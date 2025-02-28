@@ -4,6 +4,7 @@
 #include <string>
 #include <filesystem>
 #include <iostream>
+#include <geogram/api/defs.h>
 
 #define OOC_ERROR(msg) \
     std::cerr << "ERROR: " << msg << " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl
@@ -15,7 +16,9 @@
 #define OOC_DEBUG(msg)
 #endif
 
+#ifdef GEOGRAM_API
 namespace geogram = GEO;
+#endif // GEOGRAM_API
 
 namespace ooc
 {

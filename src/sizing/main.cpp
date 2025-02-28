@@ -1,8 +1,12 @@
-#include "../core.hpp"
+#include <iostream>
+
+#include "scalar_field.hpp"
 
 int main(int argc, char* argv[])
 {
     std::cout << "TODO: Sizing Field Generation..." << std::endl;
+
+    ooc::do_it();
     // 1. Load a "Slice" + Buffer data into memory
     // 2. Perform Scalar Field generation for this slice (e.g. counting sign changes)
     // 3. Generate Regular Grid (easy in beginning), later Octree

@@ -8,4 +8,6 @@ add_subdirectory(extern)
 
 # generate as own "subprojects", that may be started to work in parallel on different "slices"
 add_subdirectory(src/interfacing)
-# add_subdirectory(src/sizing)
+
+set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+add_subdirectory(src/sizing)
