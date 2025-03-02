@@ -6,11 +6,11 @@
 #include <iostream>
 
 #define OOC_ERROR(msg) \
-    std::cerr << "ERROR: " << msg << " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl
+    std::cerr << "ERROR: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
 
 #ifndef NDEBUG
 #define OOC_DEBUG(msg) \
-    std::cerr << msg << " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl
+    std::cout << "DEBUG: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
 #else
 #define OOC_DEBUG(msg)
 #endif

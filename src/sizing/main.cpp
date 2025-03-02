@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    auto tiff = std::make_shared<ooc::TiffData>(ooc::TiffData(first_file));
+    auto tiff = std::make_shared<ooc::TiffData>(ooc::TiffData(first_file, 1));
 
     ooc::generate_scalar_field(tiff);
     // 1. Load a "Slice" + Buffer data into memory

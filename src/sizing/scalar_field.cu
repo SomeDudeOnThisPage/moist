@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <stdio.h>
+#include <algorithm>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -11,6 +12,10 @@
 
 #include "scalar_field.hpp"
 #include "utils.cuh"
+
+#define DIV_UP(x, y) (x + y - 1) / y
+
+// #define KERNEL_DEBUG(msg) printf("[%d,%d,%d]: %s\n", cuda_utils::tidx(), cuda_utils::tidy(), cuda_utils::tidz(), msg)
 
 namespace ooc
 {
@@ -36,7 +41,11 @@ namespace ooc
         const int local_y = cuda_utils::tidy();
         const int local_z = cuda_utils::tidz();
 
-        const bool is_debug = local_x == 1 && local_y == 1 && local_z == 0;
+        const bool is_debug = local_x == 100 && local_y == 100 && local_z == 0;
+        if (local_x >= size_x || local_y >= size_y || local_z >= size_z)
+        {
+            return;
+        }
 
         if (is_debug)
         {
@@ -48,26 +57,22 @@ namespace ooc
         // TODO: min with max. width/height/depth
         uint16_t last = cuda_utils::pitched::get<uint16_t>(input, max(-radius + local_x, 0), max(-radius + local_y, 0), max(-radius + local_z, 0));
 
-        for (int dz = -radius + local_z; dz <= radius + local_x; dz++)
+        for (int dz = max(0, -radius + local_z); dz < min(size_z, radius + local_z); dz++)
         {
-            for (int dy = -radius + local_y; dy <= radius + local_y; dy++)
+            // TODO: better kernel error macro
+            if (is_debug)
             {
-                for (int dx = -radius + local_x; dx <= radius + local_z; dx++)
+                printf("[15, 15, 0] dx_from=%d dx_to=%d dy_from=%d dy_to=%d dz_from=%d dz_to=%d\n",
+                    -radius + local_x, radius + local_x, -radius + local_y, radius + local_y, max(0, -radius + local_z), min(size_z, radius + local_z));
+            }
+            for (int dy = max(0, -radius + local_y); dy < min(size_y, radius + local_y); dy++)
+            {
+                for (int dx = max(0, -radius + local_x); dx < min(size_x, radius + local_x); dx++)
                 {
-                    if (dx < 0 || dy < 0 || dz < 0)
-                    {
-                        continue;
-                    }
-
-                    if (dx >= size_x || dy >= size_y || dz >= size_z)
-                    {
-                        continue;
-                    }
-
                     const auto local_data = cuda_utils::pitched::get<uint16_t>(input, dx, dy, dz);
                     if (is_debug)
                     {
-                        printf("[1, 1, 0] processing %d %d %d - last sign: %d, local: %d\n", dx, dy, dz, last, local_data);
+                        printf("[15, 15, 0] processing %d %d %d - last sign: %d, local: %d\n", dx, dy, dz, last, local_data);
                     }
 
                     if (last != local_data)
@@ -81,20 +86,24 @@ namespace ooc
             }
         }
 
-        printf("thread %d %d %d counted %d sign changes, visited %d\n", cuda_utils::tidx(), cuda_utils::tidy(), cuda_utils::tidz(), sign_changes, visited);
+        if (is_debug)
+        {
+            printf("thread %d %d %d counted %d sign changes, visited %d\n", cuda_utils::tidx(), cuda_utils::tidy(), cuda_utils::tidz(), sign_changes, visited);
+        }
     }
 }
 
 void ooc::generate_scalar_field(std::shared_ptr<TiffData> data)
 {
-    printf("running...\n");
-    PitchedMatrix3d matrix;
+    PitchedMatrix3d input_matrix;
+    PitchedMatrix3d output_matrix;
 
-    cudaExtent extent = make_cudaExtent(data->width() * sizeof(uint16_t), data->height(), 1);
-    cuda_error(cudaMalloc3D(&matrix.ptr, extent));
+    cudaExtent extent = make_cudaExtent(data->width() * sizeof(uint16_t), data->height(), data->depth());
+    cuda_error(cudaMalloc3D(&input_matrix.ptr, extent));
+    cuda_error(cudaMalloc3D(&output_matrix.ptr, extent));
 
     uint16_t* host_data = new uint16_t[data->width() * data->height() * 1];
-    for (int z = 0; z < 1; z++)
+    for (int z = 0; z < data->depth(); z++)
     {
         for (int y = 0; y < data->height(); y++)
         {
@@ -108,18 +117,17 @@ void ooc::generate_scalar_field(std::shared_ptr<TiffData> data)
 
     cudaMemcpy3DParms copyParams = {0};
     copyParams.srcPtr = make_cudaPitchedPtr(host_data, data->width() * sizeof(uint16_t), data->width(), data->height());
-    copyParams.dstPtr = matrix.ptr;
+    copyParams.dstPtr = input_matrix.ptr;
     copyParams.extent = extent;
     copyParams.kind = cudaMemcpyHostToDevice;
 
     cuda_error(cudaMemcpy3D(&copyParams));
 
-    dim3 dim_block(2, 2, 1);
-    dim3 dim_grid(1, 1, 1);
-    printf("call...\n");
-    ooc::averageScalarField<<<dim_grid, dim_block>>>(matrix, /* temp until output*/ matrix, data->width(), data->height(), 1, 2);
+    dim3 dim_block(std::min((uint32_t) 16, data->width()), std::min((uint32_t) 16, data->height()), std::min((uint32_t) 16, data->depth()));
+    dim3 dim_grid(DIV_UP(data->width(), 16), DIV_UP(data->height(), 16), DIV_UP(data->depth(), 16));
+    OOC_DEBUG("calling w/ grid dimensions " << DIV_UP(data->width(), 16) << " " << DIV_UP(data->height(), 16) << " " << DIV_UP(data->depth(), 16));
+    ooc::averageScalarField<<<dim_grid, dim_block>>>(input_matrix, /* temp until output */ input_matrix, data->width(), data->height(), data->depth(), 5);
     cuda_error(cudaPeekAtLastError());
-    printf("done...\n");
     cuda_error(cudaDeviceSynchronize());
 }
 #endif // __SCALAR_FIELD_CUH
