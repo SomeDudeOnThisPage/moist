@@ -59,7 +59,27 @@ endif()
 
 
 #######################################
-### EIGEN (why do I build this myself??)
+### TinyTIFF
+#######################################
+FetchContent_Declare(
+    TinyTIFF
+    GIT_REPOSITORY https://github.com/jkriege2/TinyTIFF
+    GIT_TAG master
+)
+
+FetchContent_MakeAvailable(TinyTIFF)
+#if(NOT TinyTIFF_POPULATED)
+#    FetchContent_Populate(TinyTIFF)
+#    add_subdirectory(
+#      ${TinyTIFF_SOURCE_DIR}
+#      ${TinyTIFF_BINARY_DIR}
+#      EXCLUDE_FROM_ALL
+#    )
+#endif()
+
+
+#######################################
+### EIGEN (why do I build this myself??, part of wmtk)
 #######################################
 # FetchContent_Declare(
 #     eigen

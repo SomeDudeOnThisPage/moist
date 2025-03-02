@@ -8,6 +8,8 @@ project(OutOfCore_Meshing_SizingFieldGeneratorProject
     LANGUAGES CXX CUDA
 )
 
+find_package(TIFF REQUIRED)
+
 include_directories("/usr/local/cuda-12.8/include")
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -24,7 +26,8 @@ set_source_files_properties(${CUDA_SOURCES} PROPERTIES LANGUAGE CUDA)
 
 add_executable(OutOfCore_Meshing_SizingFieldGenerator ${SOURCES} ${HEADERS} ${CUDA_SOURCES})
 target_link_libraries(OutOfCore_Meshing_SizingFieldGenerator PRIVATE CLI11::CLI11)
+target_link_libraries(OutOfCore_Meshing_SizingFieldGenerator PRIVATE TIFF::TIFF)
+# target_link_libraries(OutOfCore_Meshing_SizingFieldGenerator PRIVATE TinyTIFF::TinyTIFF)
 
-# still support 50 but offline comp. will be removed soon...
 set_target_properties(OutOfCore_Meshing_SizingFieldGenerator PROPERTIES CUDA_ARCHITECTURES "75;80")
 set_target_properties(OutOfCore_Meshing_SizingFieldGenerator PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

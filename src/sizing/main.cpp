@@ -1,12 +1,30 @@
 #include <iostream>
+#include <filesystem>
+#include <cstdint>
 
+#include <CLI/CLI.hpp>
+#include <tiffio.h>
+
+#include "tiff_data.hpp"
 #include "scalar_field.hpp"
 
 int main(int argc, char* argv[])
 {
-    std::cout << "TODO: Sizing Field Generation..." << std::endl;
+    unsigned int depth;
+    std::filesystem::path first_file;
 
-    ooc::do_it();
+    CLI::App app{argv[0]};
+    app.add_option("-i, --input", first_file, "First .tif data slice")
+        ->required(true)
+        ->check(CLI::ExistingFile);
+    app.add_option("-n, --number", depth, "Amount of .tif data slices")
+        ->required(true);
+
+    CLI11_PARSE(app, argc, app.ensure_utf8(argv));
+
+    auto tiff = std::make_shared<ooc::TiffData>(ooc::TiffData(first_file));
+
+    ooc::generate_scalar_field(tiff);
     // 1. Load a "Slice" + Buffer data into memory
     // 2. Perform Scalar Field generation for this slice (e.g. counting sign changes)
     // 3. Generate Regular Grid (easy in beginning), later Octree
