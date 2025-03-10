@@ -27,27 +27,27 @@ namespace cuda_utils
     namespace pitched
     {
         template <typename T>
-        __device__ T get(const ooc::PitchedMatrix3d& matrix, unsigned int x, unsigned int y, unsigned int z)
+        __device__ T get(const T* pointer, size_t pitch, unsigned int x, unsigned int y, unsigned int z)
         {
             // asserts will not print to stderr upon synchronization on MacOS
             // assert((!(x < 0 && y < 0 && z < 0)) && "memory region out of bounds");
             // assert((!(x >= matrix.width || y >= matrix.height || z >= matrix.depth)) && "memory region out of bounds");
 
-            T *row = (T*) matrix.ptr.ptr + z * matrix.ptr.ysize + y * matrix.ptr.pitch;
+            T *row = (T*) pointer + z * pointer->ysize + y * pointer->pitch;
             return row[x];
         }
 
         template <typename T>
-        __device__ T set(ooc::PitchedMatrix3d& matrix, unsigned int x, unsigned int y, unsigned int z, T value)
+        __device__ void set(T* pointer, size_t pitch, unsigned int x, unsigned int y, unsigned int z, T value)
         {
             // asserts will not print to stderr upon synchronization on MacOS
             // assert((!(x < 0 && y < 0 && z < 0)) && "memory region out of bounds");
             // assert((!(x >= matrix.width || y >= matrix.height || z >= matrix.depth)) && "memory region out of bounds");
 
-            T *row = (T*) matrix.ptr.ptr + z * matrix.ptr.ysize + y * matrix.ptr.pitch;
+            T *row = (T*) pointer->ptr + z * pointer->ysize + y * pointer->pitch;
             row[x] = value;
         }
-    }
-}
+    };
+};
 
 #endif // __UTILS_CUH

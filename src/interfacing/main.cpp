@@ -1,15 +1,21 @@
 #include <filesystem>
+#include <algorithm>
 
 #include <CLI/CLI.hpp>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
+#include <geogram/mesh/mesh_geometry.h>
+#include <geogram/mesh/mesh_AABB.h>
+#include <geogram/numerics/predicates.h>
 
 #include <iostream>
 
 #include "../core.hpp"
 #include "../utils.hpp"
 
+#include "ooc_mesh.hpp"
 #include "interface.hpp"
+#include "predicates.inl"
 
 // Decide if this should be a wmtk "component" or just "use" wmtk. I'm leaning to option #2, as this project does a lot of stuff that isn't "core"
 // wmtk related, like sizing field generation, surface extraction or mesh merging...
@@ -42,11 +48,16 @@ int main(int argc, char* argv[])
 
     GEO::MeshIOFlags flags;
     flags.set_elements(GEO::MeshElementsFlags(
-        GEO::MeshElementsFlags::MESH_VERTICES |
-        GEO::MeshElementsFlags::MESH_FACETS
+        //GEO::MeshElementsFlags::MESH_VERTICES |
+        //GEO::MeshElementsFlags::MESH_FACETS |
+        //GEO::MeshElementsFlags::MESH_FACET_CORNERS |
+        //GEO::MeshElementsFlags::MESH_CELLS //|
+        //GEO::MeshElementsFlags::MESH_CELL_CORNERS |
+        GEO::MeshElementsFlags::MESH_ALL_SUBELEMENTS |
+        GEO::MeshElementsFlags::MESH_ALL_ELEMENTS
     ));
 
-    GEO::Mesh mesh_a, mesh_b;
+    ooc::OOCMesh mesh_a("a"), mesh_b("b");
     if (!GEO::mesh_load(options.path_mesh_a, mesh_a))
     {
         OOC_ERROR("Failed to load mesh A: " << options.path_mesh_a);
@@ -69,16 +80,15 @@ int main(int argc, char* argv[])
     };
 
     auto interface = ooc::Interface(plane);
-    interface.AddConstraints(mesh_a);
-    interface.AddConstraints(mesh_b);
+    interface.AddConstraints("a", mesh_a);
+    interface.AddConstraints("b", mesh_b);
     interface.Triangulate();
 
-#ifndef NDEBUG
-    ooc::export_delaunay("delaunay.obj", *interface.Triangulation());
-#endif
+//#ifndef NDEBUG
+//    ooc::export_delaunay("delaunay.obj", *interface.Triangulation());
+//#endif
 
-    // TODO: insert triangulation (do this in separate process maybe?)... use wmtk for this...
-    // TODO: decimate non_triangulation + non_boundary edges... use wmtk for this... here we kinda need both meshes again...
-    //       so maybe just start 2 threads here and assume we have enough memory to have 2 slices in it at once.
+    mesh_b.InsertInterface(interface);
+
     return 0;
 }

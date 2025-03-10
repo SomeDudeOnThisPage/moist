@@ -9,6 +9,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <tiffio.h>
 
 #include "scalar_field.hpp"
 #include "utils.cuh"
@@ -35,7 +36,7 @@ namespace ooc
      * TODO: Set a min-size of some cuboid, so as to not have to store each pixel, but only an average of areas to save memory.
      * TODO: Shared memory 👀. Currently, there's loads of global memory accesses, as each thread currently accesses radius^3 values!
      */
-    __global__ static void averageScalarField(const PitchedMatrix3d input, PitchedMatrix3d output, int size_x, int size_y, int size_z, int radius)
+    __global__ static void averageScalarField(uint16_t* i, size_t i_pitch, uint16_t* o, size_t o_pitch, int size_x, int size_y, int size_z, int radius)
     {
         const int local_x = cuda_utils::tidx();
         const int local_y = cuda_utils::tidy();
@@ -55,7 +56,7 @@ namespace ooc
         int sign_changes = 0;
         int visited = 0;
         // TODO: min with max. width/height/depth
-        uint16_t last = cuda_utils::pitched::get<uint16_t>(input, max(-radius + local_x, 0), max(-radius + local_y, 0), max(-radius + local_z, 0));
+        uint16_t last = i[max(-radius + local_y, 0) * i_pitch * sizeof(uint16_t) + max(-radius + local_x, 0)];  // cuda_utils::pitched::get<uint16_t>(&input, max(-radius + local_x, 0), max(-radius + local_y, 0), max(-radius + local_z, 0));
 
         for (int dz = max(0, -radius + local_z); dz < min(size_z, radius + local_z); dz++)
         {
@@ -69,7 +70,7 @@ namespace ooc
             {
                 for (int dx = max(0, -radius + local_x); dx < min(size_x, radius + local_x); dx++)
                 {
-                    const auto local_data = cuda_utils::pitched::get<uint16_t>(input, dx, dy, dz);
+                    const auto local_data = i[dy * i_pitch * sizeof(uint16_t) + dx]; // cuda_utils::pitched::get<uint16_t>(&input, dx, dy, dz);
                     if (is_debug)
                     {
                         printf("[15, 15, 0] processing %d %d %d - last sign: %d, local: %d\n", dx, dy, dz, last, local_data);
@@ -90,17 +91,15 @@ namespace ooc
         {
             printf("thread %d %d %d counted %d sign changes, visited %d\n", cuda_utils::tidx(), cuda_utils::tidy(), cuda_utils::tidz(), sign_changes, visited);
         }
+
+        o[local_y * i_pitch * sizeof(uint16_t) + local_x] = sign_changes * 10000 / radius; //
+        // cuda_utils::pitched::set<uint16_t>(&o, o_pitch, local_x, local_y, local_z, sign_changes * 100);
     }
 }
 
 void ooc::generate_scalar_field(std::shared_ptr<TiffData> data)
 {
-    PitchedMatrix3d input_matrix;
-    PitchedMatrix3d output_matrix;
-
     cudaExtent extent = make_cudaExtent(data->width() * sizeof(uint16_t), data->height(), data->depth());
-    cuda_error(cudaMalloc3D(&input_matrix.ptr, extent));
-    cuda_error(cudaMalloc3D(&output_matrix.ptr, extent));
 
     uint16_t* host_data = new uint16_t[data->width() * data->height() * 1];
     for (int z = 0; z < data->depth(); z++)
@@ -115,19 +114,69 @@ void ooc::generate_scalar_field(std::shared_ptr<TiffData> data)
         }
     }
 
-    cudaMemcpy3DParms copyParams = {0};
-    copyParams.srcPtr = make_cudaPitchedPtr(host_data, data->width() * sizeof(uint16_t), data->width(), data->height());
-    copyParams.dstPtr = input_matrix.ptr;
-    copyParams.extent = extent;
-    copyParams.kind = cudaMemcpyHostToDevice;
+    cudaPitchedPtr d_input;
+    cudaPitchedPtr d_output;
+    cuda_error(cudaMalloc3D(&d_input, extent));
+    cuda_error(cudaMalloc3D(&d_output, extent));
 
-    cuda_error(cudaMemcpy3D(&copyParams));
+    cudaMemcpy3DParms copy_host_to_device = {0};
+    copy_host_to_device.srcPtr = make_cudaPitchedPtr(host_data, data->width() * sizeof(uint16_t), data->width(), data->height());
+    copy_host_to_device.dstPtr = d_input;
+    copy_host_to_device.extent = extent;
+    copy_host_to_device.kind = cudaMemcpyHostToDevice;
+    cuda_error(cudaMemcpy3D(&copy_host_to_device));
 
     dim3 dim_block(std::min((uint32_t) 16, data->width()), std::min((uint32_t) 16, data->height()), std::min((uint32_t) 16, data->depth()));
     dim3 dim_grid(DIV_UP(data->width(), 16), DIV_UP(data->height(), 16), DIV_UP(data->depth(), 16));
+
     OOC_DEBUG("calling w/ grid dimensions " << DIV_UP(data->width(), 16) << " " << DIV_UP(data->height(), 16) << " " << DIV_UP(data->depth(), 16));
-    ooc::averageScalarField<<<dim_grid, dim_block>>>(input_matrix, /* temp until output */ input_matrix, data->width(), data->height(), data->depth(), 5);
+    ooc::averageScalarField<<<dim_grid, dim_block>>>(
+        (uint16_t*) d_input.ptr,
+        d_input.pitch,
+        (uint16_t*) d_output.ptr,
+        d_output.pitch,
+        data->width(),
+        data->height(),
+        data->depth(),
+        5
+    );
     cuda_error(cudaPeekAtLastError());
     cuda_error(cudaDeviceSynchronize());
+
+    cudaMemcpy3DParms copy_device_to_host = {0};
+    copy_device_to_host.srcPtr = d_output;
+    copy_device_to_host.dstPtr = make_cudaPitchedPtr(host_data, data->width() * sizeof(uint16_t), data->width(), data->height());
+    copy_device_to_host.extent = extent;
+    copy_device_to_host.kind = cudaMemcpyDeviceToHost;
+    cuda_error(cudaMemcpy3D(&copy_device_to_host));
+
+    TIFF* tif = TIFFOpen("test.tif", "w");
+    TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, data->width());
+    TIFFSetField(tif, TIFFTAG_IMAGELENGTH, data->height());
+    TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
+    TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+    TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+    TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
+    TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(tif, data->width() * sizeof(uint16_t)));
+
+    std::cout << copy_device_to_host.dstPtr.pitch << " " << data->width() << std::endl;
+    for (uint32_t depth = 0; depth < data->depth(); depth++)
+    {
+        for (uint32_t row = 0; row < data->height(); row++)
+        {
+            if (TIFFWriteScanline(tif,  &host_data[row * data->width()], row, 0) < 0)
+            {
+                std::cerr << "Error writing row " << row << "\n";
+                TIFFClose(tif);
+            }
+        }
+    }
+
+    TIFFClose(tif);
+    free(host_data);
+    cuda_error(cudaFree(d_input.ptr));
+    cuda_error(cudaFree(d_output.ptr));
 }
 #endif // __SCALAR_FIELD_CUH

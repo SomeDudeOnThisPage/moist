@@ -24,9 +24,13 @@ namespace ooc {
     public:
         Interface(const InterfacePlane plane);
 
-        void AddConstraints(geogram::Mesh& mesh);
+        void AddConstraints(std::string name, geogram::Mesh& mesh);
         void Triangulate();
-        geogram::Mesh* Triangulation();
+
+        const bool HasMeshConstraints(std::string mesh);
+
+        const geogram::index_t GetMappedVertex(std::string mesh, geogram::index_t v_id);
+        const geogram::Mesh* Triangulation();
 
     private:
         geogram::Mesh _constraints;
@@ -35,6 +39,7 @@ namespace ooc {
         InterfacePlane _plane;
         std::map<std::pair<double, double>, GEO::index_t> _indices;
         std::vector<std::pair<GEO::index_t, GEO::index_t>> _edges;
+        std::map<std::string, std::map<geogram::index_t, geogram::index_t>> _interface_vertices;
     };
 
 #ifndef NDEBUG

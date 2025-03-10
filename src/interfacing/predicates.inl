@@ -2,6 +2,8 @@
 #define __OOC_PREDICATES_CPP
 
 #include <geogram/mesh/mesh.h>
+#include <geogram/mesh/mesh_geometry.h>
+#include <geogram/numerics/predicates.h>
 #include <geogram/basic/vecg.h>
 
 #include "../core.hpp"
@@ -28,6 +30,26 @@ namespace ooc::predicates
         }
 
         return true;
+    }
+
+    // Source: geogram/mesh/mesh_AABB.cpp#175
+    inline bool point_in_tet(const geogram::Mesh& M, geogram::index_t t, const geogram::vec3& p)
+    {
+        const geogram::vec3& p0 = geogram::Geom::mesh_vertex(M, M.cells.vertex(t, 0));
+        const geogram::vec3& p1 = geogram::Geom::mesh_vertex(M, M.cells.vertex(t, 1));
+        const geogram::vec3& p2 = geogram::Geom::mesh_vertex(M, M.cells.vertex(t, 2));
+        const geogram::vec3& p3 = geogram::Geom::mesh_vertex(M, M.cells.vertex(t, 3));
+
+        geogram::Sign s[4];
+        s[0] = geogram::PCK::orient_3d(p, p1, p2, p3);
+        s[1] = geogram::PCK::orient_3d(p0, p, p2, p3);
+        s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
+        s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
+
+        return (
+            (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
+            (s[0] <= 0 && s[1] <= 0 && s[2] <= 0 && s[3] <= 0)
+        );
     }
 }
 

@@ -11,10 +11,11 @@ namespace ooc
 {
     struct PitchedMatrix3d
     {
-        int width;
-        int height;
-        int depth;
-        cudaPitchedPtr ptr;
+        size_t width;
+        size_t height;
+        size_t depth;
+        size_t pitch;
+        uint32_t* data;
     };
 
     void generate_scalar_field(std::shared_ptr<TiffData> data);

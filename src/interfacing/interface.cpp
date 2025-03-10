@@ -12,7 +12,7 @@ ooc::Interface::Interface(const InterfacePlane plane) : _constraints(geogram::Me
     }
 }
 
-void ooc::Interface::AddConstraints(geogram::Mesh& mesh)
+void ooc::Interface::AddConstraints(std::string name, geogram::Mesh& mesh)
 {
     std::map<GEO::index_t, GEO::index_t> mesh_to_interface;
 
@@ -25,6 +25,8 @@ void ooc::Interface::AddConstraints(geogram::Mesh& mesh)
             GEO::index_t interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
             this->_indices[{point[0], point[1]}] = interface_vertex_id;
             mesh_to_interface[vertex_id] = interface_vertex_id;
+
+            this->_interface_vertices[name][interface_vertex_id] = vertex_id;
         }
     }
 
@@ -97,7 +99,22 @@ void ooc::Interface::Triangulate()
     this->_triangulation.facets.assign_triangle_mesh((GEO::coord_index_t) 3, vertices, triangles, true);
 }
 
-geogram::Mesh* ooc::Interface::Triangulation()
+const bool ooc::Interface::HasMeshConstraints(std::string mesh)
+{
+    return _interface_vertices.find(mesh) != _interface_vertices.end();
+}
+
+const geogram::index_t ooc::Interface::GetMappedVertex(std::string mesh, geogram::index_t v_id)
+{
+    if (this->_interface_vertices[mesh].contains(v_id))
+    {
+        return this->_interface_vertices[mesh][v_id];
+    }
+
+    return false;
+}
+
+const geogram::Mesh* ooc::Interface::Triangulation()
 {
     return &this->_triangulation;
 }
@@ -107,6 +124,7 @@ void ooc::export_delaunay(const std::string filename, geogram::Mesh& mesh, int d
 {
     GEO::MeshIOFlags flags;
     flags.set_dimension(dimension);
+    flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
     if (!GEO::mesh_save(mesh, filename, flags))
     {
         OOC_ERROR("Error: Could not save mesh to " << filename);

@@ -61,13 +61,13 @@ endif()
 #######################################
 ### TinyTIFF
 #######################################
-FetchContent_Declare(
-    TinyTIFF
-    GIT_REPOSITORY https://github.com/jkriege2/TinyTIFF
-    GIT_TAG master
-)
+#FetchContent_Declare(
+#    TinyTIFF
+#    GIT_REPOSITORY https://github.com/jkriege2/TinyTIFF
+#    GIT_TAG master
+#)
 
-FetchContent_MakeAvailable(TinyTIFF)
+#FetchContent_MakeAvailable(TinyTIFF)
 #if(NOT TinyTIFF_POPULATED)
 #    FetchContent_Populate(TinyTIFF)
 #    add_subdirectory(
