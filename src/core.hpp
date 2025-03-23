@@ -6,7 +6,10 @@
 #include <iostream>
 
 #define OOC_ERROR(msg) \
-    std::cerr << "ERROR: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+    std::cerr << "ERROR: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl; std::exit(EXIT_FAILURE)
+
+#define OOC_WARNING(msg) \
+    std::cerr << "WARNING: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
 
 #ifndef NDEBUG
 #define OOC_DEBUG(msg) \
@@ -17,10 +20,27 @@
 
 #ifdef GEOGRAM_API
 #include <geogram/api/defs.h>
+#include <geogram/basic/stopwatch.h>
+// not parallelizable, either go back to raw geogram stopwatch or make sure to only time on the main thread!
+#define TIMER_START(x) geogram::Stopwatch __SCOPE_TIMER(x, false); std::string __SCOPE_TIMER_TASK_NAME = x;
+#define TIMER_END OOC_DEBUG(__SCOPE_TIMER_TASK_NAME << " took " << __SCOPE_TIMER.elapsed_time() << "s");
+
 namespace geogram = GEO;
 #endif // GEOGRAM_API
 
-namespace ooc
+// compiler-specific macros
+#ifdef _MSC_VER
+    #define INLINE __forceinline
+    #define PURE
+#elif defined(__GNUC__) || defined(__clang__)
+    #define INLINE __attribute__((always_inline)) inline
+    #define PURE __attribute__((pure))
+#else
+    #define INLINE inline
+    #define PURE
+#endif
+
+namespace incremental_meshing
 {
     // something like this?
     // save sizing field in here too?
@@ -31,12 +51,21 @@ namespace ooc
     //     /* plane[] */ interface_planes;
     // } Slice;
 
+    enum class Axis
+    {
+        X,
+        Y,
+        Z
+    };
+
     typedef struct
     {
         std::filesystem::path path_mesh_a;
         std::filesystem::path path_mesh_b;
         std::filesystem::path path_mesh_out;
-        std::string plane;
+        double plane;
+        double envelope_size;
+        Axis axis;
     } InterfaceExtractionOptions;
 
 }

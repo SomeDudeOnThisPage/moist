@@ -22,9 +22,9 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    auto tiff = std::make_shared<ooc::TiffData>(ooc::TiffData(first_file, 1));
+    auto tiff = std::make_shared<incremental_meshing::TiffData>(incremental_meshing::TiffData(first_file, 1));
 
-    ooc::generate_scalar_field(tiff);
+    incremental_meshing::generate_scalar_field(tiff);
     // 1. Load a "Slice" + Buffer data into memory
     // 2. Perform Scalar Field generation for this slice (e.g. counting sign changes)
     // 3. Generate Regular Grid (easy in beginning), later Octree

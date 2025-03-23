@@ -4,7 +4,7 @@
 #include <sstream>
 #include <string>
 
-namespace ooc::utils {
+namespace incremental_meshing::utils {
     /**
      * Transforms string representations "(x,y,z)" into geogram vector.
      */

@@ -18,7 +18,7 @@
 
 // #define KERNEL_DEBUG(msg) printf("[%d,%d,%d]: %s\n", cuda_utils::tidx(), cuda_utils::tidy(), cuda_utils::tidz(), msg)
 
-namespace ooc
+namespace incremental_meshing
 {
     // https://stackoverflow.com/questions/14038589/what-is-the-canonical-way-to-check-for-errors-using-the-cuda-runtime-api
     #define cuda_error(ans) { cuda_assert((ans), __FILE__, __LINE__); }
@@ -97,7 +97,7 @@ namespace ooc
     }
 }
 
-void ooc::generate_scalar_field(std::shared_ptr<TiffData> data)
+void incremental_meshing::generate_scalar_field(std::shared_ptr<TiffData> data)
 {
     cudaExtent extent = make_cudaExtent(data->width() * sizeof(uint16_t), data->height(), data->depth());
 
@@ -130,7 +130,7 @@ void ooc::generate_scalar_field(std::shared_ptr<TiffData> data)
     dim3 dim_grid(DIV_UP(data->width(), 16), DIV_UP(data->height(), 16), DIV_UP(data->depth(), 16));
 
     OOC_DEBUG("calling w/ grid dimensions " << DIV_UP(data->width(), 16) << " " << DIV_UP(data->height(), 16) << " " << DIV_UP(data->depth(), 16));
-    ooc::averageScalarField<<<dim_grid, dim_block>>>(
+    incremental_meshing::averageScalarField<<<dim_grid, dim_block>>>(
         (uint16_t*) d_input.ptr,
         d_input.pitch,
         (uint16_t*) d_output.ptr,

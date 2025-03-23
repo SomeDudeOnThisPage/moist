@@ -1,6 +1,6 @@
 #include "tiff_data.hpp"
 
-ooc::TiffData::TiffData(std::filesystem::path first_file, uint32_t n_files) : _depth(n_files)
+incremental_meshing::TiffData::TiffData(std::filesystem::path first_file, uint32_t n_files) : _depth(n_files)
 {
     // TODO: some variant crap to enable 8,32 bit etc... test-data for now uses 16 bit samples.
     _data = std::vector<std::vector<std::vector<uint16_t>>>();

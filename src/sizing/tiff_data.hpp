@@ -12,7 +12,7 @@
 
 #include "../core.hpp"
 
-namespace ooc
+namespace incremental_meshing
 {
     class TiffData
     {

@@ -4,15 +4,11 @@
 #include "interface.hpp"
 #include "predicates.inl"
 
-ooc::Interface::Interface(const InterfacePlane plane) : _constraints(geogram::Mesh(2)), _triangulation(geogram::Mesh(3)), _plane(plane)
+incremental_meshing::Interface::Interface(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2)), _triangulation(geogram::Mesh(3)), _plane(plane)
 {
-    if (geogram::length(geogram::cross(_plane.a, _plane.b)) <= 1e-6)
-    {
-        OOC_ERROR("Vectors do not span a plane!");
-    }
 }
 
-void ooc::Interface::AddConstraints(std::string name, geogram::Mesh& mesh)
+void incremental_meshing::Interface::AddConstraints(std::string name, geogram::Mesh& mesh)
 {
     std::map<GEO::index_t, GEO::index_t> mesh_to_interface;
 
@@ -67,8 +63,9 @@ void ooc::Interface::AddConstraints(std::string name, geogram::Mesh& mesh)
     }
 }
 
-void ooc::Interface::Triangulate()
+void incremental_meshing::Interface::Triangulate()
 {
+    TIMER_START("interface triangulation");
     geogram::mesh_repair(this->_constraints, geogram::MESH_REPAIR_COLOCATE);
 
     // Only the constraint-mesh is required, must pass 0 and nullptr here to set_vertices when using triangle.
@@ -97,14 +94,26 @@ void ooc::Interface::Triangulate()
     }
 
     this->_triangulation.facets.assign_triangle_mesh((GEO::coord_index_t) 3, vertices, triangles, true);
+    //if (!geogram::mesh_load("./test/interface.obj", this->_triangulation))
+    //{
+    //    OOC_ERROR("Failed to load interface");
+    //    return;
+    //}
+    this->_triangulation.facets.compute_borders(); // required for edge insertion
+
+    TIMER_END;
+
+#ifndef NDEBUG
+    incremental_meshing::export_delaunay("interface.obj", this->_triangulation, 2);
+#endif // NDEBUG
 }
 
-const bool ooc::Interface::HasMeshConstraints(std::string mesh)
+const bool incremental_meshing::Interface::HasMeshConstraints(std::string mesh) const
 {
     return _interface_vertices.find(mesh) != _interface_vertices.end();
 }
 
-const geogram::index_t ooc::Interface::GetMappedVertex(std::string mesh, geogram::index_t v_id)
+const geogram::index_t incremental_meshing::Interface::GetMappedVertex(std::string mesh, geogram::index_t v_id)
 {
     if (this->_interface_vertices[mesh].contains(v_id))
     {
@@ -114,13 +123,18 @@ const geogram::index_t ooc::Interface::GetMappedVertex(std::string mesh, geogram
     return false;
 }
 
-const geogram::Mesh* ooc::Interface::Triangulation()
+const geogram::Mesh* incremental_meshing::Interface::Triangulation() const
 {
     return &this->_triangulation;
 }
 
+incremental_meshing::AxisAlignedInterfacePlane incremental_meshing::Interface::Plane() const
+{
+    return this->_plane;
+}
+
 #ifndef NDEBUG
-void ooc::export_delaunay(const std::string filename, geogram::Mesh& mesh, int dimension)
+void incremental_meshing::export_delaunay(const std::string filename, geogram::Mesh& mesh, int dimension)
 {
     GEO::MeshIOFlags flags;
     flags.set_dimension(dimension);

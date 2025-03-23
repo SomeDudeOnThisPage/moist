@@ -7,7 +7,7 @@
 
 #include "tiff_data.hpp"
 
-namespace ooc
+namespace incremental_meshing
 {
     struct PitchedMatrix3d
     {
