@@ -26,6 +26,10 @@
 #define TIMER_END OOC_DEBUG(__SCOPE_TIMER_TASK_NAME << " took " << __SCOPE_TIMER.elapsed_time() << "s");
 
 namespace geogram = GEO;
+
+using g_index = geogram::index_t;
+using l_index = geogram::index_t;
+
 #endif // GEOGRAM_API
 
 // compiler-specific macros
@@ -39,6 +43,14 @@ namespace geogram = GEO;
     #define INLINE inline
     #define PURE
 #endif
+
+// parallel
+#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
+    #define PARALLEL_CONTINUE return
+#else
+    #warning "compiling with non-parallel local operations"
+    #define PARALLEL_CONTINUE continue
+#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
 
 namespace incremental_meshing
 {

@@ -94,16 +94,18 @@ void incremental_meshing::Interface::Triangulate()
     }
 
     this->_triangulation.facets.assign_triangle_mesh((GEO::coord_index_t) 3, vertices, triangles, true);
-    //if (!geogram::mesh_load("./test/interface.obj", this->_triangulation))
-    //{
-    //    OOC_ERROR("Failed to load interface");
-    //    return;
-    //}
     this->_triangulation.facets.compute_borders(); // required for edge insertion
-
     TIMER_END;
 
 #ifndef NDEBUG
+#ifdef OPTION_DEBUG_TEST_INTERFACE
+    if (!geogram::mesh_load("./test/interface.obj", this->_triangulation))
+    {
+        OOC_ERROR("Failed to load interface");
+        return;
+    }
+    this->_triangulation.facets.compute_borders(); // required for edge insertion
+#endif // DEBUG_TEST_INTERFACE
     incremental_meshing::export_delaunay("interface.obj", this->_triangulation, 2);
 #endif // NDEBUG
 }

@@ -10,33 +10,26 @@
 
 namespace incremental_meshing
 {
+    typedef struct CROSSED_EDGE_STRUCT
+    {
+        g_index e_v0;
+        g_index e_v1;
+        geogram::vec3 point;
+
+        bool operator==(const CROSSED_EDGE_STRUCT& other) const
+        {
+            return (point.x == other.point.x && point.y == other.point.y && point.z == other.point.z)
+                && ((e_v0 == other.e_v0 && e_v1 == other.e_v1) || (e_v0 == other.e_v1 && e_v1 == other.e_v0));
+        }
+    } CrossedEdge;
+
     typedef struct
     {
-        geogram::index_t c;
-        geogram::index_t le_v0;
-        geogram::index_t le_v1;
-        geogram::vec3 point;
-    } EdgeSplit1_2;
-
-    typedef struct Edge2d
-    {
-        geogram::index_t le_v0;
-        geogram::index_t le_v1;
-        geogram::vec3 intersection;
-
-    #ifndef NDEBUG
-        geogram::vec3 v0;
-        geogram::vec3 v1;
-    #endif // NDEBUG
-
-        bool operator==(Edge2d& other) {
-            return le_v0 == other.le_v0 && le_v1 == other.le_v1 || le_v0 == other.le_v1 && le_v1 == other.le_v0;
-        }
-
-        bool operator==(const Edge2d& other) const {
-            return le_v0 == other.le_v0 && le_v1 == other.le_v1 || le_v0 == other.le_v1 && le_v1 == other.le_v0;
-        }
-    } Edge2d_t;
+        g_index v0;
+        g_index v1;
+        g_index v2;
+        g_index v3;
+    } CreatedTetrahedon;
 
     class SubMesh : public geogram::Mesh
     {
@@ -46,7 +39,7 @@ namespace incremental_meshing
 
     private:
         std::string _identifier;
-        std::shared_ptr<incremental_meshing::Interface> _interface;
+        std::vector<CreatedTetrahedon> _created_tets;
         std::unordered_set<geogram::index_t> _deleted_tets;
 
         void InsertInterfaceVertices(incremental_meshing::Interface& interface);
@@ -55,23 +48,14 @@ namespace incremental_meshing
 
         void InsertVertex(const geogram::vec3& point, const incremental_meshing::Interface& interface);
 
-        void Insert1To2(const EdgeSplit1_2& split, const incremental_meshing::AxisAlignedInterfacePlane& plane);
+        void Split1_2(const g_index cell, const CrossedEdge& edge, const incremental_meshing::AxisAlignedInterfacePlane& plane);
+        void Split1_3(const g_index cell, const incremental_meshing::CrossedEdge& e0, const incremental_meshing::CrossedEdge& e1, const incremental_meshing::AxisAlignedInterfacePlane& plane);
+
+        void CreateTetrahedra();
+        void FlushTetrahedra();
+
         void Insert1To3(const geogram::index_t c_id, const geogram::vec3& p0, const incremental_meshing::AxisAlignedInterfacePlane& plane);
         void Insert2To3(const geogram::index_t c_id, const geogram::vec3& p0, const geogram::vec3& p1, const incremental_meshing::AxisAlignedInterfacePlane& plane);
-    };
-}
-
-namespace std
-{
-    template <>
-    struct hash<incremental_meshing::Edge2d>
-    {
-        size_t operator()(const incremental_meshing::Edge2d& e) const
-        {
-            size_t h1 = std::hash<double>{}(e.le_v0) ^ (std::hash<double>{}(e.le_v0) << 1);
-            size_t h2 = std::hash<double>{}(e.le_v1) ^ (std::hash<double>{}(e.le_v1) << 1);
-            return h1 ^ (h2 << 1);
-        }
     };
 }
 

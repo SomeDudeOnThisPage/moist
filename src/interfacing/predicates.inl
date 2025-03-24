@@ -14,9 +14,6 @@
 
 // TODO: THIS IS WRONG!
 #define in_range(x, p, eps) (std::abs(x - p) <= eps) || (std::abs(x + p) <= eps)
-
-#define orient_3d geogram::PCK::orient_3d
-#define orient_2d geogram::PCK::orient_2d
 #define EPS 1e-8
 
 namespace incremental_meshing::predicates
@@ -52,9 +49,17 @@ namespace incremental_meshing::predicates
         return false;
     }
 
+    PURE INLINE bool edge_on_plane(const geogram::vec3& p0, const geogram::vec3& p1, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    {
+        return point_on_plane(p0, plane) && point_on_plane(p1, plane);
+    }
+
     PURE INLINE bool facet_on_plane(const geogram::index_t facet, const geogram::Mesh& mesh, const incremental_meshing::AxisAlignedInterfacePlane& plane)
     {
-        for (geogram::index_t lv = 0; lv < /* mesh.facets.nb_vertices(facet) */ 3; lv++)
+    #ifdef OPTION_UNROLL_LOOPS
+        #pragma unroll 3
+    #endif
+        for (l_index lv = 0; lv < /* mesh.facets.nb_vertices(facet) */ 3; lv++)
         {
             const auto point = mesh.vertices.point(mesh.facets.vertex(facet, lv));
             if (!point_on_plane(point, plane))
@@ -69,7 +74,10 @@ namespace incremental_meshing::predicates
     PURE INLINE bool cell_on_plane(const geogram::index_t cell, const geogram::Mesh& mesh, const incremental_meshing::AxisAlignedInterfacePlane& plane)
     {
         unsigned char points_on_plane = 0;
-        for (unsigned char i = 0; i < mesh.cells.nb_vertices(cell); i++)
+    #ifdef OPTION_UNROLL_LOOPS
+        #pragma unroll 6
+    #endif
+        for (unsigned char i = 0; i < /*mesh.cells.nb_vertices(cell)*/ 6; i++)
         {
             if (point_on_plane(mesh.vertices.point(mesh.cells.vertex(cell, i)), plane))
             {
@@ -82,7 +90,7 @@ namespace incremental_meshing::predicates
 
     PURE INLINE bool cell_facet_on_plane(const geogram::index_t cell, const geogram::index_t lf, const geogram::Mesh& mesh, const incremental_meshing::AxisAlignedInterfacePlane& plane)
     {
-        for (geogram::index_t lv = 0; lv < mesh.cells.facet_nb_vertices(cell, lf); lv++)
+        for (geogram::index_t lv = 0; lv < /*mesh.cells.facet_nb_vertices(cell, lf)*/ 3; lv++)
         {
             const auto point = mesh.vertices.point(mesh.cells.facet_vertex(cell, lf, lv));
             if (!point_on_plane(point, plane))
@@ -104,10 +112,10 @@ namespace incremental_meshing::predicates
         const auto p3 = mesh.vertices.point(mesh.cells.vertex(t, 3));
 
         geogram::Sign s[4];
-        s[0] = orient_3d(p, p1, p2, p3);
-        s[1] = orient_3d(p0, p, p2, p3);
-        s[2] = orient_3d(p0, p1, p, p3);
-        s[3] = orient_3d(p0, p1, p2, p);
+        s[0] = geogram::PCK::orient_3d(p, p1, p2, p3);
+        s[1] = geogram::PCK::orient_3d(p0, p, p2, p3);
+        s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
+        s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
 
         return (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
@@ -115,58 +123,52 @@ namespace incremental_meshing::predicates
         );
     }
 
-    /*inline bool lines_intersect(const geogram::vec3& p0, const geogram::vec3& p1, const geogram::vec3& p2, const geogram::vec3& p3)
+    namespace xy
     {
-        const auto d0 = p1 - p0;
-        const auto d1 = p3 - p2;
-
-        const auto n = geogram::cross(d0, d1);
-        if (n.length() < EPS)
+        PURE INLINE bool check_lines_aabb(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
         {
-            return false;
+            return (std::min(p0.x, p1.x) <= std::max(p2.x, p3.x)) && (std::max(p0.x, p1.x) >= std::min(p2.x, p3.x))
+                && (std::min(p0.y, p1.y) <= std::max(p2.y, p3.y)) && (std::max(p0.y, p1.y) >= std::min(p2.y, p3.y));
         }
 
-        const auto dot = geogram::dot(n, p3 - p1);
-        return EPS > dot && dot > -EPS;
-    }*/
-
-    PURE /* INLINE */ inline std::optional<geogram::vec2> get_line_intersection(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
-    {
-        geogram::Sign s[4];
-        s[0] = orient_2d(p0, p1, p2);
-        s[1] = orient_2d(p0, p1, p3);
-        s[2] = orient_2d(p2, p3, p0);
-        s[3] = orient_2d(p2, p3, p1);
-
-        if (s[0] != s[1] && s[2] != s[3])
+        PURE /* INLINE */ inline std::optional<geogram::vec2> get_line_intersection(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
         {
-            double denom = (p0.x - p1.x) * (p2.y - p3.y) - (p0.y - p1.y) * (p2.x - p3.x);
-            if (denom == 0) return std::nullopt;
+            geogram::Sign s[4];
+            s[0] = geogram::PCK::orient_2d(p0, p1, p2);
+            s[1] = geogram::PCK::orient_2d(p0, p1, p3);
+            s[2] = geogram::PCK::orient_2d(p2, p3, p0);
+            s[3] = geogram::PCK::orient_2d(p2, p3, p1);
 
-            double t = ((p0.x - p2.x) * (p2.y - p3.y) - (p0.y - p2.y) * (p2.x - p3.x)) / denom;
-            double u = ((p0.x - p2.x) * (p0.y - p1.y) - (p0.y - p2.y) * (p0.x - p1.x)) / denom;
-
-            if ((t > 0 && t < 1) && (u > 0 && u < 1))
+            if (s[0] != s[1] && s[2] != s[3])
             {
-                geogram::vec2 intersection = {
-                    p0.x + t * (p1.x - p0.x),
-                    p0.y + t * (p1.y - p0.y)
-                };
+                double denom = (p0.x - p1.x) * (p2.y - p3.y) - (p0.y - p1.y) * (p2.x - p3.x);
+                if (denom == 0) return std::nullopt;
 
-                return intersection;
+                double t = ((p0.x - p2.x) * (p2.y - p3.y) - (p0.y - p2.y) * (p2.x - p3.x)) / denom;
+                double u = ((p0.x - p2.x) * (p0.y - p1.y) - (p0.y - p2.y) * (p0.x - p1.x)) / denom;
+
+                if ((t > 0 && t < 1) && (u > 0 && u < 1))
+                {
+                    geogram::vec2 intersection = {
+                        p0.x + t * (p1.x - p0.x),
+                        p0.y + t * (p1.y - p0.y)
+                    };
+
+                    return intersection;
+                }
             }
-        }
 
-        return std::nullopt;
+            return std::nullopt;
+        }
     }
 
     PURE INLINE bool lines_intersect(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
     {
         geogram::Sign s[4];
-        s[0] = orient_2d(p0, p1, p2);
-        s[1] = orient_2d(p0, p1, p3);
-        s[2] = orient_2d(p2, p3, p0);
-        s[3] = orient_2d(p2, p3, p1);
+        s[0] = geogram::PCK::orient_2d(p0, p1, p2);
+        s[1] = geogram::PCK::orient_2d(p0, p1, p3);
+        s[2] = geogram::PCK::orient_2d(p2, p3, p0);
+        s[3] = geogram::PCK::orient_2d(p2, p3, p1);
 
         if (s[0] != s[1] && s[2] != s[3])
         {
@@ -182,8 +184,5 @@ namespace incremental_meshing::predicates
         return false;
     }
 }
-
-#undef orient_3d
-#undef orient_2d
 
 #endif // __OOC_PREDICATES_CPP
