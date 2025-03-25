@@ -3,6 +3,7 @@
 #include <functional>
 #include <geogram/mesh/mesh_repair.h>
 #include <geogram/basic/process.h>
+#include <mutex>
 
 #include "ooc_mesh.hpp"
 #include "predicates.inl"
@@ -64,6 +65,11 @@ void incremental_meshing::SubMesh::InsertInterfaceVertices(incremental_meshing::
     const auto triangulation = interface.Triangulation();
     for (auto v_id : triangulation->vertices)
     {
+        if (interface.GetMappedVertex(this->_identifier, v_id))
+        {
+            continue;
+        }
+
         this->InsertVertex(geogram::vec3(triangulation->vertices.point(v_id).x, triangulation->vertices.point(v_id).y, interface.Plane().extent), interface);
     }
 
@@ -206,20 +212,18 @@ void incremental_meshing::SubMesh::InsertInterfaceEdges(const incremental_meshin
 void incremental_meshing::SubMesh::Split1_2(const g_index cell, const incremental_meshing::CrossedEdge& edge, const incremental_meshing::AxisAlignedInterfacePlane& plane)
 {
     const g_index v_opposite = incremental_meshing::geometry::non_coplanar_opposite(cell, edge.e_v0, edge.e_v1, *this, plane);
-    const g_index v_coplanar_opposite = incremental_meshing::geometry::opposite(cell, edge.e_v0, edge.e_v1, v_opposite, *this);
+    const g_index v_coplanar_opposite = incremental_meshing::geometry::other(cell, edge.e_v0, edge.e_v1, v_opposite, *this);
     const g_index p = this->vertices.create_vertex(edge.point.data());
 
     this->_created_tets.push_back({ edge.e_v0, v_coplanar_opposite, v_opposite, p });
     this->_created_tets.push_back({ edge.e_v1, v_coplanar_opposite, v_opposite, p });
-    //this->cells.create_tet(edge.e_v0, v_coplanar_opposite, v_opposite, p);
-    //this->cells.create_tet(edge.e_v1, v_coplanar_opposite, v_opposite, p);
     this->_deleted_tets.insert(cell);
 }
 
 void incremental_meshing::SubMesh::Split1_3(const g_index cell, const incremental_meshing::CrossedEdge& e0, const incremental_meshing::CrossedEdge& e1, const incremental_meshing::AxisAlignedInterfacePlane& plane)
 {
     const g_index shared = (e0.e_v0 == e1.e_v0 || e0.e_v0 == e1.e_v1) ? e0.e_v0 : e0.e_v1;
-    const g_index v_opposite = incremental_meshing::geometry::opposite(
+    const g_index v_opposite = incremental_meshing::geometry::other(
         cell,
         e0.e_v0,
         e0.e_v1,
@@ -235,11 +239,30 @@ void incremental_meshing::SubMesh::Split1_3(const g_index cell, const incrementa
     this->_created_tets.push_back({ v_opposite, shared, p0, p1 });
     this->_created_tets.push_back({ v_opposite, p0, p1, v_coplanar_opposite_p0 });
     this->_created_tets.push_back({ v_opposite, p0, v_coplanar_opposite_p0, v_coplanar_opposite_p1 });
-    //this->cells.create_tet(v_opposite, p0, p1, v_coplanar_opposite_p0);
-    //this->cells.create_tet(v_opposite, p0, v_coplanar_opposite_p0, v_coplanar_opposite_p1);
-    //this->cells.create_tet(v_opposite, p0, p1, shared);
-
     this->_deleted_tets.insert(cell);
+}
+
+void incremental_meshing::SubMesh::CreateTetrahedra()
+{
+    //OOC_DEBUG("creating #" << this->_created_tets.size() << " tets");
+    for (const auto tet : this->_created_tets)
+    {
+        const auto t = this->cells.create_tet(tet.v0, tet.v1, tet.v2, tet.v3);
+    #ifndef NDEBUG
+        const auto volume = geogram::mesh_cell_volume(*this, t);
+        if (volume == 0.00000000)
+        {
+            const auto p0 = this->vertices.point(tet.v0);
+            const auto p1 = this->vertices.point(tet.v1);
+            const auto p2 = this->vertices.point(tet.v2);
+            const auto p3 = this->vertices.point(tet.v3);
+            OOC_WARNING("cell t0 " << t << " has zero volume: " << volume);
+            _deleted_tets.insert(t);
+        }
+    #endif // NDEBUG
+    }
+
+    this->_created_tets.clear();
 }
 
 void incremental_meshing::SubMesh::FlushTetrahedra()
@@ -261,32 +284,37 @@ void incremental_meshing::SubMesh::FlushTetrahedra()
     _deleted_tets.clear();
 }
 
-void incremental_meshing::SubMesh::CreateTetrahedra()
-{
-    //OOC_DEBUG("creating #" << this->_created_tets.size() << " tets");
-    for (const auto tet : this->_created_tets)
-    {
-        this->cells.create_tet(tet.v0, tet.v1, tet.v2, tet.v3);
-    }
-    this->_created_tets.clear();
-}
-
 void incremental_meshing::SubMesh::DecimateNonInterfaceEdges(const incremental_meshing::Interface& interface)
 {
 
 }
 
+static std::mutex _m_deleted_tets;
 void incremental_meshing::SubMesh::InsertVertex(const geogram::vec3& point, const incremental_meshing::Interface& interface)
 {
     const auto plane = interface.Plane();
-    for (const g_index c_id : this->cells)
+#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
+    geogram::parallel_for(0, this->cells.nb(), [this, point, plane](const g_index cell)
     {
-        if (!_deleted_tets.contains(c_id) && incremental_meshing::predicates::point_in_tet(*this, c_id, point))
+#else
+    for (const g_index cell : this->cells)
+    {
+#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
+
         {
-            const auto p0 = this->vertices.point(this->cells.vertex(c_id, 0));
-            const auto p1 = this->vertices.point(this->cells.vertex(c_id, 1));
-            const auto p2 = this->vertices.point(this->cells.vertex(c_id, 2));
-            const auto p3 = this->vertices.point(this->cells.vertex(c_id, 3));
+            std::lock_guard<std::mutex> lock(_m_deleted_tets);
+            if (_deleted_tets.contains(cell))
+            {
+                PARALLEL_CONTINUE;
+            }
+        }
+
+        if (incremental_meshing::predicates::point_in_tet(*this, cell, point))
+        {
+            const auto p0 = this->vertices.point(this->cells.vertex(cell, 0));
+            const auto p1 = this->vertices.point(this->cells.vertex(cell, 1));
+            const auto p2 = this->vertices.point(this->cells.vertex(cell, 2));
+            const auto p3 = this->vertices.point(this->cells.vertex(cell, 3));
 
             if (incremental_meshing::predicates::vec_eq_2d(point, p0, plane)
                 || incremental_meshing::predicates::vec_eq_2d(point, p1, plane)
@@ -294,80 +322,46 @@ void incremental_meshing::SubMesh::InsertVertex(const geogram::vec3& point, cons
                 || incremental_meshing::predicates::vec_eq_2d(point, p3, plane)
             )
             {
-                continue;
+                PARALLEL_CONTINUE;
             }
 
-            this->Insert1To3(c_id, point, plane);
+            this->Insert1To3(cell, point, plane);
 
-            _deleted_tets.insert(c_id);
-            break;
+            _deleted_tets.insert(cell);
+            PARALLEL_BREAK;
         }
     }
+#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
+    );
+#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
+
+    this->CreateTetrahedra();
 }
 
 void incremental_meshing::SubMesh::Insert1To3(const geogram::index_t c_id, const geogram::vec3 &point, const incremental_meshing::AxisAlignedInterfacePlane& plane)
 {
-    const auto v0_id = this->cells.vertex(c_id, 0);
-    const auto v1_id = this->cells.vertex(c_id, 1);
-    const auto v2_id = this->cells.vertex(c_id, 2);
-    const auto v3_id = this->cells.vertex(c_id, 3);
-    const auto p0 = this->vertices.point(v0_id);
-    const auto p1 = this->vertices.point(v1_id);
-    const auto p2 = this->vertices.point(v2_id);
-    const auto p3 = this->vertices.point(v3_id);
+    const g_index v_opposite = incremental_meshing::geometry::non_interface_vertex(c_id, *this, plane);
+    const auto [v0, v1, v2] = incremental_meshing::geometry::other(c_id, v_opposite, *this);
 
-    // Some of these still generates tets with negative volume -> check after each insert to see which it is...
-    // TODO: make this nice by indexing into an array of index_ts so we don't need 4 if statements
-    geogram::index_t t0_id, t1_id, t2_id;
-    const geogram::index_t centroid_index = this->vertices.create_vertex(point.data());
-    if (!incremental_meshing::predicates::point_on_plane(p0, plane))
+    if (v0 == v1 || v0 == v2 || v0 == v_opposite)
     {
-        t0_id = this->cells.create_tet(v0_id, v1_id, v2_id, centroid_index);
-        t1_id = this->cells.create_tet(v0_id, v1_id, v3_id, centroid_index);
-        t2_id = this->cells.create_tet(v0_id, v2_id, v3_id, centroid_index);
-    }
-    else if (!incremental_meshing::predicates::point_on_plane(p1, plane))
-    {
-        t0_id = this->cells.create_tet(v0_id, v1_id, v2_id, centroid_index);
-        t1_id = this->cells.create_tet(v0_id, v1_id, v3_id, centroid_index);
-        t2_id = this->cells.create_tet(v1_id, v2_id, v3_id, centroid_index);
-    }
-    else if (!incremental_meshing::predicates::point_on_plane(p2, plane))
-    {
-        t0_id = this->cells.create_tet(v0_id, v1_id, v2_id, centroid_index);
-        t1_id = this->cells.create_tet(v1_id, v2_id, v3_id, centroid_index);
-        t2_id = this->cells.create_tet(v0_id, v2_id, v3_id, centroid_index);
-    }
-    else if (!incremental_meshing::predicates::point_on_plane(p3, plane))
-    {
-        t0_id = this->cells.create_tet(v3_id, v2_id, v1_id, centroid_index);
-        t1_id = this->cells.create_tet(v3_id, v2_id, v0_id, centroid_index);
-        t2_id = this->cells.create_tet(v3_id, v1_id, v0_id, centroid_index);
-    }
-    else
-    {
-        OOC_WARNING("attempted to insert into invalid tet " << p0 << " " << p1 << " " << p2 << " " << p3);
+        OOC_DEBUG("noo");
     }
 
-#ifndef NDEBUG
-    if (geogram::mesh_cell_volume(*this, t0_id) <= 0.0f)
+    if (v1 == v2 || v1 == v_opposite)
     {
-        OOC_WARNING("1->3 split: cell t0 " << t0_id << " has zero or negative volume: " << geogram::mesh_cell_volume(*this, t0_id));
-        _deleted_tets.insert(t0_id);
+        OOC_DEBUG("noo");
     }
 
-    if (geogram::mesh_cell_volume(*this, t1_id) <= 0.0f)
+    if (v2 == v_opposite)
     {
-        OOC_WARNING("1->3 split: cell t1 " << t1_id << " has zero or negative volume: " << geogram::mesh_cell_volume(*this, t1_id));
-        _deleted_tets.insert(t1_id);
+        OOC_DEBUG("noo");
     }
+    const g_index p = this->vertices.create_vertex(point.data());
+    _created_tets.push_back({ v_opposite, v0, v1, p });
+    _created_tets.push_back({ v_opposite, v1, v2, p });
+    _created_tets.push_back({ v_opposite, v2, v0, p });
 
-    if (geogram::mesh_cell_volume(*this, t2_id) <= 0.0f)
-    {
-        OOC_WARNING("1->3 split: cell t2 " << t2_id << " has zero or negative volume: " << geogram::mesh_cell_volume(*this, t2_id));
-        _deleted_tets.insert(t2_id);
-    }
-#endif // NDEBUG
 }
 
 // TODO: In case a vertex lies exactly on an edge, currently both tets would be split into three, creating two 0 volume tetrahedra!

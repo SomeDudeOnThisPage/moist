@@ -45,11 +45,14 @@ using l_index = geogram::index_t;
 #endif
 
 // parallel
+#define OPTION_PARALLEL_LOCAL_OPERATIONS
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     #define PARALLEL_CONTINUE return
+    #define PARALLEL_BREAK return
 #else
     #warning "compiling with non-parallel local operations"
     #define PARALLEL_CONTINUE continue
+    #define PARALLEL_BREAK break
 #endif // OPTION_PARALLEL_LOCAL_OPERATIONS
 
 namespace incremental_meshing
