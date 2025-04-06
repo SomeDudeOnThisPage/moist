@@ -52,6 +52,9 @@ int main(int argc, char* argv[])
     geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
     geogram::Logger::instance()->set_quiet(true);
 
+    // register custom attributes
+    geogram::geo_register_attribute_type<incremental_meshing::InterfaceVertexStrategy>(incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
+
     geogram::MeshIOFlags flags;
     flags.set_elements(geogram::MeshElementsFlags(
         geogram::MeshElementsFlags::MESH_ALL_SUBELEMENTS |

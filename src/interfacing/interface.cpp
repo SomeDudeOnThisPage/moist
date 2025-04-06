@@ -97,17 +97,15 @@ void incremental_meshing::Interface::Triangulate()
     this->_triangulation.facets.compute_borders(); // required for edge insertion
     TIMER_END;
 
-#ifndef NDEBUG
-#ifdef OPTION_DEBUG_TEST_INTERFACE
+//#ifdef OPTION_DEBUG_TEST_INTERFACE
     if (!geogram::mesh_load("./test/interface.obj", this->_triangulation))
     {
         OOC_ERROR("Failed to load interface");
         return;
     }
     this->_triangulation.facets.compute_borders(); // required for edge insertion
-#endif // DEBUG_TEST_INTERFACE
+//#endif // DEBUG_TEST_INTERFACE
     incremental_meshing::export_delaunay("interface.obj", this->_triangulation, 2);
-#endif // NDEBUG
 }
 
 const bool incremental_meshing::Interface::HasMeshConstraints(std::string mesh) const

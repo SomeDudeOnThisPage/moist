@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20..3.31.5)
 
 option(CMAKE_OPTION_UNROLL_LOOPS "Unroll simple loops." ON)
 option(CMAKE_OPTION_PARALLEL_LOCAL_OPERATIONS "Process local operations in parallel if applicable." ON)
-option(CMAKE_OPTION_INSERT_TEST_INTERFACE "Inserts a test-interface (test/interface.obj) into both SubMeshes." OFF)
+option(CMAKE_OPTION_INSERT_TEST_INTERFACE "Inserts a test-interface (test/interface.obj) into both SubMeshes." ON)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

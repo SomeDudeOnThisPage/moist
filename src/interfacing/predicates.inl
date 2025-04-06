@@ -14,7 +14,6 @@
 
 // TODO: THIS IS WRONG!
 #define in_range(x, p, eps) (std::abs(x - p) <= eps) || (std::abs(x + p) <= eps)
-#define EPS 1e-8
 
 namespace incremental_meshing::predicates
 {
@@ -131,6 +130,26 @@ namespace incremental_meshing::predicates
                 && (std::min(p0.y, p1.y) <= std::max(p2.y, p3.y)) && (std::max(p0.y, p1.y) >= std::min(p2.y, p3.y));
         }
 
+        PURE INLINE bool point_in_facet(const geogram::vec2& point, const g_index facet, const geogram::Mesh& triangulation)
+        {
+            const auto p0 = reinterpret_cast<const geogram::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 0)));
+            const auto p1 = reinterpret_cast<const geogram::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 1)));
+            const auto p2 = reinterpret_cast<const geogram::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 2)));
+
+            geogram::Sign s[3];
+            s[0] = geogram::PCK::orient_2d(p0, p1, point);
+            s[1] = geogram::PCK::orient_2d(p1, p2, point);
+            s[2] = geogram::PCK::orient_2d(p2, p0, point);
+
+            bool has_neg = (s[0] < 0) || (s[1] < 0) || (s[2] < 0);
+            bool has_pos = (s[0] > 0) || (s[1] > 0) || (s[2] > 0);
+
+            return (
+                (s[0] >= 0 && s[1] >= 0 && s[2] >= 0) ||
+                (s[0] <= 0 && s[1] <= 0 && s[2] <= 0)
+            );
+        }
+
         PURE /* INLINE */ inline std::optional<geogram::vec2> get_line_intersection(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
         {
             geogram::Sign s[4];
@@ -147,14 +166,16 @@ namespace incremental_meshing::predicates
                 double t = ((p0.x - p2.x) * (p2.y - p3.y) - (p0.y - p2.y) * (p2.x - p3.x)) / denom;
                 double u = ((p0.x - p2.x) * (p0.y - p1.y) - (p0.y - p2.y) * (p0.x - p1.x)) / denom;
 
-                if ((t > 0 && t < 1) && (u > 0 && u < 1))
+                const auto eps = 2 * incremental_meshing::__DOUBLE_EPSILON;
+                if ((t >= eps && t <= 1.0 - eps) && (u >= eps && u <= 1.0 - eps))
                 {
-                    geogram::vec2 intersection = {
-                        p0.x + t * (p1.x - p0.x),
-                        p0.y + t * (p1.y - p0.y)
+                    // we don't work with real predicates, so we have to have a rounding factor in these vertices...
+                    // since these are not inserted interface vertices, but created in both meshes by intersections,
+                    // this SHOULD have no effect on the merging process...
+                    return vec2 {
+                        std::round((p0.x + t * (p1.x - p0.x)) * 1e12) / 1e12,
+                        std::round((p0.y + t * (p1.y - p0.y)) * 1e12) / 1e12
                     };
-
-                    return intersection;
                 }
             }
 

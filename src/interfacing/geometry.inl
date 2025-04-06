@@ -8,10 +8,25 @@
 #include "ooc_mesh.hpp"
 #include "predicates.inl"
 
-
 namespace incremental_meshing::geometry
 {
     constexpr g_index NO_ELEMENT = -1;
+
+    PURE INLINE bool point_of_cell(const SubMesh& mesh, const g_index cell, const vec3& point)
+    {
+    #ifdef OPTION_UNROLL_LOOPS
+        #pragma unroll 4
+    #endif
+        for (l_index lv = 0; lv < 4; lv++)
+        {
+            if (mesh.vertices.point(mesh.cells.vertex(cell, lv)) == point)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     PURE INLINE g_index non_coplanar_opposite(const g_index cell, const g_index a, const g_index b, const SubMesh& mesh, const AxisAlignedInterfacePlane& plane)
     {

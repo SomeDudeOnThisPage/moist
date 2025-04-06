@@ -14,12 +14,11 @@ namespace incremental_meshing
     {
         g_index e_v0;
         g_index e_v1;
-        geogram::vec3 point;
+        g_index p;
 
         bool operator==(const CROSSED_EDGE_STRUCT& other) const
         {
-            return (point.x == other.point.x && point.y == other.point.y && point.z == other.point.z)
-                && ((e_v0 == other.e_v0 && e_v1 == other.e_v1) || (e_v0 == other.e_v1 && e_v1 == other.e_v0));
+            return p == other.p && ((e_v0 == other.e_v0 && e_v1 == other.e_v1) || (e_v0 == other.e_v1 && e_v1 == other.e_v0));
         }
     } CrossedEdge;
 
