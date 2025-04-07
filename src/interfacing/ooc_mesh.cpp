@@ -88,9 +88,23 @@ void incremental_meshing::SubMesh::InsertInterfaceVertices(incremental_meshing::
     TIMER_START("insert interface vertices");
 
     geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
+    geogram::Attribute<double> v_test(this->vertices.attributes(), incremental_meshing::INTERFACE);
+
     for (const g_index v : this->vertices)
     {
-        v_strategy[v] = incremental_meshing::InterfaceVertexStrategy::NONE;
+#ifdef OPTION_DEBUG_TEST_INTERFACE
+        v_strategy[v] = incremental_meshing::InterfaceVertexStrategy::KEEP;//incremental_meshing::predicates::point_on_plane(this->vertices.point(v), interface.Plane())
+            //? incremental_meshing::InterfaceVertexStrategy::DISCARD
+            //: incremental_meshing::InterfaceVertexStrategy::NONE;
+#else
+        v_strategy[v] = incremental_meshing::predicates::point_on_plane(this->vertices.point(v), interface.Plane())
+        ? incremental_meshing::InterfaceVertexStrategy::DISCARD
+        : incremental_meshing::InterfaceVertexStrategy::NONE;
+
+        v_test[v] = incremental_meshing::predicates::point_on_plane(this->vertices.point(v), interface.Plane())
+        ? 1.0 : 0.0;
+#endif //OPTION_DEBUG_TEST_INTERFACE
+
     }
 
     const auto triangulation = interface.Triangulation();
@@ -126,7 +140,7 @@ void incremental_meshing::SubMesh::InsertInterfaceVertices(incremental_meshing::
 
 #ifndef NDEBUG
     geogram::mesh_repair(*this);
-    incremental_meshing::export_delaunay(this->_identifier + "_after_vertex_insertion.mesh", *this, 3);
+    incremental_meshing::export_delaunay(this->_identifier + "_after_vertex_insertion.msh", *this, 3);
 #endif // NDEBUG
 }
 
@@ -238,7 +252,7 @@ void incremental_meshing::SubMesh::InsertInterfaceEdges(const incremental_meshin
     TIMER_END;
 
 #ifndef NDEBUG
-    incremental_meshing::export_delaunay(this->_identifier + "_after_edge_insertion.mesh", *this);
+    incremental_meshing::export_delaunay(this->_identifier + "_after_edge_insertion.msh", *this);
 #endif // NDEBUG
 }
 
@@ -333,14 +347,14 @@ void incremental_meshing::SubMesh::FlushTetrahedra()
 
 void incremental_meshing::SubMesh::DecimateNonInterfaceEdges(const incremental_meshing::Interface& interface)
 {
-    const geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
+    geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
     // map positions onto a list of vertices
     std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator> map;
 
     for (g_index v : this->vertices)
     {
         const auto strat = v_strategy[v];
-        if (v_strategy[v] == incremental_meshing::InterfaceVertexStrategy::NONE)
+        if (!incremental_meshing::predicates::point_on_plane(this->vertices.point(v), interface.Plane()))
         {
             continue;
         }
@@ -349,80 +363,77 @@ void incremental_meshing::SubMesh::DecimateNonInterfaceEdges(const incremental_m
         map[this->vertices.point(v)].insert(v);
     }
 
-    // collapse all cells that do not have only "KEEP" vertices
-    for (g_index c : this->cells)
+    int collapsed = 0;
+    const g_index size = this->cells.nb();
+    for (g_index c = 0; c < size; c++)
     {
         for (l_index lv = 0; lv < 4; lv++)
         {
             const g_index v = this->cells.vertex(c, lv);
-            const vec3 point = this->vertices.point(v);
-
-            if (v_strategy[v] != incremental_meshing::InterfaceVertexStrategy::DISCARD)
+            if (v_strategy[v] == incremental_meshing::InterfaceVertexStrategy::KEEP || !incremental_meshing::predicates::point_on_plane(this->vertices.point(v), interface.Plane()))
             {
                 continue;
             }
 
-            // cluster each discard vertex onto a neighbouring cluster, if found onto a KEEP vertex
-            g_index to_v;
-            vec3 to_point;
-            for (l_index to_lv = 0; to_lv < 4; to_lv++)
+            // find vertex to move onto
+            g_index v_collapse_onto = -1;
+            bool keep;
+            for (l_index to_lv = (lv + 1) % 4; to_lv != lv; to_lv = (to_lv + 1) % 4)
             {
-                if (to_lv == lv)
+                const g_index to_v = this->cells.vertex(c, to_lv);
+                if (!incremental_meshing::predicates::point_on_plane(this->vertices.point(to_v), interface.Plane()))
                 {
                     continue;
                 }
 
-                to_v = this->cells.vertex(c, to_lv);
-                to_point = this->vertices.point(to_v);
-
-                if (incremental_meshing::predicates::vec_eq_2d(point, to_point, interface.Plane()) || !incremental_meshing::predicates::point_on_plane(to_point, interface.Plane()))
-                {
-                    continue;
-                }
+                v_collapse_onto = to_v;
 
                 if (v_strategy[to_v] == incremental_meshing::InterfaceVertexStrategy::KEEP)
                 {
+                    keep = true;
                     break;
                 }
             }
 
-            // cluster all vertices onto the new point
-            if (v >= this->vertices.nb())
+            if (v_collapse_onto == -1)
             {
-                OOC_DEBUG("Oh no!");
                 continue;
             }
 
-            const auto size = map[point].size();
-            for (const g_index m_v : map[point])
+            const vec3 v_keep_point = this->vertices.point(v_collapse_onto);
+            for (const auto move_v : map[this->vertices.point(v)])
             {
-                const auto mm = map[point];
-                if (m_v >= this->vertices.nb() || incremental_meshing::predicates::vec_eq_2d(point, to_point, interface.Plane()))
+                const auto ll = map[this->vertices.point(v)];
+                if (keep)
                 {
-                    OOC_DEBUG("Oh no!");
-                    continue;
+                    v_strategy[move_v] = incremental_meshing::InterfaceVertexStrategy::KEEP;
                 }
 
-                auto point_m = this->vertices.point(m_v);
-                point_m.x = to_point.x;
-                point_m.y = to_point.y;
-                point_m.z = to_point.z;
-                map[to_point].insert(m_v);
+                // OOC_DEBUG("moving " << this->vertices.point(move_v) << " -> " << v_keep_point);
+                // actually move all of the points
+                this->vertices.point_ptr(move_v)[0] = v_keep_point.x;
+                this->vertices.point_ptr(move_v)[1] = v_keep_point.y;
+                this->vertices.point_ptr(move_v)[2] = v_keep_point.z;
+                map[v_keep_point].insert(move_v);
+                map[this->vertices.point(move_v)].clear();
             }
-            //_deleted_tets.insert(c);
+
         }
+
+        collapsed++;
     }
 
+    OOC_DEBUG("collapsed " << collapsed << " tets");
     for (const auto cell : this->cells)
     {
-        if (geogram::mesh_cell_volume(*this, cell) == 0)
+        if (geogram::mesh_cell_volume(*this, cell) == 0 || incremental_meshing::geometry::has_duplicate_vertex(cell, *this))
         {
             _deleted_tets.insert(cell);
         }
     }
     this->FlushTetrahedra();
 #ifndef NDEBUG
-    incremental_meshing::export_delaunay(this->_identifier + "_after_vertex_clustering.mesh", *this);
+    incremental_meshing::export_delaunay(this->_identifier + "_after_vertex_clustering.msh", *this);
 #endif // NDEBUG
 }
 

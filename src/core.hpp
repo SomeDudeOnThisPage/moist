@@ -8,7 +8,7 @@
 
 #ifndef NDEBUG
 #undef OPTION_PARALLEL_LOCAL_OPERATIONS // dev
-#define OPTION_DEBUG_TEST_INTERFACE
+//#def OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
 namespace incremental_meshing
@@ -16,6 +16,7 @@ namespace incremental_meshing
     // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
     const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon();
     const std::string INTERFACE_VERTEX_STRATEGY_ATTRIBUTE = "InterfaceVertexStrategy";
+    const std::string INTERFACE = "Interface";
 
     // custom attributes
     enum class InterfaceVertexStrategy

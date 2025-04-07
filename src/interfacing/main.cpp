@@ -54,6 +54,7 @@ int main(int argc, char* argv[])
 
     // register custom attributes
     geogram::geo_register_attribute_type<incremental_meshing::InterfaceVertexStrategy>(incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
+    geogram::geo_register_attribute_type<double>(incremental_meshing::INTERFACE);
 
     geogram::MeshIOFlags flags;
     flags.set_elements(geogram::MeshElementsFlags(
