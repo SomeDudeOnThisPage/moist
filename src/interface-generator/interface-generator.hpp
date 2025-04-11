@@ -15,8 +15,10 @@ namespace incremental_meshing
         void AddConstraints(geogram::Mesh& mesh);
         void Triangulate();
     private:
+#ifndef NDEBUG
+        std::vector<vec3> _required_vertices;
+#endif // NDEBUG
         geogram::Mesh _constraints;
-        std::map<std::pair<double, double>, g_index> _indices;
     };
 }
 

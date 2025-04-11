@@ -32,8 +32,10 @@ void incremental_meshing::InterfaceGenerator::AddConstraints(geogram::Mesh &mesh
             std::lock_guard<std::mutex> lock(mtx);
         #endif
             g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
-            this->_indices[{point[0], point[1]}] = interface_vertex_id;
             mesh_to_interface[v] = interface_vertex_id;
+        #ifndef NDEBUG
+            this->_required_vertices.push_back(point);
+        #endif // NDEBUG
         }
     }
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
@@ -91,6 +93,7 @@ void incremental_meshing::InterfaceGenerator::Triangulate()
     // TODO: REALLY annoying thing about triangle... it seems to create a bbox ("master-triangles") where a vertex of the bbox corresponds with a vertex of the
     //       input, a double vertex is found and "ignored", which leads to a segfault when geogram tries to read the data back into it's
     //       own data structure... somehow create own bbox for triangle?
+    // TODO: this doesn't actually help fix things...
     geogram::mesh_repair(this->_constraints, geogram::MESH_REPAIR_COLOCATE);
 
     auto delaunay = geogram::Delaunay::create(2, "triangle");
@@ -118,4 +121,29 @@ void incremental_meshing::InterfaceGenerator::Triangulate()
     this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
 
     TIMER_END;
+
+#ifndef NDEBUG
+    OOC_DEBUG("checking for missing vertices...");
+    uint32_t missing = 0;
+    for (const g_index v : this->_triangulation->vertices)
+    {
+        const vec3 point = this->_triangulation->vertices.point(v);
+        bool found = false;
+        for (const vec3 other : this->_required_vertices) // too lazy to add operator==...
+        {
+            if (reinterpret_cast<const vec2&>(point) == reinterpret_cast<const vec2&>(other))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            OOC_DEBUG("missing point " << point);
+            missing++;
+        }
+    }
+    OOC_DEBUG("finished checking vertices, missing " << missing << " points...");
+#endif // NDEBUG
 }
