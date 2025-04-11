@@ -6,7 +6,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include "../core.hpp"
-#include "interface.hpp"
+#include "../core-interface.hpp"
 
 namespace incremental_meshing
 {

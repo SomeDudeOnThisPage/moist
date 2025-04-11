@@ -6,8 +6,13 @@ project(OutOfCore_Meshing
 
 add_subdirectory(extern)
 
-# generate as own "subprojects", that may be started to work in parallel on different "slices"
-add_subdirectory(src/interfacing)
+# shared stuff as static library
+add_subdirectory(src/core)
 
-set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
-add_subdirectory(src/sizing)
+# generate as own "subprojects", that may be started to work in parallel on different "slices"
+# add_subdirectory(src/interfacing) # todo rename to "interface-inserter" or something
+add_subdirectory(src/interface-generator)
+
+# Make work again after core lib refactor
+#set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+#add_subdirectory(src/sizing)

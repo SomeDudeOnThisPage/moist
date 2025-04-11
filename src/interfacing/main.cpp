@@ -13,10 +13,11 @@
 #include <iostream>
 
 #include "../core.hpp"
+#include "../core-interface.hpp"
 #include "../utils.hpp"
 
 #include "ooc_mesh.hpp"
-#include "interface.hpp"
+#include "attributes.inl"
 #include "predicates.inl"
 
 int main(int argc, char* argv[])
@@ -30,10 +31,10 @@ int main(int argc, char* argv[])
     incremental_meshing::InterfaceExtractionOptions options;
     CLI::App app{argv[0]};
 
-    app.add_option("-a, --input-a", options.path_mesh_a, "Mesh 'A' (.mesh) file")
+    app.add_option("-m, --mesh", options.path_mesh_a, "Mesh (.mesh) file")
         ->required()
         ->check(CLI::ExistingFile);
-    app.add_option("-b, --input-b", options.path_mesh_b, "Mesh 'B' (.mesh) file")
+    app.add_option("-i, --interface", options.path_mesh_b, "Interface mesh (.mesh) file")
         ->required()
         ->check(CLI::ExistingFile);
     app.add_option("-o, --output", options.path_mesh_out, "Output Triangulation (.obj) file")
@@ -56,40 +57,29 @@ int main(int argc, char* argv[])
     geogram::geo_register_attribute_type<incremental_meshing::InterfaceVertexStrategy>(incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
     geogram::geo_register_attribute_type<double>(incremental_meshing::INTERFACE);
 
+    incremental_meshing::attributes::initialize();
+
     geogram::MeshIOFlags flags;
     flags.set_elements(geogram::MeshElementsFlags(
         geogram::MeshElementsFlags::MESH_ALL_SUBELEMENTS |
         geogram::MeshElementsFlags::MESH_ALL_ELEMENTS
     ));
 
-    incremental_meshing::SubMesh mesh_a("a"), mesh_b("b");
+    incremental_meshing::SubMesh mesh_a("a");
     if (!geogram::mesh_load(options.path_mesh_a, mesh_a))
     {
         OOC_ERROR("Failed to load mesh A: " << options.path_mesh_a);
         return 1;
     }
 
-    if (!geogram::mesh_load(options.path_mesh_b, mesh_b))
-    {
-        OOC_ERROR("Failed to load mesh B: " << options.path_mesh_b);
-        return 1;
-    }
-
-    auto interface = incremental_meshing::Interface(incremental_meshing::AxisAlignedInterfacePlane {
+    auto interface = incremental_meshing::Interface(options.path_mesh_b, incremental_meshing::AxisAlignedInterfacePlane {
         options.axis,
         options.plane,
         options.envelope_size
     });
 
-    interface.AddConstraints("a", mesh_a);
-    interface.AddConstraints("b", mesh_b);
-    interface.Triangulate();
-
     mesh_a.InsertInterface(interface);
-    mesh_b.InsertInterface(interface);
-
     mesh_a.assert_is_valid();
-    mesh_b.assert_is_valid();
 
     return 0;
 }

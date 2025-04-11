@@ -266,11 +266,11 @@ void incremental_meshing::SubMesh::Split1_2(const g_index cell, const incrementa
     const auto cp2 = this->vertices.point(this->cells.vertex(cell, 2));
     const auto cp3 = this->vertices.point(this->cells.vertex(cell, 3));
 
-    if (incremental_meshing::geometry::point_of_cell(*this, cell, this->vertices.point(edge.p)))
-    {
-        OOC_DEBUG("prevented 1 -> 2 split due to exising point");
-        return;
-    }
+    //if (incremental_meshing::geometry::point_of_cell(*this, cell, this->vertices.point(edge.p)))
+    //{
+    //    OOC_DEBUG("prevented 1 -> 2 split due to exising point");
+    //    return;
+    //}
 
     geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
     v_strategy[edge.p] = incremental_meshing::InterfaceVertexStrategy::DISCARD;
@@ -294,11 +294,11 @@ void incremental_meshing::SubMesh::Split1_3(const g_index cell, const incrementa
     const g_index v_coplanar_opposite_p0 = (e1.e_v0 != shared) ? e1.e_v0 : e1.e_v1;
     const g_index v_coplanar_opposite_p1 = (e0.e_v0 != shared) ? e0.e_v0 : e0.e_v1;
 
-    if (incremental_meshing::geometry::point_of_cell(*this, cell, this->vertices.point(e0.p)) ||  incremental_meshing::geometry::point_of_cell(*this, cell, this->vertices.point(e1.p)))
-    {
-        OOC_DEBUG("prevented 1 -> 3 split due to exising point");
-        return;
-    }
+    //if (incremental_meshing::geometry::point_of_cell(*this, cell, this->vertices.point(e0.p)) ||  incremental_meshing::geometry::point_of_cell(*this, cell, this->vertices.point(e1.p)))
+    //{
+    //    OOC_DEBUG("prevented 1 -> 3 split due to exising point");
+    //    return;
+    //}
 
     geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
     v_strategy[e0.p] = incremental_meshing::InterfaceVertexStrategy::DISCARD;
@@ -439,9 +439,8 @@ void incremental_meshing::SubMesh::DecimateNonInterfaceEdges(const incremental_m
 
 static std::mutex _m_deleted_tets;
 static std::mutex _m_v_strategy_attribute;
-void incremental_meshing::SubMesh::InsertVertex(const geogram::vec3& point, const incremental_meshing::Interface& interface)
+void incremental_meshing::SubMesh::InsertVertex(const geogram::vec3& point, incremental_meshing::Interface& interface)
 {
-    const auto plane = interface.Plane();
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     geogram::parallel_for(0, this->cells.nb(), [this, point, plane](const g_index cell)
     {
@@ -466,7 +465,7 @@ void incremental_meshing::SubMesh::InsertVertex(const geogram::vec3& point, cons
             {
                 const g_index v = this->cells.vertex(cell, lv);
                 const vec3 p = this->vertices.point(v);
-                if (incremental_meshing::predicates::vec_eq_2d(point, p, plane))
+                if (incremental_meshing::predicates::vec_eq_2d(point, p, *interface.Plane()))
                 {
                     std::lock_guard<std::mutex> lock(_m_v_strategy_attribute);
                     geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
@@ -478,7 +477,7 @@ void incremental_meshing::SubMesh::InsertVertex(const geogram::vec3& point, cons
 
             if (!found)
             {
-                this->Insert1To3(cell, point, plane);
+                this->Insert1To3(cell, point, *interface.Plane());
 
                 _deleted_tets.insert(cell);
                 PARALLEL_BREAK;

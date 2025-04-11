@@ -7,8 +7,8 @@
 #include <limits>
 
 #ifndef NDEBUG
-#undef OPTION_PARALLEL_LOCAL_OPERATIONS // dev
-//#def OPTION_DEBUG_TEST_INTERFACE
+// #define OPTION_PARALLEL_LOCAL_OPERATIONS // dev
+// #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
 namespace incremental_meshing

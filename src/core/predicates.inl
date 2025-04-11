@@ -9,8 +9,8 @@
 #include <geogram/numerics/predicates.h>
 #include <geogram/basic/vecg.h>
 
-#include "../core.hpp"
-#include "interface.hpp"
+#include "core.hpp"
+#include "core-interface.hpp"
 
 // TODO: THIS IS WRONG!
 #define in_range(x, p, eps) (std::abs(x - p) <= eps) || (std::abs(x + p) <= eps)
@@ -173,6 +173,9 @@ namespace incremental_meshing::predicates
                     // since these are not inserted interface vertices, but created in both meshes by intersections,
                     // this SHOULD have no effect on the merging process...
                     return vec2 {
+                        //p0.x + t * (p1.x - p0.x),
+                        //p0.y + t * (p1.y - p0.y)
+
                         std::round((p0.x + t * (p1.x - p0.x)) * 1e12) / 1e12,
                         std::round((p0.y + t * (p1.y - p0.y)) * 1e12) / 1e12
                     };
@@ -204,6 +207,7 @@ namespace incremental_meshing::predicates
 
         return false;
     }
+
 }
 
 #endif // __OOC_PREDICATES_CPP
