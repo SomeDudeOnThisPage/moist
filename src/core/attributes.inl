@@ -1,17 +1,23 @@
 #ifndef __OOC_ATTRIBUTES_HPP
 #define __OOC_ATTRIBUTES_HPP
 
-#include <geogram/api/defs.h>
+#include <mutex>
+
+#include <geogram/mesh/mesh.h>
 
 #include "core.hpp"
-#include <geogram/mesh/mesh.h>
+
+#define ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS "VertexDescriptorFlags"
 
 namespace incremental_meshing::attributes
 {
+    inline std::mutex _MUTEX_VERTEX_DESCRIPTOR;
+
     enum class VertexDescriptorFlags : uint8_t
     {
-        INTERFACE = 1 << 0, // marks vertex as interface vertex for the currently processed plane
-        DISCARD   = 1 << 1  // marks vertex as discardable in the decimation stage
+        NONE      = 1 << 0,
+        INTERFACE = 1 << 1, // marks vertex as interface vertex for the currently processed plane
+        DISCARD   = 1 << 2  // marks vertex as discardable in the decimation stage
     };
 
     // needs to be defined for the compiler not to complain
@@ -50,6 +56,15 @@ namespace incremental_meshing::attributes
             static_cast<std::underlying_type<VertexDescriptorFlags>::type>(lhs) &
             static_cast<std::underlying_type<VertexDescriptorFlags>::type>(rhs)
         );
+    }
+
+    inline VertexDescriptorFlags& operator|=(VertexDescriptorFlags& lhs, VertexDescriptorFlags rhs)
+    {
+        lhs = static_cast<VertexDescriptorFlags>(
+            static_cast<std::underlying_type<VertexDescriptorFlags>::type>(lhs) |
+            static_cast<std::underlying_type<VertexDescriptorFlags>::type>(rhs)
+        );
+        return lhs;
     }
 
     inline void initialize()

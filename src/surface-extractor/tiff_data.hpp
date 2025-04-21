@@ -10,7 +10,7 @@
 
 #include <tiffio.h>
 
-#include "../core.hpp"
+#include "core.hpp"
 
 namespace incremental_meshing
 {

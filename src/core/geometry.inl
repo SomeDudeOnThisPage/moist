@@ -3,7 +3,7 @@
 
 #include <geogram/mesh/mesh.h>
 
-#include "../core.hpp"
+#include "core.hpp"
 
 #include "ooc_mesh.hpp"
 #include "predicates.inl"
@@ -12,7 +12,7 @@ namespace incremental_meshing::geometry
 {
     constexpr g_index NO_ELEMENT = -1;
 
-    PURE INLINE bool point_of_cell(const SubMesh &mesh, const g_index cell, const vec3 &point)
+    PURE INLINE bool point_of_cell(const MeshSlice &mesh, const g_index cell, const vec3 &point)
     {
 #ifdef OPTION_UNROLL_LOOPS
 #pragma unroll 4
@@ -28,7 +28,7 @@ namespace incremental_meshing::geometry
         return false;
     }
 
-    PURE INLINE g_index non_coplanar_opposite(const g_index cell, const g_index a, const g_index b, const SubMesh &mesh, const AxisAlignedInterfacePlane &plane)
+    PURE INLINE g_index non_coplanar_opposite(const g_index cell, const g_index a, const g_index b, const MeshSlice &mesh, const AxisAlignedInterfacePlane &plane)
     {
 #ifdef OPTION_UNROLL_LOOPS
 #pragma unroll 4
@@ -45,7 +45,7 @@ namespace incremental_meshing::geometry
         return NO_ELEMENT;
     }
 
-    PURE INLINE bool has_duplicate_vertex(const g_index cell, const SubMesh &mesh)
+    PURE INLINE bool has_duplicate_vertex(const g_index cell, const MeshSlice &mesh)
     {
         const vec3 a = mesh.vertices.point(mesh.cells.vertex(cell, 0));
         const vec3 b = mesh.vertices.point(mesh.cells.vertex(cell, 1));
@@ -60,7 +60,7 @@ namespace incremental_meshing::geometry
                c == d;
     }
 
-    PURE INLINE std::tuple<g_index, g_index, g_index> other(const g_index cell, g_index opposite, const SubMesh &mesh)
+    PURE INLINE std::tuple<g_index, g_index, g_index> other(const g_index cell, g_index opposite, const MeshSlice &mesh)
     {
 #ifdef OPTION_UNROLL_LOOPS
 #pragma unroll 4
@@ -80,7 +80,7 @@ namespace incremental_meshing::geometry
         return std::make_tuple(NO_ELEMENT, NO_ELEMENT, NO_ELEMENT);
     }
 
-    PURE INLINE g_index other(const g_index cell, const g_index a, const g_index b, const g_index c, const SubMesh &mesh)
+    PURE INLINE g_index other(const g_index cell, const g_index a, const g_index b, const g_index c, const MeshSlice &mesh)
     {
 #ifdef OPTION_UNROLL_LOOPS
 #pragma unroll 4
@@ -97,7 +97,7 @@ namespace incremental_meshing::geometry
         return NO_ELEMENT;
     }
 
-    PURE INLINE std::tuple<g_index, g_index, g_index> interface_vertices(const g_index cell, const SubMesh &mesh, const AxisAlignedInterfacePlane &plane)
+    PURE INLINE std::tuple<g_index, g_index, g_index> interface_vertices(const g_index cell, const MeshSlice &mesh, const AxisAlignedInterfacePlane &plane)
     {
 #ifdef OPTION_UNROLL_LOOPS
 #pragma unroll 4
@@ -117,7 +117,7 @@ namespace incremental_meshing::geometry
         return std::make_tuple(NO_ELEMENT, NO_ELEMENT, NO_ELEMENT);
     }
 
-    PURE INLINE g_index non_interface_vertex(const g_index cell, const SubMesh &mesh, const AxisAlignedInterfacePlane &plane)
+    PURE INLINE g_index non_interface_vertex(const g_index cell, const MeshSlice &mesh, const AxisAlignedInterfacePlane &plane)
     {
 #ifdef OPTION_UNROLL_LOOPS
 #pragma unroll 4

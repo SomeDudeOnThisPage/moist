@@ -10,7 +10,7 @@ incremental_meshing::TiffData::TiffData(std::filesystem::path first_file, uint32
         &TIFFClose
     );
 
-    uint32_t sample_bits;
+    uint32_t sample_bits = 16;
     TIFFGetField(tiff.get(), TIFFTAG_IMAGEWIDTH, &_width);
     TIFFGetField(tiff.get(), TIFFTAG_IMAGELENGTH, &_height);
     TIFFGetField(tiff.get(), TIFFTAG_BITSPERSAMPLE, &sample_bits);
@@ -28,13 +28,6 @@ incremental_meshing::TiffData::TiffData(std::filesystem::path first_file, uint32
         }
     }
 
-    //for (int i = 0; i < _height; i++)
-    //{
-    //    for (int j = 0; j < _width; j++)
-    //    {
-    //        std::cout << i << "," << j << " = " << directory[j][i] << std::endl;
-    //    }
-    //}
     this->_data.resize(_depth);
     this->_data[0] = directory;
 }

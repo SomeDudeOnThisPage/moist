@@ -1,5 +1,0 @@
-- extract isosurface(s) from binarized (or discretized) volume
-- extract slice by slice, make parallelizable - must make sure interface planes exist and are "flat"
-- ideally adapt a ready-made algorithm, have to check what exists...
-- can use "suboptimal" algorithms that generate non-watertight, non-manifold or self-intersecting meshes
-- some form of dual contouring to make "less interesting" areas of the mesh coarser? -> use sizing field for this somehow?

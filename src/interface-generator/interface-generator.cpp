@@ -17,7 +17,7 @@ incremental_meshing::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInt
 void incremental_meshing::InterfaceGenerator::AddConstraints(geogram::Mesh &mesh)
 {
     std::map<g_index, g_index> mesh_to_interface;
-    std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map;
+    std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map; // if we have more than 255 incident edges we have a waaaay bigger problem anyway...
 
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     std::mutex mtx;
@@ -78,7 +78,7 @@ void incremental_meshing::InterfaceGenerator::AddConstraints(geogram::Mesh &mesh
         // one adjacent interface facet -> edge must be a boundary edge.
         if (entry.second == 1)
         {
-            // translate Edge-Vertices from Mesh-Global index to Interface-Local index.
+            // translate edge-vertices from mesh-global index to interface-local index.
             auto global = entry.first;
             this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
         }

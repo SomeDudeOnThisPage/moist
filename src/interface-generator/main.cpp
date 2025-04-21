@@ -1,5 +1,8 @@
 #include <CLI/CLI.hpp>
 
+#include <geogram/basic/environment.h>
+#include <geogram/basic/command_line.h>
+#include <geogram/basic/command_line_args.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 
@@ -43,46 +46,61 @@ static bool load_mesh(const std::filesystem::path& path, incremental_meshing::In
  */
 int main(int argc, char* argv[])
 {
-    incremental_meshing::InterfaceExtractionOptions options;
+    struct Arguments
+    {
+        std::filesystem::path path_mesh_a;
+        std::filesystem::path path_mesh_b;
+        std::filesystem::path path_mesh_out;
+        double plane;
+        double envelope_size;
+        incremental_meshing::Axis axis;
+    };
+
     const std::map<std::string, incremental_meshing::Axis> axis_option_map{
         {"X", incremental_meshing::Axis::X},
         {"Y", incremental_meshing::Axis::Y},
         {"Z", incremental_meshing::Axis::Z}
     };
 
+    Arguments arguments{};
     CLI::App app{argv[0]};
-    app.add_option("-a, --input-a", options.path_mesh_a, "Mesh 'A' (.mesh) file")
+
+    app.add_option("-a, --input-a", arguments.path_mesh_a, "Mesh 'A' (.mesh) file")
         ->required()
         ->check(CLI::ExistingFile);
-    app.add_option("-b, --input-b", options.path_mesh_b, "Mesh 'B' (.mesh) file")
+    app.add_option("-b, --input-b", arguments.path_mesh_b, "Mesh 'B' (.mesh) file")
         ->required()
         ->check(CLI::ExistingFile);
-    app.add_option("-o, --output", options.path_mesh_out, "Output Triangulation (.obj) file")
+    app.add_option("-o, --output", arguments.path_mesh_out, "Output Triangulation (.obj) file")
         ->required();
-    app.add_option("-x, --axis", options.axis, "Interface axis (X|Y|Z)")
+    app.add_option("-x, --axis", arguments.axis, "Interface axis (X|Y|Z)")
         ->required()
+        ->default_str("Y")
         ->transform(CLI::CheckedTransformer(axis_option_map, CLI::ignore_case));
-    app.add_option("-p, --plane", options.plane, "Interface plane along the axis (-x)")
+    app.add_option("-p, --plane", arguments.plane, "Interface plane along the axis (-x)")
         ->required();
-    app.add_option("-e, --envelope", options.envelope_size, "Envelope size around the interface plane.");
+    app.add_option("-e, --envelope", arguments.envelope_size, "Envelope size around the interface plane.")
+        ->default_val(0.00001);
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
+    geogram::initialize();
+    geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
+    geogram::CmdLine::set_arg("sys:compression_level", "0");
     geogram::Logger::instance()->set_quiet(false);
 
     auto generator = incremental_meshing::InterfaceGenerator(incremental_meshing::AxisAlignedInterfacePlane {
-        options.axis,
-        options.plane,
-        options.envelope_size
+        arguments.axis,
+        arguments.plane,
+        arguments.envelope_size
     });
 
-    if (!load_mesh(options.path_mesh_a, generator))
+    if (!load_mesh(arguments.path_mesh_a, generator))
     {
         return -1;
     }
 
-    if (!load_mesh(options.path_mesh_b, generator))
+    if (!load_mesh(arguments.path_mesh_b, generator))
     {
         return -1;
     }
@@ -93,7 +111,11 @@ int main(int argc, char* argv[])
     export_flags.set_dimension(3);
     export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
     export_flags.set_verbose(true);
-    geogram::mesh_save(*generator.Triangulation(), options.path_mesh_out.string(), export_flags);
+    geogram::mesh_save(*generator.Triangulation(), arguments.path_mesh_out.replace_extension(".geogram"), export_flags);
+
+#ifndef NDEBUG
+    geogram::mesh_save(*generator.Triangulation(), arguments.path_mesh_out.replace_extension(".debug.obj"), export_flags);
+#endif
 
     return 0;
 }

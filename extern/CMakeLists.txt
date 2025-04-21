@@ -4,7 +4,6 @@ include(FetchContent)
 
 set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/extern)
 
-
 #######################################
 ### GEOGRAM
 #######################################
@@ -37,7 +36,6 @@ if(NOT geogram_POPULATED)
     )
 endif()
 
-
 #######################################
 ### CLI11
 #######################################
@@ -57,6 +55,27 @@ if(NOT cli11_POPULATED)
     )
 endif()
 
+#######################################
+### CGAL
+#######################################
+FetchContent_Declare(
+  CGAL
+  GIT_REPOSITORY https://github.com/CGAL/cgal.git
+  GIT_TAG        v5.6.1  # cgal 6 not on github currently, but we use deprecated 5.x features anyway...
+)
+
+FetchContent_MakeAvailable(CGAL)
+
+# this doesnt fckn work. just make cgal a requirement to be installed...
+
+#if(NOT CGAL_POPULATED)
+#    FetchContent_Populate(CGAL)
+#    add_subdirectory(
+#      ${CGAL_SOURCE_DIR}
+#      ${CGAL_BINARY_DIR}
+#      EXCLUDE_FROM_ALL
+#    )
+#endif()
 
 #######################################
 ### TinyTIFF
