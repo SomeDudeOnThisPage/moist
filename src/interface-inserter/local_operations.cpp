@@ -3,16 +3,45 @@
 #include "geometry.inl"
 #include "attributes.inl"
 
+#ifndef NDEBUG
+#define VECE(a, b, c, d) ((a) == (b) || (a) == (c) || (a) == (d) || \
+                          (b) == (c) || (b) == (d) || \
+                          (c) == (d))
+#endif // NDEBUG
+
 void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge, const AxisAlignedInterfacePlane &plane)
 {
+    // bandaid-fix, must fix predicates...
+    const auto p0 = mesh.vertices.point(edge.p);
+    const auto p1 = mesh.vertices.point(edge.e_v0);
+    const auto p2 = mesh.vertices.point(edge.e_v1);
+    if (p0 == p1 || p0 == p2)
+    {
+        return;
+    }
+
     const g_index v_opposite = incremental_meshing::geometry::non_coplanar_opposite(cell, edge.e_v0, edge.e_v1, mesh, plane);
     const g_index v_coplanar_opposite = incremental_meshing::geometry::other(cell, edge.e_v0, edge.e_v1, v_opposite, mesh);
 
     {
-        std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR);
+        // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
+        LOCK_ATTRIBUTES;
         geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
         v_descriptor[edge.p] |= incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
     }
+
+#ifndef NDEBUG
+    // check to make sure bandaid-fix worked
+    const auto p0t = mesh.vertices.point(edge.e_v0);
+    const auto p1t = mesh.vertices.point(v_coplanar_opposite);
+    const auto p2t = mesh.vertices.point(v_opposite);
+    const auto p3t = mesh.vertices.point(edge.p);
+    const auto p4t = mesh.vertices.point(edge.e_v1);
+    if (VECE(p0t, p1t, p2t, p3t) || VECE(p4t, p1t, p2t, p3t))
+    {
+        OOC_ERROR("zero volume tet");
+    }
+#endif // NDEBUG
 
     mesh.CreateTetrahedra({
         {edge.e_v0, v_coplanar_opposite, v_opposite, edge.p},
@@ -42,10 +71,15 @@ void incremental_meshing::operation::edge_split_1to3(MeshSlice &mesh, const g_in
     }
 
     {
-        std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR);
+        // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
+        LOCK_ATTRIBUTES;
         geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
         v_descriptor[edge0.p] |= incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
         v_descriptor[edge1.p] |= incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
+
+        geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+        v_discard[edge0.p] = true;
+        v_discard[edge1.p] = true;
     }
 
     mesh.CreateTetrahedra({
@@ -62,7 +96,7 @@ void incremental_meshing::operation::vertex_insert_1to2()
 }
 
 // why did I name this 2to4??
-void incremental_meshing::operation::vertex_insert_2to4(MeshSlice &mesh, const g_index cell, const vec3 &point, const incremental_meshing::AxisAlignedInterfacePlane &plane)
+void incremental_meshing::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, const vec3 &point, const incremental_meshing::AxisAlignedInterfacePlane &plane)
 {
     // if we already have the vertex, only mark it as "interface"
     for (l_index lv = 0; lv < 4; lv++)
@@ -71,9 +105,13 @@ void incremental_meshing::operation::vertex_insert_2to4(MeshSlice &mesh, const g
         const vec3 p = mesh.vertices.point(v);
         if (incremental_meshing::predicates::vec_eq_2d(point, p, plane))
         {
-            std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR);
+            LOCK_ATTRIBUTES;
             geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
             v_descriptor[v] |= incremental_meshing::attributes::VertexDescriptorFlags::INTERFACE;
+
+            geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+            v_discard[v] = false;
+
             return;
         }
     }
@@ -83,9 +121,26 @@ void incremental_meshing::operation::vertex_insert_2to4(MeshSlice &mesh, const g
 
     const g_index p = mesh.vertices.create_vertex(point.data());
     {
+        LOCK_ATTRIBUTES;
         geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
         v_descriptor[p] |= incremental_meshing::attributes::VertexDescriptorFlags::INTERFACE;
+
+        geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+        v_discard[p] = false;
     }
+
+#ifndef NDEBUG
+    // check to make sure bandaid-fix worked
+    const auto p0t = mesh.vertices.point(v0);
+    const auto p1t = mesh.vertices.point(v1);
+    const auto p2t = mesh.vertices.point(v2);
+    const auto p3t = mesh.vertices.point(p);
+    const auto p4t = mesh.vertices.point(v_opposite);
+    if (VECE(p0t, p1t, p2t, p3t) || VECE(p4t, p1t, p2t, p3t))
+    {
+        OOC_ERROR("zero volume tet");
+    }
+#endif // NDEBUG
 
     mesh.CreateTetrahedra({
         {v_opposite, v0, v1, p},

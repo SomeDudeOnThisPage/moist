@@ -14,7 +14,7 @@ incremental_meshing::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInt
     this->_plane = std::make_shared<AxisAlignedInterfacePlane>(plane);
 }
 
-void incremental_meshing::InterfaceGenerator::AddConstraints(geogram::Mesh &mesh)
+void incremental_meshing::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
 {
     std::map<g_index, g_index> mesh_to_interface;
     std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map; // if we have more than 255 incident edges we have a waaaay bigger problem anyway...

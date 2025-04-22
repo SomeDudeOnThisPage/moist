@@ -3,8 +3,8 @@
 #include <functional>
 #include <geogram/mesh/mesh_repair.h>
 #include <geogram/basic/process.h>
-#include <mutex>
 #include <limits>
+#include <mutex>
 
 #include "local_operations.hpp"
 #include "ooc_mesh.hpp"
@@ -100,18 +100,18 @@ void incremental_meshing::MeshSlice::InsertInterfaceVertices(incremental_meshing
 {
     TIMER_START("insert interface vertices");
 
-    geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
-    geogram::Attribute<double> v_test(this->vertices.attributes(), incremental_meshing::INTERFACE);
-
     // mark vertices as discardable if they lie on the interface plane (later, during vertex insertion, vertices that match the interface will
     // be marked as interface, and thus non-discardable...)
     for (const g_index v : this->vertices)
     {
-        std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR);
+        LOCK_ATTRIBUTES;
+        geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+        v_discard[v] = incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane());
+
         geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(this->vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
         v_descriptor[v] |= incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane())
             ? incremental_meshing::attributes::VertexDescriptorFlags::DISCARD
-            : incremental_meshing::attributes::VertexDescriptorFlags::NONE;
+            : incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
     }
 
     const auto triangulation = interface.Triangulation();
@@ -293,86 +293,100 @@ void incremental_meshing::MeshSlice::FlushTetrahedra()
     {
         tets_to_delete[deleted_tet] = 1;
     }
-    this->cells.delete_elements(tets_to_delete, true);
+    this->cells.delete_elements(tets_to_delete, false);
     _deleted_tets.clear();
 }
 
 void incremental_meshing::MeshSlice::DecimateNonInterfaceEdges(incremental_meshing::Interface& interface)
 {
-    geogram::Attribute<incremental_meshing::InterfaceVertexStrategy> v_strategy(this->vertices.attributes(), incremental_meshing::INTERFACE_VERTEX_STRATEGY_ATTRIBUTE);
-    // map positions onto a list of vertices
+    // create buckets of all collapsable vertices containing their index
     std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator> map;
-
-    for (g_index v : this->vertices)
+    for (const g_index v : this->vertices)
     {
-        const auto strat = v_strategy[v];
-        if (!incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane()))
+#ifndef NDEBUG // sanity check... this should not happen as we map created vertices when splitting edges...
+        for (const g_index vo : this->vertices)
         {
+            if (vo != v && this->vertices.point(v) == this->vertices.point(vo))
+            {
+                OOC_DEBUG("colocated vertices " << v << ", " << vo << " at " << this->vertices.point(v));
+            }
+        }
+#endif // NDEBUG
+        LOCK_ATTRIBUTES;
+        geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(this->vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
+        geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+
+        if (v_discard[v])
+        {
+            const vec3 point = this->vertices.point(v);
+            map[point].insert(v);
+        }
+    }
+
+    // new idea: create a "new" tet with the g_indices of the collapsed onto vertex
+    // then mark the old as deleted...
+    // TODO: now that I have flags, can I just use a bit there? // TODO: No that is stupid... unless...
+    int collapsed = 0;
+    const g_index size = this->cells.nb();
+    for (g_index cell = 0; cell < size; cell++)
+    {
+        std::vector<g_index> collapsable;
+        g_index collapse_onto = -1;
+        bool collapse_onto_any = true;
+        for (l_index lv = 0; lv < 4; lv++)
+        {
+            const g_index v = this->cells.vertex(cell, lv);
+            const vec3 p = this->vertices.point(v);
+            if (!incremental_meshing::predicates::point_on_plane(p, *interface.Plane()))
+            {
+                continue;
+            }
+
+            LOCK_ATTRIBUTES;
+            geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(this->vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
+            geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+
+            if (v_discard[v])
+            {
+                collapsable.push_back(v);
+            }
+            else
+            {
+                collapse_onto = v;
+                collapse_onto_any = false;
+            }
+        }
+
+        if (collapse_onto == -1 && !collapse_onto_any)
+        {
+            // interface-tet is already created
             continue;
         }
 
-        map[this->vertices.point(v)] = std::unordered_set<g_index>();
-        map[this->vertices.point(v)].insert(v);
-    }
-
-    int collapsed = 0;
-    const g_index size = this->cells.nb();
-    for (g_index c = 0; c < size; c++)
-    {
-        for (l_index lv = 0; lv < 4; lv++)
+        if (collapse_onto_any)
         {
-            const g_index v = this->cells.vertex(c, lv);
-            if (v_strategy[v] == incremental_meshing::InterfaceVertexStrategy::KEEP || !incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane()))
-            {
-                continue;
-            }
-
-            // find vertex to move onto
-            g_index v_collapse_onto = -1;
-            bool keep;
-            for (l_index to_lv = (lv + 1) % 4; to_lv != lv; to_lv = (to_lv + 1) % 4)
-            {
-                const g_index to_v = this->cells.vertex(c, to_lv);
-                if (!incremental_meshing::predicates::point_on_plane(this->vertices.point(to_v), *interface.Plane()))
-                {
-                    continue;
-                }
-
-                v_collapse_onto = to_v;
-
-                if (v_strategy[to_v] == incremental_meshing::InterfaceVertexStrategy::KEEP)
-                {
-                    keep = true;
-                    break;
-                }
-            }
-
-            if (v_collapse_onto == -1)
-            {
-                continue;
-            }
-
-            const vec3 v_keep_point = this->vertices.point(v_collapse_onto);
-            for (const auto move_v : map[this->vertices.point(v)])
-            {
-                const auto ll = map[this->vertices.point(v)];
-                if (keep)
-                {
-                    v_strategy[move_v] = incremental_meshing::InterfaceVertexStrategy::KEEP;
-                }
-
-                // OOC_DEBUG("moving " << this->vertices.point(move_v) << " -> " << v_keep_point);
-                // actually move all of the points
-                this->vertices.point_ptr(move_v)[0] = v_keep_point.x;
-                this->vertices.point_ptr(move_v)[1] = v_keep_point.y;
-                this->vertices.point_ptr(move_v)[2] = v_keep_point.z;
-                map[v_keep_point].insert(move_v);
-                map[this->vertices.point(move_v)].clear();
-            }
-
+            collapse_onto = collapsable.front();
         }
 
-        collapsed++;
+        for (const g_index v : collapsable)
+        {
+            if (v == collapse_onto)
+            {
+                continue;
+            }
+
+            const vec3 collapse_onto_point = this->vertices.point(collapse_onto);
+
+            // collapse all clustered vertices onto collapse_onto
+            const vec3 point = this->vertices.point(v);
+            for (const g_index _v : map[point])
+            {
+                this->vertices.point(_v).x = collapse_onto_point.x;
+                this->vertices.point(_v).y = collapse_onto_point.y;
+                this->vertices.point(_v).z = collapse_onto_point.z;
+                map[collapse_onto_point].insert(_v);
+            }
+        }
     }
 
     OOC_DEBUG("collapsed " << collapsed << " tets");
@@ -411,7 +425,7 @@ void incremental_meshing::MeshSlice::InsertVertex(const geogram::vec3& point, co
 
         if (incremental_meshing::predicates::point_in_tet(*this, cell, point))
         {
-            incremental_meshing::operation::vertex_insert_2to4(*this, cell, point, plane);
+            incremental_meshing::operation::vertex_insert_1to3(*this, cell, point, plane);
             PARALLEL_BREAK;
         }
     }

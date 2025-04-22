@@ -34,7 +34,21 @@ namespace incremental_meshing
     class MeshSlice : public geogram::Mesh
     {
     public:
+        /**
+         * @brief Constructs a MeshSlice object.
+         *
+         * Initializes a new MeshSlice with the given dimension and precision settings.
+         *
+         * @param dimension The dimension of the mesh (default `3`).
+         * @param single_precision If true, use `float`; otherwise, use `double` (default `false`).
+         */
         MeshSlice(geogram::index_t dimension = 3, bool single_precision = false);
+
+        /**
+         * @brief Inserts a created Interface into this MeshSlice.
+         *
+         * @param interface The (initialized) interface reference.
+         */
         void InsertInterface(incremental_meshing::Interface& interface);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
@@ -42,16 +56,21 @@ namespace incremental_meshing
         void DeleteTetrahedra(const g_index tet) { this->DeleteTetrahedra({tet}); };
         void DeleteTetrahedra(const std::initializer_list<g_index> tetrahedra);
     private:
+
+        // deprecated
         std::string _identifier;
+
         std::vector<CreatedTetrahedon> _created_tets;
+
         std::unordered_set<geogram::index_t> _deleted_tets;
 
+        // global operations
         void InsertInterfaceVertices(incremental_meshing::Interface& interface);
         void InsertInterfaceEdges(incremental_meshing::Interface& interface);
         void DecimateNonInterfaceEdges(incremental_meshing::Interface& interface);
 
+        // utils
         void InsertVertex(const geogram::vec3& point, const incremental_meshing::AxisAlignedInterfacePlane& plane);
-
         void CreateTetrahedra();
         void FlushTetrahedra();
     };

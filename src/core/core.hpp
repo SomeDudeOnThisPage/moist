@@ -7,7 +7,7 @@
 #include <limits>
 
 #ifndef NDEBUG
-// #define OPTION_PARALLEL_LOCAL_OPERATIONS // dev
+#undef OPTION_PARALLEL_LOCAL_OPERATIONS // dev
 // #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
@@ -15,40 +15,6 @@ namespace incremental_meshing
 {
     // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
     const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon();
-    const std::string INTERFACE_VERTEX_STRATEGY_ATTRIBUTE = "InterfaceVertexStrategy";
-    const std::string INTERFACE = "Interface";
-
-    // custom attributes
-    enum class InterfaceVertexStrategy
-    {
-        NONE, // not an interface vertex
-        DISCARD,
-        KEEP
-    };
-
-    inline std::istream& operator>>(std::istream& is, InterfaceVertexStrategy& obj)
-    {
-        return is;
-    }
-
-    inline std::ostream& operator<<(std::ostream& os, const InterfaceVertexStrategy& strategy)
-    {
-#ifndef NDEBUG
-        switch (strategy)
-        {
-            case InterfaceVertexStrategy::DISCARD:
-                os << "DISCARD";
-                break;
-            case InterfaceVertexStrategy::KEEP:
-                os << "KEEP";
-                break;
-            default:
-                os << "UNKNOWN";
-                break;
-        }
-#endif
-        return os;
-    }
 
     // util structs
     enum class Axis
@@ -101,13 +67,6 @@ using l_index = geogram::index_t;
 // in case we switch to real predicates, similar to, for instance, marco attenes stuff...
 using vec3 = geogram::vec3;
 using vec2 = geogram::vec2;
-
-// enum class InterfaceEdgeStrategy
-// {
-//     NONE, // not an interface vertex
-//     DISCARD,
-//     KEEP
-// };
 
 // additional operators
 inline bool operator==(const vec3& a, const vec3& b)
