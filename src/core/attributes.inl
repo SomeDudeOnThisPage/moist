@@ -9,12 +9,15 @@
 
 #define ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS "VertexDescriptorFlags"
 #define ATTRIBUTE_DISCARD "Discard"
+#define ATTRIBUTE_INTERFACE "Interface" // TODO: Make all this flags after testing, maybe keep "int" attributes for visualization in debug mode vorpaview
+#define ATTRIBUTE_CLUSTER_ONTO "ClusterOnto" // TODO: Make all this flags after testing, maybe keep "int" attributes for visualization in debug mode vorpaview
+
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     #define LOCK_ATTRIBUTES std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR)
 #else
     #define LOCK_ATTRIBUTES
 #endif // OPTION_PARALLEL_LOCAL_OPERATIONS
-
+#include <geogram/basic/numeric.h>
 namespace incremental_meshing::attributes
 {
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
@@ -30,8 +33,13 @@ namespace incremental_meshing::attributes
     };
 
     // needs to be defined for the compiler not to complain
-    inline std::istream& operator>>(std::istream& is, VertexDescriptorFlags& flags){ return is; }
-    inline std::ostream& operator<<(std::ostream& os, const VertexDescriptorFlags& flags) { return os; }
+    inline std::istream& operator>>(std::istream& is, VertexDescriptorFlags& flags){
+        return is;
+    }
+
+    inline std::ostream& operator<<(std::ostream& os, const VertexDescriptorFlags& flags) {
+        return os;
+    }
 
     // must be an enum class, geogram doesn't seem to like "normal" pre-c11 enums
     // https://stackoverflow.com/questions/32578638/how-to-use-c11-enum-class-for-flags
@@ -70,8 +78,8 @@ namespace incremental_meshing::attributes
 
     inline void initialize()
     {
-        geogram::geo_register_attribute_type<VertexDescriptorFlags>("VertexDescriptorFlags");
-        geogram::geo_register_attribute_type<int>("Discard");
+        //geogram::geo_register_attribute_type<geogram::Numeric::uint8>("VertexDescriptorFlags");
+        //geogram::geo_register_attribute_type<int>("Discard");
     }
 }
 #endif // __OOC_ATTRIBUTES_HPP

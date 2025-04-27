@@ -26,8 +26,13 @@ void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_in
     {
         // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
         LOCK_ATTRIBUTES;
-        geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
-        v_descriptor[edge.p] |= incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
+        geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+        geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
+        geogram::Attribute<int> v_cluster_direction(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+
+        v_discard[edge.p] = true;
+        v_interface[edge.p] = true;
+        v_cluster_direction[edge.p] = v_coplanar_opposite;
     }
 
 #ifndef NDEBUG
@@ -73,13 +78,17 @@ void incremental_meshing::operation::edge_split_1to3(MeshSlice &mesh, const g_in
     {
         // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
         LOCK_ATTRIBUTES;
-        geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
-        v_descriptor[edge0.p] |= incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
-        v_descriptor[edge1.p] |= incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
-
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+        geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
+        geogram::Attribute<int> v_cluster_direction(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+
         v_discard[edge0.p] = true;
         v_discard[edge1.p] = true;
+        v_interface[edge0.p] = true;
+        v_interface[edge1.p] = true;
+        v_cluster_direction[edge0.p] = edge1.p;
+        v_cluster_direction[edge1.p] = edge0.p;
+
     }
 
     mesh.CreateTetrahedra({
@@ -103,12 +112,9 @@ void incremental_meshing::operation::vertex_insert_1to3(MeshSlice &mesh, const g
     {
         const g_index v = mesh.cells.vertex(cell, lv);
         const vec3 p = mesh.vertices.point(v);
-        if (incremental_meshing::predicates::vec_eq_2d(point, p, plane))
+        if (incremental_meshing::predicates::point_on_plane(p, plane) && incremental_meshing::predicates::vec_eq_2d(point, p, plane))
         {
             LOCK_ATTRIBUTES;
-            geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
-            v_descriptor[v] |= incremental_meshing::attributes::VertexDescriptorFlags::INTERFACE;
-
             geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
             v_discard[v] = false;
 
@@ -122,11 +128,18 @@ void incremental_meshing::operation::vertex_insert_1to3(MeshSlice &mesh, const g
     const g_index p = mesh.vertices.create_vertex(point.data());
     {
         LOCK_ATTRIBUTES;
-        geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(mesh.vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
-        v_descriptor[p] |= incremental_meshing::attributes::VertexDescriptorFlags::INTERFACE;
-
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+        geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
+        geogram::Attribute<int> v_cluster_direction(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+
         v_discard[p] = false;
+        v_interface[p] = true;
+        v_cluster_direction[p] = -1;
+
+        if (point.z != -1.0)
+        {
+            OOC_DEBUG("what?");
+        }
     }
 
 #ifndef NDEBUG
@@ -136,7 +149,7 @@ void incremental_meshing::operation::vertex_insert_1to3(MeshSlice &mesh, const g
     const auto p2t = mesh.vertices.point(v2);
     const auto p3t = mesh.vertices.point(p);
     const auto p4t = mesh.vertices.point(v_opposite);
-    if (VECE(p0t, p1t, p2t, p3t) || VECE(p4t, p1t, p2t, p3t))
+    if (VECE(v_opposite, v0, v1, p) || VECE(v_opposite, v1, v2, p) || VECE(v_opposite, v2, v0, p))
     {
         OOC_ERROR("zero volume tet");
     }

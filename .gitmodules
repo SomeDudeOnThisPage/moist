@@ -1,0 +1,3 @@
+[submodule "src/surface-extractor/MC33"]
+	path = src/surface-extractor/MC33
+	url = https://github.com/dvega68/MC33_cpp_library.git

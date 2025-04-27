@@ -1,6 +1,8 @@
 #ifndef __OOC_GEOMETRY_CPP
 #define __OOC_GEOMETRY_CPP
 
+#include <array>
+
 #include <geogram/mesh/mesh.h>
 
 #include "core.hpp"
@@ -58,6 +60,16 @@ namespace incremental_meshing::geometry
                b == c ||
                b == d ||
                c == d;
+    }
+
+    PURE INLINE std::array<g_index, 4> cell_vertices(const g_index cell, const MeshSlice &mesh)
+    {
+        return {
+            mesh.cells.vertex(cell, 0),
+            mesh.cells.vertex(cell, 1),
+            mesh.cells.vertex(cell, 2),
+            mesh.cells.vertex(cell, 3)
+        };
     }
 
     PURE INLINE std::tuple<g_index, g_index, g_index> other(const g_index cell, g_index opposite, const MeshSlice &mesh)

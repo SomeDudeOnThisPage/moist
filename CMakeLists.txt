@@ -4,9 +4,13 @@ project(OutOfCore_Meshing
     DESCRIPTION "out of core surface extraction, tetrahedral meshing and sizing field generation tools"
 )
 
-add_subdirectory(extern)
+# Options
+option(OOC_WITH_TETWILD "Bundle fTetWild" ON)
 
-# shared stuff as static library
+set(TIFF_DATA_FORMAT "u16" CACHE STRING "Define data format: u8 u16 u32 f32 f64")
+set_property(CACHE TIFF_DATA_FORMAT PROPERTY STRINGS u8 u16 u32 f32 f64)
+
+add_subdirectory(extern)
 add_subdirectory(src/core)
 
 # generate as own "subprojects", that may be started to work in parallel on different "slices"
@@ -16,6 +20,10 @@ add_subdirectory(src/core)
 add_subdirectory(src/surface-extractor)
 add_subdirectory(src/interface-generator)
 add_subdirectory(src/interface-inserter)
+
+if(OOC_WITH_TETWILD)
+    #add_subdirectory(src/tetwild-wrapper)
+endif()
 
 # Make work again after core lib refactor
 #set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)

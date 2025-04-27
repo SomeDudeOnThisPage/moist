@@ -17,15 +17,14 @@ namespace incremental_meshing
     class TiffData
     {
     public:
-        TiffData(std::filesystem::path first_file, uint32_t n_files);
+        TiffData(const std::string& pattern, uint32_t first_file, uint32_t num_files);
         ~TiffData() = default;
 
         uint32_t width() { return _width; };
         uint32_t height() { return _height; };
         uint32_t depth() { return _depth; };
 
-        std::vector<std::vector<std::vector<uint16_t>>>& data() { return _data; };
-        std::vector<std::vector<std::vector<uint16_t>>> _data;
+        std::vector<uint16_t> data;
     private:
         uint32_t _width;
         uint32_t _height;

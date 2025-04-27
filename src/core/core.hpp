@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <map>
 
 #ifndef NDEBUG
 #undef OPTION_PARALLEL_LOCAL_OPERATIONS // dev
@@ -13,8 +14,7 @@
 
 namespace incremental_meshing
 {
-    // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
-    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon();
+    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon(); // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
 
     // util structs
     enum class Axis
@@ -24,16 +24,18 @@ namespace incremental_meshing
         Z
     };
 
-    typedef struct
+    const std::map<std::string, incremental_meshing::Axis> AXIS_OPTION_ARGUMENT_MAP
     {
-        std::filesystem::path path_mesh_a;
-        std::filesystem::path path_mesh_b;
-        std::filesystem::path path_mesh_out;
-        double plane;
-        double envelope_size;
-        Axis axis;
-    } InterfaceExtractionOptions;
+        {"X", incremental_meshing::Axis::X},
+        {"Y", incremental_meshing::Axis::Y},
+        {"Z", incremental_meshing::Axis::Z}
+    };
 
+    // enum class GrowthDirection
+    // {
+    //     POSITIVE,
+    //     NEGATIVE
+    // };
 }
 
 #define OOC_ERROR(msg) \
@@ -78,8 +80,9 @@ inline bool operator==(const vec3& a, const vec3& b)
 
 inline bool operator==(const vec2& a, const vec2& b)
 {
-    return std::fabs(a.x - b.x) < incremental_meshing::__DOUBLE_EPSILON &&
-           std::fabs(a.y - b.y) < incremental_meshing::__DOUBLE_EPSILON;
+    //return std::fabs(a.x - b.x) < incremental_meshing::__DOUBLE_EPSILON &&
+    //       std::fabs(a.y - b.y) < incremental_meshing::__DOUBLE_EPSILON;
+    return a.x == b.x && a.y == b.y;
 }
 
 #endif // GEOGRAM_API

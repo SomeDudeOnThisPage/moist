@@ -9,7 +9,7 @@ set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/extern)
 #######################################
 set(GEOGRAM_LIB_ONLY ON CACHE BOOL "" FORCE)
 
-set(GEOGRAM_WITH_GRAPHICS OFF CACHE BOOL "" FORCE)
+set(GEOGRAM_WITH_GRAPHICS ON CACHE BOOL "" FORCE)
 set(GEOGRAM_WITH_LEGACY_NUMERICS OFF CACHE BOOL "" FORCE)
 set(GEOGRAM_WITH_HLBFGS OFF CACHE BOOL "" FORCE)
 set(GEOGRAM_WITH_TETGEN OFF CACHE BOOL "" FORCE)
@@ -56,6 +56,69 @@ if(NOT cli11_POPULATED)
 endif()
 
 #######################################
+### fTetWild
+#######################################
+#if(OOC_WITH_TETWILD)
+#    FetchContent_Declare(
+#        fTetWild
+#        GIT_REPOSITORY https://github.com/wildmeshing/fTetWild.git
+#        GIT_TAG        master
+#    )
+
+#    FetchContent_MakeAvailable(fTetWild) # goofy aaah since this also downloads and builds it's own geogram...
+#endif()
+
+# TODO: Make this better with a fork of MC33 where I fix the problems it has with modern cpp and cmake...
+#######################################
+### MC33
+#######################################
+#FetchContent_Declare(
+#    mc33
+#    GIT_REPOSITORY https://github.com/dvega68/MC33_cpp_library.git
+#    GIT_TAG main
+#)
+#
+#FetchContent_MakeAvailable(mc33)
+#
+#add_library(MC33 STATIC
+#    ${mc33_SOURCE_DIR}/include/MC33.h
+#    ${mc33_SOURCE_DIR}/source/MC33.cpp
+#    ${mc33_SOURCE_DIR}/source/libMC33++.cpp
+#    ${mc33_SOURCE_DIR}/source/MC33_LookUpTable.h
+#    ${mc33_SOURCE_DIR}/source/surface.cpp
+#    ${mc33_SOURCE_DIR}/source/grid3d.cpp
+#)
+#
+## TODO: Probably best to compile a different static version for each of these types, and then choose based on parameter...
+#if(TIFF_DATA_FORMAT STREQUAL "u8")
+#    message(STATUS "compiling mc33 with u8 data type")
+#    target_compile_definitions(MC33 PRIVATE integer_GRD)
+#    target_compile_definitions(MC33 PRIVATE GRD_type_size=1)
+#elseif(TIFF_DATA_FORMAT STREQUAL "u16")
+#    message(STATUS "compiling mc33 with u16 data type")
+#    target_compile_definitions(MC33 PRIVATE integer_GRD)
+#    target_compile_definitions(MC33 PRIVATE GRD_type_size=2)
+#elseif(TIFF_DATA_FORMAT STREQUAL "u32")
+#    message(STATUS "compiling mc33 with u32 data type")
+#    target_compile_definitions(MC33 PRIVATE integer_GRD)
+#    target_compile_definitions(MC33 PRIVATE GRD_type_size=4)
+#elseif(TIFF_DATA_FORMAT STREQUAL "f32")
+#    message(STATUS "compiling mc33 with f32 data type")
+#    target_compile_definitions(MC33 PRIVATE GRD_type_size=4)
+#elseif(TIFF_DATA_FORMAT STREQUAL "f64")
+#    message(STATUS "compiling mc33 with f64 data type")
+#    target_compile_definitions(MC33 PRIVATE GRD_type_size=8)
+#else()
+#    message(FATAL_ERROR "Invalid tiff data type: ${TIFF_DATA_FORMAT}")
+#endif()
+#
+## removed Wextra from original compiler flags in mc33 makefile
+#target_compile_options(MC33 PRIVATE -std=c++11 -Ofast -m64 -Wall -funroll-loops)
+#target_include_directories(MC33 PUBLIC ${mc33_SOURCE_DIR}/include)
+
+# this doesnt fckn work. just make cgal a requirement to be installed...
+
+#######################################
 ### CGAL
 #######################################
 FetchContent_Declare(
@@ -65,8 +128,6 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(CGAL)
-
-# this doesnt fckn work. just make cgal a requirement to be installed...
 
 #if(NOT CGAL_POPULATED)
 #    FetchContent_Populate(CGAL)

@@ -24,6 +24,17 @@ typedef struct EDGE_STRUCT
     }
 } Edge;
 
+typedef struct EDGE_STRUCT_POSITION
+{
+    vec2 p0;
+    vec2 p1;
+
+    bool operator==(const EDGE_STRUCT_POSITION& other) const
+    {
+        return (p0 == other.p0 && p1 == other.p1) || (p0 == other.p1 && p1 == other.p0);
+    }
+} EdgePosition;
+
 struct Vec3HashOperator
 {
     std::size_t operator()(const vec3& v) const
@@ -50,6 +61,18 @@ struct Vec3EqualOperator
 namespace std
 {
     template <>
+    struct hash<vec2>
+    {
+        std::size_t operator()(const vec2& v) const
+        {
+            std::hash<float> hasher;
+            std::size_t h1 = hasher(v.x);
+            std::size_t h2 = hasher(v.y);
+            return h1 ^ (h2 << 1);
+        }
+    };
+
+    template <>
     struct hash<incremental_meshing::CROSSED_EDGE_STRUCT>
     {
         std::size_t operator()(const incremental_meshing::CROSSED_EDGE_STRUCT& edge) const
@@ -66,6 +89,16 @@ namespace std
             return std::hash<geogram::index_t>()(std::min(edge.v0, edge.v1)) ^ (std::hash<geogram::index_t>()(std::max(edge.v0, edge.v1)) << 1);
         }
     };
+
+    template <>
+    struct hash<EDGE_STRUCT_POSITION>
+    {
+        std::size_t operator()(const EDGE_STRUCT_POSITION& e) const
+        {
+            return std::hash<vec2>()(e.p0) ^ std::hash<vec2>()(e.p1);
+        }
+    };
+
 }
 
 incremental_meshing::MeshSlice::MeshSlice(geogram::index_t dimension, bool single_precision) : geogram::Mesh(dimension, single_precision)
@@ -106,12 +139,12 @@ void incremental_meshing::MeshSlice::InsertInterfaceVertices(incremental_meshing
     {
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
-        v_discard[v] = incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane());
+        geogram::Attribute<int> v_interface(this->vertices.attributes(), ATTRIBUTE_INTERFACE);
+        geogram::Attribute<int> v_cluster_direction(this->vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
 
-        geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(this->vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
-        v_descriptor[v] |= incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane())
-            ? incremental_meshing::attributes::VertexDescriptorFlags::DISCARD
-            : incremental_meshing::attributes::VertexDescriptorFlags::DISCARD;
+        v_discard[v] = true;
+        v_interface[v] = incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane());
+        v_cluster_direction[v] = -1;
     }
 
     const auto triangulation = interface.Triangulation();
@@ -146,7 +179,7 @@ void incremental_meshing::MeshSlice::InsertInterfaceVertices(incremental_meshing
         }
     }
     OOC_DEBUG("Done validating point insertion...");
-    incremental_meshing::utils::dump_mesh(*this, "_after_point_insertion.msh");
+    incremental_meshing::utils::dump_mesh(*this, "after_point_insertion.geogram");
 #endif // NDEBUG
 }
 
@@ -258,7 +291,7 @@ void incremental_meshing::MeshSlice::InsertInterfaceEdges(incremental_meshing::I
     TIMER_END;
 
 #ifndef NDEBUG
-    incremental_meshing::utils::dump_mesh(*this, "_after_edge_insertion.msh");
+    incremental_meshing::utils::dump_mesh(*this, "after_edge_insertion.geogram");
 #endif // NDEBUG
 }
 
@@ -299,6 +332,37 @@ void incremental_meshing::MeshSlice::FlushTetrahedra()
 
 void incremental_meshing::MeshSlice::DecimateNonInterfaceEdges(incremental_meshing::Interface& interface)
 {
+
+#ifndef NDEBUG
+{
+    int discardable = 0;
+    LOCK_ATTRIBUTES;
+    geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+    for (const g_index v : this->vertices)
+    {
+        if (v_discard[v])
+        {
+            discardable++;
+        }
+    }
+    OOC_DEBUG(discardable << " discardable vertices");
+}
+#endif // NDEBUG
+
+    // TODO: build this once... need it at multiple places
+    // sometimes edges are just... missing... even when calling compute_borders, so do it manually here.
+    std::unordered_set<EdgePosition> edges;
+    for (const g_index f_id : interface.Triangulation()->facets)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            edges.emplace(EdgePosition {
+                reinterpret_cast<const vec2&>(interface.Triangulation()->vertices.point(interface.Triangulation()->facets.vertex(f_id, i))),
+                reinterpret_cast<const vec2&>(interface.Triangulation()->vertices.point(interface.Triangulation()->facets.vertex(f_id, (i + 1) % 3)))
+            });
+        }
+    }
+
     // create buckets of all collapsable vertices containing their index
     std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator> map;
     for (const g_index v : this->vertices)
@@ -313,7 +377,6 @@ void incremental_meshing::MeshSlice::DecimateNonInterfaceEdges(incremental_meshi
         }
 #endif // NDEBUG
         LOCK_ATTRIBUTES;
-        geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(this->vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
         geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
 
         if (v_discard[v])
@@ -323,73 +386,99 @@ void incremental_meshing::MeshSlice::DecimateNonInterfaceEdges(incremental_meshi
         }
     }
 
-    // new idea: create a "new" tet with the g_indices of the collapsed onto vertex
-    // then mark the old as deleted...
-    // TODO: now that I have flags, can I just use a bit there? // TODO: No that is stupid... unless...
-    int collapsed = 0;
-    const g_index size = this->cells.nb();
-    for (g_index cell = 0; cell < size; cell++)
+    std::unordered_map<g_index, std::unordered_set<g_index>> v_to_c; // vertex to cell incidence array only containing interface relevant elements
+    for (g_index cell = this->cells.nb() - 1; cell > 0; cell--)
     {
-        std::vector<g_index> collapsable;
-        g_index collapse_onto = -1;
-        bool collapse_onto_any = true;
-        for (l_index lv = 0; lv < 4; lv++)
+        LOCK_ATTRIBUTES;
+        geogram::Attribute<int> v_interface(this->vertices.attributes(), ATTRIBUTE_INTERFACE);
+        geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+        for (const g_index v : incremental_meshing::geometry::cell_vertices(cell, *this))
         {
-            const g_index v = this->cells.vertex(cell, lv);
-            const vec3 p = this->vertices.point(v);
-            if (!incremental_meshing::predicates::point_on_plane(p, *interface.Plane()))
+            if (v == -1)
+            {
+                OOC_DEBUG("invalid vertex...");
+            }
+            // TODO: replace this all with bitflags...
+            if (!incremental_meshing::predicates::point_on_plane(this->vertices.point(v), *interface.Plane()))
             {
                 continue;
             }
 
-            LOCK_ATTRIBUTES;
-            geogram::Attribute<incremental_meshing::attributes::VertexDescriptorFlags> v_descriptor(this->vertices.attributes(), ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS);
-            geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
-
-            if (v_discard[v])
-            {
-                collapsable.push_back(v);
-            }
-            else
-            {
-                collapse_onto = v;
-                collapse_onto_any = false;
-            }
+            v_to_c[v].insert(cell);
         }
+    }
+    OOC_DEBUG("#v_to_c = " << v_to_c.size());
 
-        if (collapse_onto == -1 && !collapse_onto_any)
+    // iterate all vertices in our incidence array
+    // if the vertex needs to be collapsed, search incident cells for a interface-nondiscardable vertex.
+    for (const auto& [v, _] : v_to_c)
+    {
+        LOCK_ATTRIBUTES;
+        geogram::Attribute<int> v_interface(this->vertices.attributes(), ATTRIBUTE_INTERFACE);
+        geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+        if (!v_discard[v])
         {
-            // interface-tet is already created
             continue;
         }
 
-        if (collapse_onto_any)
+        g_index actual_cluster_onto = -1; // if we have no interface vertices in any cells around the current vertex, cluster onto any...
+        g_index cluster_onto = -1;
+        for (const g_index cell : v_to_c[v])
         {
-            collapse_onto = collapsable.front();
+            for (const g_index v_to : incremental_meshing::geometry::cell_vertices(cell, *this))
+            {
+                if (v_to == -1 || !incremental_meshing::predicates::point_on_plane(this->vertices.point(v_to), *interface.Plane()))
+                {
+                    // OOC_DEBUG("invalid vertex...");
+                    continue;
+                }
+
+                if (actual_cluster_onto == -1)
+                {
+                    actual_cluster_onto = v_to;
+                }
+
+                // prioritize collapse along interface edge if possible
+                if (edges.contains(EdgePosition {
+                    reinterpret_cast<const vec2&>(this->vertices.point(v)),
+                    reinterpret_cast<const vec2&>(this->vertices.point(v_to))
+                }))
+                {
+                    cluster_onto = v_to;
+                }
+            }
         }
 
-        for (const g_index v : collapsable)
+        actual_cluster_onto = (cluster_onto != -1) ? cluster_onto : actual_cluster_onto;
+
+        if (actual_cluster_onto == -1)
         {
-            if (v == collapse_onto)
-            {
-                continue;
-            }
+            OOC_DEBUG("invalid vertex");
+            continue;
+        }
 
-            const vec3 collapse_onto_point = this->vertices.point(collapse_onto);
+        const vec3 point_to = this->vertices.point(actual_cluster_onto);
+        const vec3 point_from = this->vertices.point(v);
 
-            // collapse all clustered vertices onto collapse_onto
-            const vec3 point = this->vertices.point(v);
-            for (const g_index _v : map[point])
+        for (const g_index v_movable : map[point_from])
+        {
+            this->vertices.point(v_movable).x = point_to.x;
+            this->vertices.point(v_movable).y = point_to.y;
+            this->vertices.point(v_movable).z = point_to.z;
+
+            map[point_to].insert(v_movable);
+
+            if (actual_cluster_onto == cluster_onto)
             {
-                this->vertices.point(_v).x = collapse_onto_point.x;
-                this->vertices.point(_v).y = collapse_onto_point.y;
-                this->vertices.point(_v).z = collapse_onto_point.z;
-                map[collapse_onto_point].insert(_v);
+                LOCK_ATTRIBUTES;
+                geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+                geogram::Attribute<int> v_interface(this->vertices.attributes(), ATTRIBUTE_INTERFACE);
+                v_discard[v_movable] = false;
+                v_interface[v_movable] = true;
             }
         }
     }
 
-    OOC_DEBUG("collapsed " << collapsed << " tets");
     for (const auto cell : this->cells)
     {
         if (geogram::mesh_cell_volume(*this, cell) == 0 || incremental_meshing::geometry::has_duplicate_vertex(cell, *this))
@@ -400,7 +489,7 @@ void incremental_meshing::MeshSlice::DecimateNonInterfaceEdges(incremental_meshi
     this->FlushTetrahedra();
 
 #ifndef NDEBUG
-    incremental_meshing::utils::dump_mesh(*this, "_after_clustering.msh");
+    incremental_meshing::utils::dump_mesh(*this, "after_clustering.geogram");
 #endif // NDEBUG
 }
 

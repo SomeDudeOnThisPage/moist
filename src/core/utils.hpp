@@ -21,10 +21,38 @@ namespace incremental_meshing::utils {
         return geogram::vec3(x, y, z);
     }
 
+    inline std::size_t count_placeholders(const std::string& pattern)
+    {
+        std::size_t count = 0;
+        for (std::size_t i = 0; i < pattern.size(); ++i)
+        {
+            if (pattern[i] == '{')
+            {
+                if (i + 1 < pattern.size() && pattern[i + 1] == '{')
+                {
+                    ++i;
+                }
+                else
+                {
+                    ++count;
+                }
+            }
+            else if (pattern[i] == '}')
+            {
+                if (i + 1 < pattern.size() && pattern[i + 1] == '}')
+                {
+                    ++i;
+                }
+            }
+        }
+        return count;
+    }
+
 #ifndef NDEBUG
     inline void dump_mesh(geogram::Mesh& mesh, std::string file)
     {
         GEO::MeshIOFlags export_flags;
+        export_flags.set_attribute(geogram::MESH_NO_ATTRIBUTES);
         export_flags.set_dimension(3);
         export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
         export_flags.set_verbose(true);

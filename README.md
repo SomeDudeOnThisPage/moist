@@ -19,6 +19,20 @@ cmake ..
 make
 ```
 
+# Useful Software
+To view .geogram meshes, install vorpaview from the geogram repository:
+```
+mkdir vorpaview
+cd vorpaview
+git clone https://github.com/BrunoLevy/geogram.git .
+git submodule init
+mkdir build
+cd build
+cmake ..
+make [install] vorpaview
+```
+
+
 ### Options
 I still have to figure out how to do the entire CMAKE-Option-Configuration-Thingy...
 - ```UNROLL_LOOPS```: Unrolls most loops in geometric predicates
@@ -32,7 +46,7 @@ Planned:
 The project is split into multiple sub-programs, which can be incorporated in any workflow-framework.
 
 ### 1. Surface-Extraction
-CGAL Surface-Extraction wrapper, that takes a stack of TIFF-Data and generates a surface mesh for use in meshers like TetWild. Also generates a sizing-field mesh if desired. 
+CGAL Surface-Extraction wrapper, that takes a stack of TIFF-Data and generates a surface mesh for use in meshers like TetWild. Also generates a sizing-field mesh if desired.
 
 <b>Implementation pending.</b>
 
@@ -74,4 +88,3 @@ Example usage: (<b>Pending after refactoring.</b>)
 Takes two arbitrary tetrahedral meshes, as well as their interface-metadata, and merges them into the first mesh.
 
 <b>Implementation pending.</b>
-
