@@ -17,6 +17,8 @@ namespace incremental_meshing
         g_index e_v1;
         g_index p;
 
+        g_index e_interface; // (custom) interface edge global index, used in decimation to find a point to decimate onto
+
         bool operator==(const CROSSED_EDGE_STRUCT& other) const
         {
             return p == other.p && ((e_v0 == other.e_v0 && e_v1 == other.e_v1) || (e_v0 == other.e_v1 && e_v1 == other.e_v0));
@@ -25,7 +27,7 @@ namespace incremental_meshing
 
     typedef struct
     {
-        g_index v0;
+        g_index v0; // alias v_line
         g_index v1;
         g_index v2;
         g_index v3;
@@ -60,6 +62,7 @@ namespace incremental_meshing
         // deprecated
         std::string _identifier;
 
+        std::vector<g_index> _created_tets_idx;
         std::vector<CreatedTetrahedon> _created_tets;
 
         std::unordered_set<geogram::index_t> _deleted_tets;
@@ -68,6 +71,9 @@ namespace incremental_meshing
         void InsertInterfaceVertices(incremental_meshing::Interface& interface);
         void InsertInterfaceEdges(incremental_meshing::Interface& interface);
         void DecimateNonInterfaceEdges(incremental_meshing::Interface& interface);
+
+        // v2
+        void InsertEdges(incremental_meshing::Interface& interface);
 
         // utils
         void InsertVertex(const geogram::vec3& point, const incremental_meshing::AxisAlignedInterfacePlane& plane);

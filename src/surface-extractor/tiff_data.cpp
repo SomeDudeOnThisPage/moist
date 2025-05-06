@@ -19,17 +19,17 @@ incremental_meshing::TiffData::TiffData(const std::string& pattern, const uint32
                 &TIFFClose
             );
 
-            uint32_t sample_bits = 16;
+            _sample_bits = 16;
             TIFFGetField(tiff.get(), TIFFTAG_IMAGEWIDTH, &_width);
             TIFFGetField(tiff.get(), TIFFTAG_IMAGELENGTH, &_height);
-            TIFFGetField(tiff.get(), TIFFTAG_BITSPERSAMPLE, &sample_bits);
+            TIFFGetField(tiff.get(), TIFFTAG_BITSPERSAMPLE, &_sample_bits);
 
             if (n == 0)
             {
                 data.resize(_width * _height * _depth);
             }
 
-            OOC_DEBUG("loading .tiff: w = " << _width << ", h = " << _height << ", sample_bits = " << sample_bits);
+            OOC_DEBUG("loading .tiff: w = " << _width << ", h = " << _height << ", sample_bits = " << _sample_bits);
 
             //_data[n].resize(_height);
             for (auto row = 0; row < _height; row++)

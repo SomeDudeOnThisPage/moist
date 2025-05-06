@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <algorithm>
+#include <cmath>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -26,7 +27,7 @@ namespace incremental_meshing
     {
        if (code != cudaSuccess)
        {
-          std::cout << (stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line) << std::endl;
+          OOC_ERROR("cuda_error " << cudaGetErrorString(code));
           if (abort) exit(code);
        }
     }
@@ -97,40 +98,102 @@ namespace incremental_meshing
     }
 }
 
-void incremental_meshing::generate_scalar_field(std::shared_ptr<TiffData> data)
+struct CU_TiffParameters
 {
-    cudaExtent extent = make_cudaExtent(data->width() * sizeof(uint16_t), data->height(), data->depth());
+    size_t size;
+    size_t width;
+    size_t height;
+    size_t depth;
+};
 
-    uint16_t* host_data = new uint16_t[data->width() * data->height() * 1];
-    for (int z = 0; z < data->depth(); z++)
+// TODO: Should I make this configurable or only use it for internal testing, settling on the (tested) best values?
+enum CU_ScalarFieldOverflowWrappingMode : uint8_t
+{
+    OVERFLOW_MODE_ZERO = 0,             /** Set over/underflow to zero. */
+    OVERFLOW_MODE_WRAP_AROUND = 1,      /** Wrap around the entire given data in the over/underflow direction. */
+    OVERFLOW_MODE_WRAP_INTO_SELF = 2    /** Wrap around the current cell being processed - cells must be sized at least `2 * CU_ScalarFieldParameters#kernel_radius`. */
+};
+
+struct CU_ScalarFieldParameters
+{
+    /**
+     * @brief Minimal size of an octree node in the scalar field in pixels (one thread will walk one block of extent `min_size.x * min_size.y * min_size.z`).
+     *
+     * This also defines the size of the output array. TODO: currently this is just assumed to be "1".
+     */
+    dim3 octree_node_size;
+    dim3 kernel_radius;
+    CU_ScalarFieldOverflowWrappingMode overflow_mode;
+    incremental_meshing::IsoValue isovalue;
+};
+
+__global__ static void scalar_field_kernel(const float* input, float* output, const CU_TiffParameters tiff_parameters, const CU_ScalarFieldParameters scalar_field_parameters)
+{
+    // gates
+    const uint32_t x = cuda_utils::tidx();
+    const uint32_t y = cuda_utils::tidy();
+    const uint32_t z = cuda_utils::tidz();
+
+    const uint32_t dx = scalar_field_parameters.octree_node_size.x;
+    const uint32_t dy = scalar_field_parameters.octree_node_size.y;
+    const uint32_t dz = scalar_field_parameters.octree_node_size.z;
+
+}
+
+void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoValue isovalue)
+{
+    const size_t size = tiff.width() * tiff.height() * tiff.depth();
+    const size_t size_bytes = size * sizeof(float);
+
+    std::vector<float> h_input(size);
+    std::transform(
+        tiff.data.begin(), tiff.data.end(), h_input.begin(),
+        [&tiff](const uint16_t value) { return static_cast<float>(value) / static_cast<float>(std::pow(2, tiff.bits())); }
+    );
+
+    float* d_input;
+    float* d_output;
+
+    cuda_error(cudaMalloc(&d_input, size_bytes));
+    cuda_error(cudaMalloc(&d_output, size_bytes));
+
+    cuda_error(cudaMemcpy(d_input, h_input.data(), size_bytes, cudaMemcpyHostToDevice));
+
+    dim3 dim_block(
+        std::min((uint32_t) 16, tiff.width()),
+        std::min((uint32_t) 16, tiff.height()),
+        std::min((uint32_t) 16, tiff.depth())
+    );
+
+    dim3 dim_grid(
+        DIV_UP(tiff.width(), 16),
+        DIV_UP(tiff.height(), 16),
+        DIV_UP(tiff.depth(), 16)
+    );
+
+    OOC_DEBUG("calling w/ grid dimensions " << dim_grid.x << ", " << dim_grid.y << ", " << dim_grid.z);
+
+    CU_TiffParameters tiff_parameters
     {
-        for (int y = 0; y < data->height(); y++)
-        {
-            for (int x = 0; x < data->width(); x++)
-            {
-                int index = z * data->height() * data->width() + y * data->width() + x;
-                host_data[index] = data->_data[z][y][x];
-            }
-        }
-    }
+        size,
+        tiff.width(),
+        tiff.height(),
+        tiff.depth(),
+    };
 
-    cudaPitchedPtr d_input;
-    cudaPitchedPtr d_output;
-    cuda_error(cudaMalloc3D(&d_input, extent));
-    cuda_error(cudaMalloc3D(&d_output, extent));
+    CU_ScalarFieldParameters scalar_field_parameters
+    {
+        dim3(1, 1, 1),
+        dim3(2, 2, 2),
+        CU_ScalarFieldOverflowWrappingMode::OVERFLOW_MODE_ZERO,
+        isovalue
+    };
 
-    cudaMemcpy3DParms copy_host_to_device = {0};
-    copy_host_to_device.srcPtr = make_cudaPitchedPtr(host_data, data->width() * sizeof(uint16_t), data->width(), data->height());
-    copy_host_to_device.dstPtr = d_input;
-    copy_host_to_device.extent = extent;
-    copy_host_to_device.kind = cudaMemcpyHostToDevice;
-    cuda_error(cudaMemcpy3D(&copy_host_to_device));
+    scalar_field_kernel<<<dim_grid, dim_block>>>(d_input, d_output, tiff_parameters, scalar_field_parameters);
+    cuda_error(cudaPeekAtLastError());
+    cuda_error(cudaDeviceSynchronize());
 
-    dim3 dim_block(std::min((uint32_t) 16, data->width()), std::min((uint32_t) 16, data->height()), std::min((uint32_t) 16, data->depth()));
-    dim3 dim_grid(DIV_UP(data->width(), 16), DIV_UP(data->height(), 16), DIV_UP(data->depth(), 16));
-
-    OOC_DEBUG("calling w/ grid dimensions " << DIV_UP(data->width(), 16) << " " << DIV_UP(data->height(), 16) << " " << DIV_UP(data->depth(), 16));
-    incremental_meshing::averageScalarField<<<dim_grid, dim_block>>>(
+    /*incremental_meshing::averageScalarField<<<dim_grid, dim_block>>>(
         (uint16_t*) d_input.ptr,
         d_input.pitch,
         (uint16_t*) d_output.ptr,
@@ -141,9 +204,9 @@ void incremental_meshing::generate_scalar_field(std::shared_ptr<TiffData> data)
         5
     );
     cuda_error(cudaPeekAtLastError());
-    cuda_error(cudaDeviceSynchronize());
+    cuda_error(cudaDeviceSynchronize());*/
 
-    cudaMemcpy3DParms copy_device_to_host = {0};
+    /*cudaMemcpy3DParms copy_device_to_host = {0};
     copy_device_to_host.srcPtr = d_output;
     copy_device_to_host.dstPtr = make_cudaPitchedPtr(host_data, data->width() * sizeof(uint16_t), data->width(), data->height());
     copy_device_to_host.extent = extent;
@@ -174,9 +237,10 @@ void incremental_meshing::generate_scalar_field(std::shared_ptr<TiffData> data)
         }
     }
 
-    TIFFClose(tif);
-    free(host_data);
-    cuda_error(cudaFree(d_input.ptr));
-    cuda_error(cudaFree(d_output.ptr));
+    TIFFClose(tif);*/
+
+    //free(host_data);
+    //cuda_error(cudaFree(d_input.ptr));
+    //cuda_error(cudaFree(d_output.ptr));
 }
 #endif // __SCALAR_FIELD_CUH

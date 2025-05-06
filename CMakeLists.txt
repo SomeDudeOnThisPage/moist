@@ -7,6 +7,8 @@ project(OutOfCore_Meshing
 # Options
 option(OOC_WITH_TETWILD "Bundle fTetWild" ON)
 
+set(CUDA_DIR "/usr/local/cuda-12.8/bin/")
+set(CUDA_INCLUDE_DIR "/usr/local/cuda-12.8/include")
 set(TIFF_DATA_FORMAT "u16" CACHE STRING "Define data format: u8 u16 u32 f32 f64")
 set_property(CACHE TIFF_DATA_FORMAT PROPERTY STRINGS u8 u16 u32 f32 f64)
 
@@ -24,7 +26,3 @@ add_subdirectory(src/interface-inserter)
 if(OOC_WITH_TETWILD)
     #add_subdirectory(src/tetwild-wrapper)
 endif()
-
-# Make work again after core lib refactor
-#set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
-#add_subdirectory(src/sizing)

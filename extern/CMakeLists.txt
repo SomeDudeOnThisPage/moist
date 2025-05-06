@@ -58,15 +58,17 @@ endif()
 #######################################
 ### fTetWild
 #######################################
-#if(OOC_WITH_TETWILD)
+if(OOC_WITH_TETWILD)
 #    FetchContent_Declare(
 #        fTetWild
 #        GIT_REPOSITORY https://github.com/wildmeshing/fTetWild.git
 #        GIT_TAG        master
 #    )
-
+#    message("using ${CMAKE_SOURCE_DIR}/extern as third party folder for tetwild")
+#    set(LIBIGL_USE_STATIC_LIBRARY ON CACHE BOOL "Force libigl static library" FORCE)
+#    set(INPUT_THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/extern)
 #    FetchContent_MakeAvailable(fTetWild) # goofy aaah since this also downloads and builds it's own geogram...
-#endif()
+endif()
 
 # TODO: Make this better with a fork of MC33 where I fix the problems it has with modern cpp and cmake...
 #######################################

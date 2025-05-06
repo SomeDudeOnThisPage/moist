@@ -1,3 +1,5 @@
+#include <format>
+
 #include <CLI/CLI.hpp>
 
 // TODO: For now, since I had to fix some small things to make it compile with cpp 20, include it directly as files here...
@@ -14,6 +16,7 @@
 #include "core.hpp"
 #include "utils.hpp"
 #include "tiff_data.hpp"
+#include "sizing-field/scalar_field.hpp"
 
 static CLI::Validator PatternPlaceholderCountValidator(const std::size_t placeholders)
 {
@@ -42,8 +45,10 @@ int main(int argc, char* argv[])
         float isovalue;
         double scale_factor;
         bool f_center;
-        bool f_generate_sizing_field;
         bool f_invert;
+        bool f_generate_sizing_field;
+
+        float sizing_field_scale_denominator;
     };
 
     Arguments arguments{};
@@ -63,6 +68,7 @@ int main(int argc, char* argv[])
         ->required();
     app.add_option("-v, --isovalue", arguments.isovalue, "Isovalue.")
         ->check(CLI::PositiveNumber)
+        ->check(CLI::Bound(0.0f, 1.0f))
         ->required();
     app.add_option("-b, --sample-bits", arguments.sample_bits, "Bits per sample [8, 16, 32, 64].")
         ->check(CLI::IsMember({8, 16, 32, 64}))
@@ -72,12 +78,16 @@ int main(int argc, char* argv[])
         ->default_val(incremental_meshing::Axis::Z); // TODO: Maybe a "growth-direction" (positive/negative)?
     app.add_option("--directional-offset", arguments.dir_offset, "Directional offset along the growth axis (Z), e.g. if your files start with File500.tif, set this to -500. If you have 100 files and want them centered around 0 in the growth direction, set this to -50.")
         ->default_val(0);
-    app.add_flag("--center", arguments.f_center, "Center around 0,0,0")
-        ->default_val(false);
-    app.add_flag("--generate-sizing-field", arguments.f_generate_sizing_field, "Generates a sizing field - TODO: More configs for this")
+    app.add_flag("--center", arguments.f_center, "Center around 0,0,0. Applies to the entire mesh, not just this slice.")
         ->default_val(false);
     app.add_flag("--invert", arguments.f_invert, "Invert output (mesh negative space).")
         ->default_val(true);
+    app.add_flag("--generate-sizing-field", arguments.f_generate_sizing_field, "Generates a sizing field - TODO: More configs for this")
+        ->default_val(false);
+
+    // sizing-field specific, how do I make this conditional if f_generate_sizing_field is set?
+    app.add_option("--sizing-field-scale-denominator", arguments.sizing_field_scale_denominator, "Inverse minimum sizing field octree node size, in relation to the width of the data. E.g., with a width of 500, setting this to 50 will set the minimum size of an octree cell to 500/50 = 10x10x10px")
+        ->default_val(100.0f);
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
@@ -147,6 +157,8 @@ int main(int argc, char* argv[])
     {
         return 0;
     }
+
+    incremental_meshing::generate_scalar_field(tiff_data, incremental_meshing::IsoValue(arguments.isovalue));
 
     /*geogram::compute_sizing_field(mesh);
     geogram::mesh_save(

@@ -9,6 +9,12 @@
                           (c) == (d))
 #endif // NDEBUG
 
+// NEW NEW IDEA:
+// Map created vertices to FACETS (or facet-edges, since they are shared) of the input triangulation
+// Then, in the first step, only decimate these vertices ALONG the interface edges, so the "supercells" (with edges corresponding to the interface triangles)
+//     exist, and have more edges/points inside them. That does not matter
+// Then, in a second step, decimate all remaining edges in whatever order inside the "supercells"
+
 void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge, const AxisAlignedInterfacePlane &plane)
 {
     // bandaid-fix, must fix predicates...
@@ -27,12 +33,13 @@ void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_in
         // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
-        geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
-        geogram::Attribute<int> v_cluster_direction(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+        geogram::Attribute<int> v_interface_edge(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
 
+        v_discard[edge.e_v0] = false;
+        v_discard[edge.e_v1] = false;
         v_discard[edge.p] = true;
-        v_interface[edge.p] = true;
-        v_cluster_direction[edge.p] = v_coplanar_opposite;
+
+        v_interface_edge[edge.p] = edge.e_interface;
     }
 
 #ifndef NDEBUG
@@ -80,15 +87,17 @@ void incremental_meshing::operation::edge_split_1to3(MeshSlice &mesh, const g_in
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
         geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
-        geogram::Attribute<int> v_cluster_direction(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+        geogram::Attribute<int> v_interface_edge(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+
+        v_interface_edge[edge0.p] = edge0.e_interface;
+        v_interface_edge[edge1.p] = edge1.e_interface;
 
         v_discard[edge0.p] = true;
         v_discard[edge1.p] = true;
-        v_interface[edge0.p] = true;
-        v_interface[edge1.p] = true;
-        v_cluster_direction[edge0.p] = edge1.p;
-        v_cluster_direction[edge1.p] = edge0.p;
-
+        v_discard[v_opposite] = false;
+        v_discard[shared] = false;
+        v_discard[v_coplanar_opposite_p0] = false;
+        v_discard[v_coplanar_opposite_p1] = false;
     }
 
     mesh.CreateTetrahedra({
@@ -130,11 +139,10 @@ void incremental_meshing::operation::vertex_insert_1to3(MeshSlice &mesh, const g
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
         geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
-        geogram::Attribute<int> v_cluster_direction(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
+        geogram::Attribute<int> v_interface_edge(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
 
         v_discard[p] = false;
         v_interface[p] = true;
-        v_cluster_direction[p] = -1;
 
         if (point.z != -1.0)
         {

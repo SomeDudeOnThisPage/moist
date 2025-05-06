@@ -20,15 +20,18 @@ namespace incremental_meshing
         TiffData(const std::string& pattern, uint32_t first_file, uint32_t num_files);
         ~TiffData() = default;
 
-        uint32_t width() { return _width; };
-        uint32_t height() { return _height; };
-        uint32_t depth() { return _depth; };
+        uint32_t width() const { return _width; };
+        uint32_t height() const { return _height; };
+        uint32_t depth() const { return _depth; };
+
+        uint8_t bits() const { return _sample_bits; }
 
         std::vector<uint16_t> data;
     private:
         uint32_t _width;
         uint32_t _height;
         uint32_t _depth;
+        uint8_t _sample_bits;
     };
 }
 
