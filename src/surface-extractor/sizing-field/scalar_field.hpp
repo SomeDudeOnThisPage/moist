@@ -27,8 +27,7 @@ namespace incremental_meshing
         }
 
         __host__ __device__ IsoValue(const float v) : isovalue(check(v)){}
-        __host__ __device__ float get() const { return isovalue; }
-        __host__ __device__ operator float() const { return isovalue; }
+        __host__ __device__ operator float() const { return isovalue; } // TODO: Does a static_cast use implicit conversion operator?
     };
 
     struct PitchedMatrix3d

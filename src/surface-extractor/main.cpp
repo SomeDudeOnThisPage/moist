@@ -151,7 +151,8 @@ int main(int argc, char* argv[])
     export_flags.set_dimension(3);
     export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
     export_flags.set_verbose(true);
-    geogram::mesh_save(mesh, std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first)), export_flags);
+    // skip for now for faster testing of scalar field
+    //geogram::mesh_save(mesh, std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first)), export_flags);
 
     if (!arguments.f_generate_sizing_field)
     {

@@ -99,6 +99,10 @@ inline bool operator==(const vec2& a, const vec2& b)
     #define PURE
 #endif
 
+#ifdef __CUDACC__
+    #define restricted __restrict__
+#endif
+
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     #define PARALLEL_CONTINUE return
     #define PARALLEL_BREAK return

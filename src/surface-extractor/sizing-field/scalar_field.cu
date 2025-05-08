@@ -117,61 +117,91 @@ enum CU_ScalarFieldOverflowWrappingMode : uint8_t
 struct CU_ScalarFieldParameters
 {
     /**
-     * @brief Minimal size of an octree node in the scalar field in pixels (one thread will walk one block of extent `min_size.x * min_size.y * min_size.z`).
+     * @brief Minimal size of an octree node in the scalar field in pixels (one thread will walk one 3d-block of extent `min_size * min_size * min_size`).
      *
-     * This also defines the size of the output array. TODO: currently this is just assumed to be "1".
+     * This also defines the size of the output array.
      */
-    dim3 octree_node_size;
-    dim3 kernel_radius;
+    size_t octree_node_size;
+    size_t kernel_radius;
     CU_ScalarFieldOverflowWrappingMode overflow_mode;
     incremental_meshing::IsoValue isovalue;
 };
 
-__global__ static void scalar_field_kernel(const float* input, float* output, const CU_TiffParameters tiff_parameters, const CU_ScalarFieldParameters scalar_field_parameters)
+__global__ static void scalar_field_kernel(const float* __restrict__ input, uint16_t* __restrict__ output, const CU_TiffParameters tiff_parameters, const CU_ScalarFieldParameters scalar_field_parameters)
 {
+    constexpr uint16_t UINT16_MAX_VALUE = cuda_utils::math::c_pow(2, 16);
+
     // gates
-    const uint32_t x = cuda_utils::tidx();
-    const uint32_t y = cuda_utils::tidy();
-    const uint32_t z = cuda_utils::tidz();
+    const int tidx = cuda_utils::tidx();
+    const int tidy = cuda_utils::tidy();
+    const int tidz = cuda_utils::tidz();
 
-    const uint32_t dx = scalar_field_parameters.octree_node_size.x;
-    const uint32_t dy = scalar_field_parameters.octree_node_size.y;
-    const uint32_t dz = scalar_field_parameters.octree_node_size.z;
+    if (tidx >= tiff_parameters.width || tidy >= tiff_parameters.height || tidz >= tiff_parameters.depth) return;
 
+#ifndef NDEBUG
+    const bool is_debug_thread = tidx == 100 && tidy == 100 && tidz == 10;
+    if (is_debug_thread) { printf("DEBUG_CUDA: debug info from thread (%llu,%llu,%llu)\r\n", (unsigned long long) tidx, (unsigned long long) tidy, (unsigned long long) tidz); }
+    if (is_debug_thread) { printf("DEBUG_CUDA: radius: %d, tiff-size: (%llu,%llu,%llu)\r\n", scalar_field_parameters.kernel_radius, (unsigned long long) tiff_parameters.width, (unsigned long long) tiff_parameters.height, (unsigned long long) tiff_parameters.depth); }
+#endif
+
+    const float pixel = input[cuda_utils::index(tidx, tidy, tidz, tiff_parameters.width, tiff_parameters.height)];
+
+#define OPTION_GENERATE_VISUAL_SIZING_FIELD
+#ifdef OPTION_GENERATE_VISUAL_SIZING_FIELD // ignore z changes so the sizing-field-visualization of a slice is unimpacted
+    const int radius = scalar_field_parameters.kernel_radius;
+    const int radius_z = 0;
+#else
+    const int radius = scalar_field_parameters.kernel_radius;
+#endif //OPTION_GENERATE_VISUAL_SIZING_FIELD
+    unsigned int count = 0;
+
+    if (is_debug_thread) { printf("DEBUG_CUDA: tidz=%d, local_delta_z=%d, dz=%d\n", (int)tidz, -radius, ((int)tidz)+(-radius)); }
+#ifdef OPTION_GENERATE_VISUAL_SIZING_FIELD
+    for (int local_delta_z = 0; local_delta_z <= 0; local_delta_z++)
+    {
+        const int dz = tidz;
+    #else
+    for (int local_delta_z = -radius; local_delta_z <= radius; local_delta_z++)
+    {
+        const int dz = tidz + local_delta_z;
+    #endif
+        if (is_debug_thread) { printf("DEBUG_CUDA: %d\n", dz); }
+
+        if (dz < 0 || dz >= tiff_parameters.depth) continue;
+
+        for (int local_delta_y = -radius; local_delta_y <= radius; local_delta_y++) {
+            const int dy = tidy + local_delta_y;
+            if (dy < 0 || dy >= tiff_parameters.height) continue;
+
+            for (int local_delta_x = -radius; local_delta_x <= radius; local_delta_x++)
+            {
+                const int dx = tidx + local_delta_x;
+                if (dx < 0 || dx >= tiff_parameters.width) continue;
+
+                const float pixel_other = input[cuda_utils::index(dx, dy, dz, tiff_parameters.width, tiff_parameters.height)];
+            #ifndef NDEBUG
+                if (is_debug_thread) { printf("DEBUG_CUDA: center (%d,%d,%d): %.2f, other (%d,%d,%d): %.2f\r\n", tidx, tidy, tidz, pixel, dx, dy, dz, pixel_other); }
+            #endif
+                if (pixel != pixel_other)
+                {
+                    count++;
+                }
+            }
+        }
+    }
+
+    output[cuda_utils::index(tidx, tidy, tidz, tiff_parameters.width, tiff_parameters.height)] = count;
 }
 
 void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoValue isovalue)
 {
     const size_t size = tiff.width() * tiff.height() * tiff.depth();
-    const size_t size_bytes = size * sizeof(float);
 
     std::vector<float> h_input(size);
     std::transform(
         tiff.data.begin(), tiff.data.end(), h_input.begin(),
         [&tiff](const uint16_t value) { return static_cast<float>(value) / static_cast<float>(std::pow(2, tiff.bits())); }
     );
-
-    float* d_input;
-    float* d_output;
-
-    cuda_error(cudaMalloc(&d_input, size_bytes));
-    cuda_error(cudaMalloc(&d_output, size_bytes));
-
-    cuda_error(cudaMemcpy(d_input, h_input.data(), size_bytes, cudaMemcpyHostToDevice));
-
-    dim3 dim_block(
-        std::min((uint32_t) 16, tiff.width()),
-        std::min((uint32_t) 16, tiff.height()),
-        std::min((uint32_t) 16, tiff.depth())
-    );
-
-    dim3 dim_grid(
-        DIV_UP(tiff.width(), 16),
-        DIV_UP(tiff.height(), 16),
-        DIV_UP(tiff.depth(), 16)
-    );
-
-    OOC_DEBUG("calling w/ grid dimensions " << dim_grid.x << ", " << dim_grid.y << ", " << dim_grid.z);
 
     CU_TiffParameters tiff_parameters
     {
@@ -183,15 +213,102 @@ void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoV
 
     CU_ScalarFieldParameters scalar_field_parameters
     {
-        dim3(1, 1, 1),
-        dim3(2, 2, 2),
+        5,
+        25,
         CU_ScalarFieldOverflowWrappingMode::OVERFLOW_MODE_ZERO,
         isovalue
     };
 
+    dim3 dim_block(
+        scalar_field_parameters.octree_node_size,
+        scalar_field_parameters.octree_node_size,
+        scalar_field_parameters.octree_node_size
+    );
+
+    dim3 dim_grid(
+        DIV_UP(tiff.width(), dim_block.x),
+        DIV_UP(tiff.height(), dim_block.y),
+        DIV_UP(tiff.depth(), dim_block.z)
+    );
+
+    float* d_input;
+    uint16_t* d_output;
+    std::vector<uint16_t> h_output(size);
+
+    cuda_error(cudaMalloc(&d_input, size * sizeof(float)));
+    cuda_error(cudaMalloc(&d_output, size * sizeof(uint16_t)));
+
+    cuda_error(cudaMemcpy(d_input, h_input.data(), size * sizeof(float), cudaMemcpyHostToDevice));
+
+    OOC_DEBUG("calling w/ block dimensions " << dim_block.x << ", " << dim_block.y << ", " << dim_block.z);
+    OOC_DEBUG("calling w/ grid dimensions " << dim_grid.x << ", " << dim_grid.y << ", " << dim_grid.z);
+
+    cudaEvent_t start, stop;
+    cuda_error(cudaEventCreate(&start));
+    cuda_error(cudaEventCreate(&stop));
+
+    cuda_error(cudaEventRecord(start));
     scalar_field_kernel<<<dim_grid, dim_block>>>(d_input, d_output, tiff_parameters, scalar_field_parameters);
+    cuda_error(cudaEventRecord(stop));
+    cuda_error(cudaEventSynchronize(stop));
+
     cuda_error(cudaPeekAtLastError());
-    cuda_error(cudaDeviceSynchronize());
+
+    float ms = 0;
+    cuda_error(cudaEventElapsedTime(&ms, start, stop));
+    OOC_DEBUG("scalar_field_kernel runtime: " << ms << "ms");
+
+    cuda_error(cudaMemcpy(h_output.data(), d_output, size * sizeof(uint16_t), cudaMemcpyDeviceToHost));
+    cuda_error(cudaFree(d_input));
+    cuda_error(cudaFree(d_output));
+
+    // normalize h_output in-place to span [0, 65535 (or rather max() of data type)] for easy use in the actual sizing mesh generation, and visual export, without needing a separate float vector.
+    // TODO: Make this work for other data types...
+    // adapted from: https://t4tutorials.com/min-max-normalization-of-data-in-data-mining/
+    // v' = (v-min)/(max-min)(new_max - new_min)+new_min // new_min is 0 so it's irrelevant... => v' = (v-min)/(max-min)(new_max)
+    auto [min_it, max_it] = std::minmax_element(h_output.begin(), h_output.end());
+    const uint16_t min = *min_it;
+    const uint16_t max = *max_it;
+
+    if (max != min)
+    {
+        constexpr uint16_t uint16_max = std::numeric_limits<uint16_t>::max(); // TODO: Get max from tiff-data.
+        std::transform(h_output.begin(), h_output.end(), h_output.begin(), [max, min, uint16_max](const uint16_t v) -> uint16_t
+        {
+            // cast internally to uint32_t to avoid overflow shenanigans
+            return static_cast<uint16_t>(((static_cast<uint32_t>(v) - min) * uint16_max) / (max - min));
+        });
+    }
+
+#ifndef NDEBUG
+    TIFF* tif = TIFFOpen("test.tif", "w");
+    TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, tiff.width());
+    TIFFSetField(tif, TIFFTAG_IMAGELENGTH, tiff.height());
+    TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
+    TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+    TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+    TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
+    TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(tif, tiff.width() * sizeof(uint16_t)));
+
+    for (size_t depth = 0; depth < 1; depth++)
+    {
+        for (size_t row = 0; row < tiff.height(); row++)
+        {
+            if (TIFFWriteScanline(tif,  &h_output[row * tiff.width()], row, 0) < 0)
+            {
+                std::cerr << "Error writing row " << row << "\n";
+                TIFFClose(tif);
+            }
+        }
+    }
+
+    TIFFClose(tif);
+#endif
+
+    cuda_error(cudaEventDestroy(start));
+    cuda_error(cudaEventDestroy(stop));
 
     /*incremental_meshing::averageScalarField<<<dim_grid, dim_block>>>(
         (uint16_t*) d_input.ptr,
