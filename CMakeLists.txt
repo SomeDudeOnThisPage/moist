@@ -5,12 +5,16 @@ project(OutOfCore_Meshing
 )
 
 # Options
-option(OOC_WITH_TETWILD "Bundle fTetWild" ON)
+# option(OOC_WITH_TETWILD "Bundle fTetWild" ON)
+option(OOC_WITH_TESTS   "Build Tests" ON)
 
 set(CUDA_DIR "/usr/local/cuda-12.8/bin/")
 set(CUDA_INCLUDE_DIR "/usr/local/cuda-12.8/include")
-set(TIFF_DATA_FORMAT "u16" CACHE STRING "Define data format: u8 u16 u32 f32 f64")
-set_property(CACHE TIFF_DATA_FORMAT PROPERTY STRINGS u8 u16 u32 f32 f64)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
 
 add_subdirectory(extern)
 add_subdirectory(src/core)
@@ -22,7 +26,8 @@ add_subdirectory(src/core)
 add_subdirectory(src/surface-extractor)
 add_subdirectory(src/interface-generator)
 add_subdirectory(src/interface-inserter)
+#add_subdirectory(src/submesh-merger)
 
-if(OOC_WITH_TETWILD)
-    #add_subdirectory(src/tetwild-wrapper)
+if(OOC_WITH_TESTS)
+#    add_subdirectory(src/tests)
 endif()

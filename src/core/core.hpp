@@ -12,7 +12,7 @@
 // #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
-namespace incremental_meshing
+namespace moist
 {
     const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon(); // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
 
@@ -24,11 +24,11 @@ namespace incremental_meshing
         Z
     };
 
-    const std::map<std::string, incremental_meshing::Axis> AXIS_OPTION_ARGUMENT_MAP
+    const std::map<std::string, moist::Axis> AXIS_OPTION_ARGUMENT_MAP
     {
-        {"X", incremental_meshing::Axis::X},
-        {"Y", incremental_meshing::Axis::Y},
-        {"Z", incremental_meshing::Axis::Z}
+        {"X", moist::Axis::X},
+        {"Y", moist::Axis::Y},
+        {"Z", moist::Axis::Z}
     };
 
     // enum class GrowthDirection
@@ -73,9 +73,9 @@ using vec2 = geogram::vec2;
 // additional operators
 inline bool operator==(const vec3& a, const vec3& b)
 {
-    return std::fabs(a.x - b.x) < incremental_meshing::__DOUBLE_EPSILON &&
-           std::fabs(a.y - b.y) < incremental_meshing::__DOUBLE_EPSILON &&
-           std::fabs(a.z - b.z) < incremental_meshing::__DOUBLE_EPSILON;
+    return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
+           std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON &&
+           std::fabs(a.z - b.z) < moist::__DOUBLE_EPSILON;
 }
 
 inline bool operator==(const vec2& a, const vec2& b)
@@ -113,3 +113,10 @@ inline bool operator==(const vec2& a, const vec2& b)
 #endif // OPTION_PARALLEL_LOCAL_OPERATIONS
 
 #endif // __CORE_HPP
+
+static_assert(sizeof(float) * CHAR_BIT == 32, "float is not 32 bits on this platform");
+static_assert(sizeof(double) * CHAR_BIT == 64, "double is not 64 bits on this platform");
+
+// Since float and double are aliased in cmake options, alias them in code aswell.
+using float32_t = float;
+using float64_t = double;

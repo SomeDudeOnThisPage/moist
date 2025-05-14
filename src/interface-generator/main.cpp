@@ -9,7 +9,7 @@
 #include "core.hpp"
 #include "interface-generator.hpp"
 
-static bool load_mesh(const std::filesystem::path& path, incremental_meshing::InterfaceGenerator& generator)
+static bool load_mesh(const std::filesystem::path& path, moist::InterfaceGenerator& generator)
 {
     geogram::MeshIOFlags import_flags;
     import_flags.set_elements(geogram::MeshElementsFlags(
@@ -53,13 +53,13 @@ int main(int argc, char* argv[])
         std::filesystem::path path_mesh_out;
         double plane;
         double envelope_size;
-        incremental_meshing::Axis axis;
+        moist::Axis axis;
     };
 
-    const std::map<std::string, incremental_meshing::Axis> axis_option_map{
-        {"X", incremental_meshing::Axis::X},
-        {"Y", incremental_meshing::Axis::Y},
-        {"Z", incremental_meshing::Axis::Z}
+    const std::map<std::string, moist::Axis> axis_option_map{
+        {"X", moist::Axis::X},
+        {"Y", moist::Axis::Y},
+        {"Z", moist::Axis::Z}
     };
 
     Arguments arguments{};
@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
     geogram::CmdLine::set_arg("sys:compression_level", "0");
     geogram::Logger::instance()->set_quiet(false);
 
-    auto generator = incremental_meshing::InterfaceGenerator(incremental_meshing::AxisAlignedInterfacePlane {
+    auto generator = moist::InterfaceGenerator(moist::AxisAlignedInterfacePlane {
         arguments.axis,
         arguments.plane,
         arguments.envelope_size

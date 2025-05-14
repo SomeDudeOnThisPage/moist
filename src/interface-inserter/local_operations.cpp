@@ -15,7 +15,7 @@
 //     exist, and have more edges/points inside them. That does not matter
 // Then, in a second step, decimate all remaining edges in whatever order inside the "supercells"
 
-void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge, const AxisAlignedInterfacePlane &plane)
+void moist::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge, const AxisAlignedInterfacePlane &plane)
 {
     // bandaid-fix, must fix predicates...
     const auto p0 = mesh.vertices.point(edge.p);
@@ -26,8 +26,8 @@ void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_in
         return;
     }
 
-    const g_index v_opposite = incremental_meshing::geometry::non_coplanar_opposite(cell, edge.e_v0, edge.e_v1, mesh, plane);
-    const g_index v_coplanar_opposite = incremental_meshing::geometry::other(cell, edge.e_v0, edge.e_v1, v_opposite, mesh);
+    const g_index v_opposite = moist::geometry::non_coplanar_opposite(cell, edge.e_v0, edge.e_v1, mesh, plane);
+    const g_index v_coplanar_opposite = moist::geometry::other(cell, edge.e_v0, edge.e_v1, v_opposite, mesh);
 
     {
         // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
@@ -62,10 +62,10 @@ void incremental_meshing::operation::edge_split_1to2(MeshSlice &mesh, const g_in
     mesh.DeleteTetrahedra(cell);
 }
 
-void incremental_meshing::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge0, const CrossedEdge &edge1, const AxisAlignedInterfacePlane &plane)
+void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge0, const CrossedEdge &edge1, const AxisAlignedInterfacePlane &plane)
 {
     const g_index shared = (edge0.e_v0 == edge1.e_v0 || edge0.e_v0 == edge1.e_v1) ? edge0.e_v0 : edge0.e_v1;
-    const g_index v_opposite = incremental_meshing::geometry::other(
+    const g_index v_opposite = moist::geometry::other(
         cell,
         edge0.e_v0,
         edge0.e_v1,
@@ -76,7 +76,7 @@ void incremental_meshing::operation::edge_split_1to3(MeshSlice &mesh, const g_in
     const g_index v_coplanar_opposite_p0 = (edge1.e_v0 != shared) ? edge1.e_v0 : edge1.e_v1;
     const g_index v_coplanar_opposite_p1 = (edge0.e_v0 != shared) ? edge0.e_v0 : edge0.e_v1;
 
-    if (incremental_meshing::geometry::point_of_cell(mesh, cell, mesh.vertices.point(edge0.p)) ||  incremental_meshing::geometry::point_of_cell(mesh, cell, mesh.vertices.point(edge1.p)))
+    if (moist::geometry::point_of_cell(mesh, cell, mesh.vertices.point(edge0.p)) ||  moist::geometry::point_of_cell(mesh, cell, mesh.vertices.point(edge1.p)))
     {
         OOC_DEBUG("prevented 1 -> 3 split due to exising point");
         return;
@@ -108,47 +108,32 @@ void incremental_meshing::operation::edge_split_1to3(MeshSlice &mesh, const g_in
     mesh.DeleteTetrahedra(cell);
 }
 
-void incremental_meshing::operation::vertex_insert_1to2()
+void moist::operation::vertex_insert_1to2()
 {
     // honestly this is so niche I don't have the time right now...
 }
 
 // why did I name this 2to4??
-void incremental_meshing::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, const vec3 &point, const incremental_meshing::AxisAlignedInterfacePlane &plane)
+void moist::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, const vec3 &point, const moist::AxisAlignedInterfacePlane &plane)
 {
     // if we already have the vertex, only mark it as "interface"
     for (l_index lv = 0; lv < 4; lv++)
     {
         const g_index v = mesh.cells.vertex(cell, lv);
         const vec3 p = mesh.vertices.point(v);
-        if (incremental_meshing::predicates::point_on_plane(p, plane) && incremental_meshing::predicates::vec_eq_2d(point, p, plane))
+        if (moist::predicates::point_on_plane(p, plane) && moist::predicates::vec_eq_2d(point, p, plane))
         {
-            LOCK_ATTRIBUTES;
-            geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
-            v_discard[v] = false;
-
+        //    LOCK_ATTRIBUTES;
+        //    geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
+        //    v_discard[v] = false;
             return;
         }
     }
 
-    const g_index v_opposite = incremental_meshing::geometry::non_interface_vertex(cell, mesh, plane);
-    const auto [v0, v1, v2] = incremental_meshing::geometry::other(cell, v_opposite, mesh);
+    const g_index v_opposite = moist::geometry::non_interface_vertex(cell, mesh, plane);
+    const auto [v0, v1, v2] = moist::geometry::other(cell, v_opposite, mesh);
 
     const g_index p = mesh.vertices.create_vertex(point.data());
-    {
-        LOCK_ATTRIBUTES;
-        geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
-        geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
-        geogram::Attribute<int> v_interface_edge(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
-
-        v_discard[p] = false;
-        v_interface[p] = true;
-
-        if (point.z != -1.0)
-        {
-            OOC_DEBUG("what?");
-        }
-    }
 
 #ifndef NDEBUG
     // check to make sure bandaid-fix worked

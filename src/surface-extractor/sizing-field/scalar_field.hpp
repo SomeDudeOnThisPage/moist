@@ -7,9 +7,9 @@
 
 #include "../tiff_data.hpp"
 
-namespace incremental_meshing
+namespace moist
 {
-    struct IsoValue // TODO: Make this core and use in more places...
+    struct IsoValue
     {
         float isovalue;
 

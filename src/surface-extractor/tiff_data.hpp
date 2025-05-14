@@ -12,8 +12,15 @@
 
 #include "core.hpp"
 
-namespace incremental_meshing
+namespace moist
 {
+    using _vector = std::variant<
+        std::vector<uint8_t>,
+        std::vector<uint16_t>,
+        std::vector<uint32_t>,
+        std::vector<uint64_t>,
+    >;
+
     class TiffData
     {
     public:
@@ -26,7 +33,7 @@ namespace incremental_meshing
 
         uint8_t bits() const { return _sample_bits; }
 
-        std::vector<uint16_t> data;
+        std::vector<float> data;
     private:
         uint32_t _width;
         uint32_t _height;

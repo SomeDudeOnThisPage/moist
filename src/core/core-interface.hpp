@@ -9,7 +9,7 @@
 
 #include "core.hpp"
 
-namespace incremental_meshing
+namespace moist
 {
     typedef struct
     {

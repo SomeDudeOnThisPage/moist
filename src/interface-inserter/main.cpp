@@ -30,7 +30,7 @@ struct Arguments
     std::filesystem::path output;
     double plane;
     double envelope_size;
-    incremental_meshing::Axis axis;
+    moist::Axis axis;
 };
 
 int main(int argc, char* argv[])
@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
     app.add_option("-o, --output", arguments.output, "Output Triangulation (.obj) file");
     app.add_option("-x, --axis", arguments.axis, "Interface axis (X|Y|Z)")
         ->required()
-        ->transform(CLI::CheckedTransformer(incremental_meshing::AXIS_OPTION_ARGUMENT_MAP, CLI::ignore_case));
+        ->transform(CLI::CheckedTransformer(moist::AXIS_OPTION_ARGUMENT_MAP, CLI::ignore_case));
     app.add_option("-e, --envelope", arguments.envelope_size, "Envelope size around the interface plane.")
         ->required();
     app.add_option("-p, --plane", arguments.plane, "Interface plane along the axis (-x)")
@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
     geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
     //geogram::CmdLine::set_arg("sys:compression_level", "0");
     geogram::Logger::instance()->set_quiet(true);
-    incremental_meshing::attributes::initialize();
+    moist::attributes::initialize();
 
     geogram::MeshIOFlags flags;
     flags.set_elements(geogram::MeshElementsFlags(
@@ -67,14 +67,14 @@ int main(int argc, char* argv[])
         geogram::MeshElementsFlags::MESH_ALL_ELEMENTS
     ));
 
-    incremental_meshing::MeshSlice slice;
+    moist::MeshSlice slice;
     if (!geogram::mesh_load(arguments.input, slice))
     {
         OOC_ERROR("Failed to load mesh A: " << arguments.input);
         return 1;
     }
 
-    auto interface = incremental_meshing::Interface(arguments.interface, incremental_meshing::AxisAlignedInterfacePlane {
+    auto interface = moist::Interface(arguments.interface, moist::AxisAlignedInterfacePlane {
         arguments.axis,
         arguments.plane,
         arguments.envelope_size

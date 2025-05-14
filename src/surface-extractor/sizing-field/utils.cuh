@@ -9,22 +9,22 @@
 
 namespace cuda_utils
 {
-    __device__ __inline__ const size_t tidx()
+    __device__ __inline__ size_t tidx()
     {
         return blockIdx.x * blockDim.x + threadIdx.x;
     }
 
-    __device__ __inline__ const size_t tidy()
+    __device__ __inline__ size_t tidy()
     {
         return blockIdx.y * blockDim.y + threadIdx.y;
     }
 
-    __device__ __inline__ const size_t tidz()
+    __device__ __inline__ size_t tidz()
     {
         return blockIdx.z * blockDim.z + threadIdx.z;
     }
 
-    __device__ __inline__ const size_t index(const size_t x, const size_t y, const size_t z, const size_t width, const size_t height)
+    __device__ __inline__ size_t index(const size_t x, const size_t y, const size_t z, const size_t width, const size_t height)
     {
         return z * width * height + y * width + x;
     }

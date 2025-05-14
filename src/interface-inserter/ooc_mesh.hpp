@@ -9,7 +9,7 @@
 #include "core.hpp"
 #include "core-interface.hpp"
 
-namespace incremental_meshing
+namespace moist
 {
     typedef struct CROSSED_EDGE_STRUCT
     {
@@ -51,7 +51,7 @@ namespace incremental_meshing
          *
          * @param interface The (initialized) interface reference.
          */
-        void InsertInterface(incremental_meshing::Interface& interface);
+        void InsertInterface(moist::Interface& interface);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
         void CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra);
@@ -68,15 +68,11 @@ namespace incremental_meshing
         std::unordered_set<geogram::index_t> _deleted_tets;
 
         // global operations
-        void InsertInterfaceVertices(incremental_meshing::Interface& interface);
-        void InsertInterfaceEdges(incremental_meshing::Interface& interface);
-        void DecimateNonInterfaceEdges(incremental_meshing::Interface& interface);
-
-        // v2
-        void InsertEdges(incremental_meshing::Interface& interface);
+        void InsertInterfaceVertices(moist::Interface& interface);
+        void InsertInterfaceEdges(moist::Interface& interface);
 
         // utils
-        void InsertVertex(const geogram::vec3& point, const incremental_meshing::AxisAlignedInterfacePlane& plane);
+        void InsertVertex(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane);
         void CreateTetrahedra();
         void FlushTetrahedra();
     };

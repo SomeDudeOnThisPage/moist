@@ -36,3 +36,5 @@ if(CMAKE_OPTION_PARALLEL_LOCAL_OPERATIONS)
     message("Option: PARALLEL_LOCAL_OPERATIONS")
     target_compile_definitions(OutOfCore_Meshing_InterfaceInserter PRIVATE OPTION_PARALLEL_LOCAL_OPERATIONS)
 endif()
+
+set_target_properties(OutOfCore_Meshing_InterfaceInserter PROPERTIES OUTPUT_NAME "ooc-insert")

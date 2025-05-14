@@ -19,7 +19,7 @@
 
 // #define KERNEL_DEBUG(msg) printf("[%d,%d,%d]: %s\n", cuda_utils::tidx(), cuda_utils::tidy(), cuda_utils::tidz(), msg)
 
-namespace incremental_meshing
+namespace moist
 {
     // https://stackoverflow.com/questions/14038589/what-is-the-canonical-way-to-check-for-errors-using-the-cuda-runtime-api
     #define cuda_error(ans) { cuda_assert((ans), __FILE__, __LINE__); }
@@ -124,7 +124,7 @@ struct CU_ScalarFieldParameters
     size_t octree_node_size;
     size_t kernel_radius;
     CU_ScalarFieldOverflowWrappingMode overflow_mode;
-    incremental_meshing::IsoValue isovalue;
+    moist::IsoValue isovalue;
 };
 
 __global__ static void scalar_field_kernel(const float* __restrict__ input, uint16_t* __restrict__ output, const CU_TiffParameters tiff_parameters, const CU_ScalarFieldParameters scalar_field_parameters)
@@ -193,17 +193,11 @@ __global__ static void scalar_field_kernel(const float* __restrict__ input, uint
     output[cuda_utils::index(tidx, tidy, tidz, tiff_parameters.width, tiff_parameters.height)] = count;
 }
 
-void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoValue isovalue)
+void moist::generate_scalar_field(const TiffData& tiff, const IsoValue isovalue)
 {
     const size_t size = tiff.width() * tiff.height() * tiff.depth();
 
-    std::vector<float> h_input(size);
-    std::transform(
-        tiff.data.begin(), tiff.data.end(), h_input.begin(),
-        [&tiff](const uint16_t value) { return static_cast<float>(value) / static_cast<float>(std::pow(2, tiff.bits())); }
-    );
-
-    CU_TiffParameters tiff_parameters
+    const CU_TiffParameters tiff_parameters
     {
         size,
         tiff.width(),
@@ -211,7 +205,7 @@ void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoV
         tiff.depth(),
     };
 
-    CU_ScalarFieldParameters scalar_field_parameters
+    const CU_ScalarFieldParameters scalar_field_parameters
     {
         5,
         25,
@@ -219,13 +213,13 @@ void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoV
         isovalue
     };
 
-    dim3 dim_block(
+    const dim3 dim_block(
         scalar_field_parameters.octree_node_size,
         scalar_field_parameters.octree_node_size,
         scalar_field_parameters.octree_node_size
     );
 
-    dim3 dim_grid(
+    const dim3 dim_grid(
         DIV_UP(tiff.width(), dim_block.x),
         DIV_UP(tiff.height(), dim_block.y),
         DIV_UP(tiff.depth(), dim_block.z)
@@ -238,7 +232,7 @@ void incremental_meshing::generate_scalar_field(const TiffData& tiff, const IsoV
     cuda_error(cudaMalloc(&d_input, size * sizeof(float)));
     cuda_error(cudaMalloc(&d_output, size * sizeof(uint16_t)));
 
-    cuda_error(cudaMemcpy(d_input, h_input.data(), size * sizeof(float), cudaMemcpyHostToDevice));
+    cuda_error(cudaMemcpy(d_input, tiff.data.data(), size * sizeof(float), cudaMemcpyHostToDevice));
 
     OOC_DEBUG("calling w/ block dimensions " << dim_block.x << ", " << dim_block.y << ", " << dim_block.z);
     OOC_DEBUG("calling w/ grid dimensions " << dim_grid.x << ", " << dim_grid.y << ", " << dim_grid.z);

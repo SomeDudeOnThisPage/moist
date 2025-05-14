@@ -1,16 +1,14 @@
-# ooc-meshing
-Out-Of-Core Tetrahedal Interface Remesher
-
+# MOIST-Toolkit
+The "Merging Out-of-core Interfaced Slices of TetMeshes"-Project is a toolkit for incremental surface extraction, interfacing and merging of SubMeshes part of a larger mesh.
 
 # Requirements:
-##### Install external Dependencies
-```
-apt-get install libtiff-dev
-```
+All required dependencies are bundled and built by the project.
 
-##### Bundled dependencies, downloaded and built during cmake
-- geogram: [https://github.com/BrunoLevy/geogram](https://github.com/BrunoLevy/geogram)
-- cli11: [https://github.com/CLIUtils/CLI11](https://github.com/CLIUtils/CLI11)
+- geogram: [https://github.com/BrunoLevy/geogram](https://github.com/BrunoLevy/geogram) (1.9.5)
+- cli11: [https://github.com/CLIUtils/CLI11](https://github.com/CLIUtils/CLI11) (2.5.0)
+- mc33: [https://github.com/SomeDudeOnThisPage/MC33_CMake_CXX231](https://github.com/SomeDudeOnThisPage/MC33_CMake_CXX23) (5.2)
+- libtiff: [https://gitlab.com/libtiff/libtiff](https://gitlab.com/libtiff/libtiff) (4.7.0)
+- gtest [https://github.com/google/googletest/tree/v1.17.0](https://github.com/google/googletest/tree/v1.17.0) (1.17.0)
 
 # Building
 ```
@@ -19,7 +17,7 @@ cmake ..
 make
 ```
 
-# Useful Software
+### Vorpaview
 To view .geogram meshes, install vorpaview from the geogram repository:
 ```
 mkdir vorpaview

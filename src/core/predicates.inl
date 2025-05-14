@@ -15,32 +15,32 @@
 // TODO: THIS IS WRONG!
 #define in_range(x, p, eps) (std::abs(x - p) <= eps) || (std::abs(x + p) <= eps)
 
-namespace incremental_meshing::predicates
+namespace moist::predicates
 {
-    PURE INLINE bool vec_eq_2d(const geogram::vec3 &v0, const geogram::vec3 &v1, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool vec_eq_2d(const geogram::vec3 &v0, const geogram::vec3 &v1, const moist::AxisAlignedInterfacePlane& plane)
     {
         switch (plane.axis)
         {
-            case incremental_meshing::Axis::X:
+            case moist::Axis::X:
                 return v0.y == v1.y && v0.z == v1.z;
-            case incremental_meshing::Axis::Y:
+            case moist::Axis::Y:
                 return v0.x == v1.x && v0.z == v1.z;
-            case incremental_meshing::Axis::Z:
+            case moist::Axis::Z:
                 return v0.x == v1.x && v0.y == v1.y;
         }
 
         return false;
     }
 
-    PURE INLINE bool point_on_plane(const geogram::vec3& point, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool point_on_plane(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane)
     {
         switch (plane.axis)
         {
-            case incremental_meshing::Axis::X:
+            case moist::Axis::X:
                 return in_range(point.x, plane.extent, plane.epsilon);
-            case incremental_meshing::Axis::Y:
+            case moist::Axis::Y:
                 return in_range(point.y, plane.extent, plane.epsilon);
-            case incremental_meshing::Axis::Z:
+            case moist::Axis::Z:
                 return point.z == plane.extent; // TODO
                 //return in_range(point.z, plane.extent, plane.epsilon);
         }
@@ -48,12 +48,12 @@ namespace incremental_meshing::predicates
         return false;
     }
 
-    PURE INLINE bool edge_on_plane(const geogram::vec3& p0, const geogram::vec3& p1, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool edge_on_plane(const geogram::vec3& p0, const geogram::vec3& p1, const moist::AxisAlignedInterfacePlane& plane)
     {
         return point_on_plane(p0, plane) && point_on_plane(p1, plane);
     }
 
-    PURE INLINE bool facet_on_plane(const geogram::index_t facet, const geogram::Mesh& mesh, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool facet_on_plane(const geogram::index_t facet, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 3
@@ -70,7 +70,7 @@ namespace incremental_meshing::predicates
         return true;
     }
 
-    PURE INLINE bool cell_on_plane(const geogram::index_t cell, const geogram::Mesh& mesh, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool cell_on_plane(const geogram::index_t cell, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
     {
         unsigned char points_on_plane = 0;
     #ifdef OPTION_UNROLL_LOOPS
@@ -87,7 +87,7 @@ namespace incremental_meshing::predicates
         return points_on_plane == 3;
     }
 
-    PURE INLINE bool cell_facet_on_plane(const geogram::index_t cell, const geogram::index_t lf, const geogram::Mesh& mesh, const incremental_meshing::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool cell_facet_on_plane(const geogram::index_t cell, const geogram::index_t lf, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
     {
         for (geogram::index_t lv = 0; lv < /*mesh.cells.facet_nb_vertices(cell, lf)*/ 3; lv++)
         {
@@ -101,9 +101,17 @@ namespace incremental_meshing::predicates
         return true;
     }
 
+    PURE INLINE bool point_of_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p)
+    {
+        return p == mesh.vertices.point(mesh.cells.vertex(t, 0))
+             || p == mesh.vertices.point(mesh.cells.vertex(t, 1))
+             || p == mesh.vertices.point(mesh.cells.vertex(t, 2))
+             || p == mesh.vertices.point(mesh.cells.vertex(t, 3));
+    }
+
     // Source: geogram/mesh/mesh_AABB.cpp#175
     // TODO: this can likely be replaced with less instructions because we work in 2d...
-    PURE INLINE bool point_in_tet(const geogram::Mesh& mesh, geogram::index_t t, const geogram::vec3& p)
+    PURE INLINE bool point_in_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p, bool exclude_existing_points = false)
     {
         const auto p0 = mesh.vertices.point(mesh.cells.vertex(t, 0));
         const auto p1 = mesh.vertices.point(mesh.cells.vertex(t, 1));
@@ -116,10 +124,14 @@ namespace incremental_meshing::predicates
         s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
         s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
 
-        return (
+        const bool inside = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
             (s[0] <= 0 && s[1] <= 0 && s[2] <= 0 && s[3] <= 0)
         );
+
+        return (exclude_existing_points)
+            ? inside && !point_of_tet(mesh, t, p)
+            : inside;
     }
 
     namespace xy
@@ -166,7 +178,7 @@ namespace incremental_meshing::predicates
                 double t = ((p0.x - p2.x) * (p2.y - p3.y) - (p0.y - p2.y) * (p2.x - p3.x)) / denom;
                 double u = ((p0.x - p2.x) * (p0.y - p1.y) - (p0.y - p2.y) * (p0.x - p1.x)) / denom;
 
-                const auto eps = 2 * incremental_meshing::__DOUBLE_EPSILON;
+                const auto eps = 2 * moist::__DOUBLE_EPSILON;
                 if ((t >= eps && t <= 1.0 - eps) && (u >= eps && u <= 1.0 - eps))
                 {
                     // we don't work with real predicates, so we have to have a rounding factor in these vertices...

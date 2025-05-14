@@ -31,9 +31,10 @@ add_executable(OutOfCore_Meshing_SurfaceExtractor ${SOURCES} ${HEADERS} ${CUDA_S
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE geogram)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE CLI11::CLI11)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE TIFF::TIFF)
-#target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE MC33)
+target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE MC33::MC33)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE OutOfCore_Meshing_Core)
 #target_include_directories(OutOfCore_Meshing_SurfaceExtractor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 set_target_properties(OutOfCore_Meshing_SurfaceExtractor PROPERTIES CUDA_ARCHITECTURES "75;80")
 set_target_properties(OutOfCore_Meshing_SurfaceExtractor PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+set_target_properties(OutOfCore_Meshing_SurfaceExtractor PROPERTIES OUTPUT_NAME "ooc-extract")

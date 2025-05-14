@@ -18,7 +18,7 @@
     #define LOCK_ATTRIBUTES
 #endif // OPTION_PARALLEL_LOCAL_OPERATIONS
 #include <geogram/basic/numeric.h>
-namespace incremental_meshing::attributes
+namespace moist::attributes
 {
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     inline std::mutex _MUTEX_VERTEX_DESCRIPTOR;
@@ -27,9 +27,8 @@ namespace incremental_meshing::attributes
     /// TODO: Doxygen...
     enum class VertexDescriptorFlags : uint8_t
     {
-        INTERFACE = 1 << 0, // marks vertex as interface vertex for the currently processed plane
-        DISCARD   = 1 << 1  // marks vertex as discardable in the decimation stage
-        // DELETED = 1 << 3 // TODO: use this instead of a "Deleted"-Map, so it's 1 bit instead of 32 bit to mark a deleted tet?
+        DELETED = 1 << 1, // marks vertex as deleted
+        DISCARD = 1 << 2  // marks vertex as discardable
     };
 
     // needs to be defined for the compiler not to complain

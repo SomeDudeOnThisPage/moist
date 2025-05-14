@@ -7,7 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 
-namespace incremental_meshing::utils {
+namespace moist::utils {
     /**
      * Transforms string representations "(x,y,z)" into geogram vector.
      */

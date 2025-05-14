@@ -6,7 +6,7 @@
 
 #include "core-interface.hpp"
 
-namespace incremental_meshing
+namespace moist
 {
     class InterfaceGenerator : public Interface
     {

@@ -10,9 +10,30 @@
 #include "ooc_mesh.hpp"
 #include "predicates.inl"
 
-namespace incremental_meshing::geometry
+namespace moist::geometry
 {
     constexpr g_index NO_ELEMENT = -1;
+    struct Edge
+    {
+        g_index v0;
+        g_index v1;
+
+        Edge(const g_index v0, const g_index v1) : v0(v0), v1(v1) {};
+
+        bool operator==(const Edge& other) const
+        {
+            return (v0 == other.v0 && v1 == other.v1) || (v0 == other.v1 && v1 == other.v0);
+        }
+    };
+
+    struct EdgeHash
+    {
+        EdgeHash() = default;
+        size_t operator()(const Edge& e) const
+        {
+            return std::hash<g_index>()(e.v0) ^ std::hash<g_index>()(e.v1);
+        }
+    };
 
     PURE INLINE bool point_of_cell(const MeshSlice &mesh, const g_index cell, const vec3 &point)
     {
@@ -38,7 +59,7 @@ namespace incremental_meshing::geometry
         for (l_index lv = 0; lv < 4; lv++)
         {
             const g_index v = mesh.cells.vertex(cell, lv);
-            if (v != a && v != b && !incremental_meshing::predicates::point_on_plane(mesh.vertices.point(v), plane))
+            if (v != a && v != b && !moist::predicates::point_on_plane(mesh.vertices.point(v), plane))
             {
                 return v;
             }
@@ -117,7 +138,7 @@ namespace incremental_meshing::geometry
         for (l_index lv = 0; lv < 4; lv++)
         {
             const g_index v = mesh.cells.vertex(cell, lv);
-            if (!incremental_meshing::predicates::point_on_plane(mesh.vertices.point(v), plane))
+            if (!moist::predicates::point_on_plane(mesh.vertices.point(v), plane))
             {
                 return std::make_tuple(
                     mesh.cells.vertex(cell, (lv + 1) % 4),
@@ -137,13 +158,33 @@ namespace incremental_meshing::geometry
         for (l_index lv = 0; lv < 4; lv++)
         {
             const g_index v = mesh.cells.vertex(cell, lv);
-            if (!incremental_meshing::predicates::point_on_plane(mesh.vertices.point(v), plane))
+            if (!moist::predicates::point_on_plane(mesh.vertices.point(v), plane))
             {
                 return v;
             }
         }
 
         return NO_ELEMENT;
+    }
+
+    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geogram::Mesh& mesh)
+    {
+        std::unordered_set<Edge, EdgeHash> edges;
+        edges.reserve(mesh.vertices.nb());
+        for (const g_index f : mesh.facets)
+        {
+        #ifdef OPTION_UNROLL_LOOPS
+            #pragma unroll 3
+        #endif
+            for (size_t i = 0; i < 3; i++)
+            {
+                edges.emplace(
+                    mesh.facets.vertex(f, i),
+                    mesh.facets.vertex(f, (i + 1) % 3)
+                );
+            }
+        }
+        return edges; // return by value not ideal should probably be passed as reference parameter
     }
 }
 

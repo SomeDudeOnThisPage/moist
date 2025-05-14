@@ -3,7 +3,7 @@
 
 #include "ooc_mesh.hpp"
 
-namespace incremental_meshing
+namespace moist
 {
     namespace operation
     {
@@ -45,7 +45,7 @@ namespace incremental_meshing
          * @todo This should be refactored to be more "generalized", so that there needs to be no information about a plane, but rather just
          *       a point and cell. If the point lies on a facet, split into 3, if it lies on an edge, split into 2, if neither split into 4.
          */
-        void vertex_insert_1to3(MeshSlice &mesh, const g_index cell, const vec3& point, const incremental_meshing::AxisAlignedInterfacePlane& plane);
+        void vertex_insert_1to3(MeshSlice &mesh, const g_index cell, const vec3& point, const moist::AxisAlignedInterfacePlane& plane);
     }
 }
 

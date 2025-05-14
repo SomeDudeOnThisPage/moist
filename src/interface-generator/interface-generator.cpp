@@ -8,13 +8,13 @@
 
 #include "predicates.inl"
 
-incremental_meshing::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2, false))
+moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2, false))
 {
     this->_triangulation = std::make_shared<geogram::Mesh>(3);
     this->_plane = std::make_shared<AxisAlignedInterfacePlane>(plane);
 }
 
-void incremental_meshing::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
+void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
 {
     std::map<g_index, g_index> mesh_to_interface;
     std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map; // if we have more than 255 incident edges we have a waaaay bigger problem anyway...
@@ -85,7 +85,7 @@ void incremental_meshing::InterfaceGenerator::AddConstraints(const geogram::Mesh
     }
 }
 
-void incremental_meshing::InterfaceGenerator::Triangulate()
+void moist::InterfaceGenerator::Triangulate()
 {
     TIMER_START("interface triangulation");
 

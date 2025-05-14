@@ -2,7 +2,7 @@
 
 #include "core-interface.hpp"
 
-incremental_meshing::Interface::Interface(const std::filesystem::path mesh_path, const AxisAlignedInterfacePlane plane) : _plane(std::make_shared<AxisAlignedInterfacePlane>(plane))
+moist::Interface::Interface(const std::filesystem::path mesh_path, const AxisAlignedInterfacePlane plane) : _plane(std::make_shared<AxisAlignedInterfacePlane>(plane))
 {
     geogram::MeshIOFlags flags;
     flags.set_elements(geogram::MeshElementsFlags(
@@ -20,12 +20,12 @@ incremental_meshing::Interface::Interface(const std::filesystem::path mesh_path,
     }
 }
 
-std::shared_ptr<geogram::Mesh> incremental_meshing::Interface::Triangulation()
+std::shared_ptr<geogram::Mesh> moist::Interface::Triangulation()
 {
     return this->_triangulation;
 }
 
-std::shared_ptr<incremental_meshing::AxisAlignedInterfacePlane> incremental_meshing::Interface::Plane()
+std::shared_ptr<moist::AxisAlignedInterfacePlane> moist::Interface::Plane()
 {
     return this->_plane;
 }
