@@ -17,6 +17,18 @@ cmake ..
 make
 ```
 
+# Usage
+The project is split into several modules:
+
+### Surface and Sizing Field Extractor
+
+### Interface Generator
+
+### Interface Inserter
+
+### Slice Merger
+
+
 ### Vorpaview
 To view .geogram meshes, install vorpaview from the geogram repository:
 ```
@@ -29,7 +41,6 @@ cd build
 cmake ..
 make [install] vorpaview
 ```
-
 
 ### Options
 I still have to figure out how to do the entire CMAKE-Option-Configuration-Thingy...
