@@ -19,6 +19,17 @@ namespace moist
         };
 
         /**
+         * @brief Maps an interface triangulation cell to an index insided LocalInterface, i.e. maps a cell quality value of the local mesh to the interface.
+         *
+         * Used in the final decimation procedure, to determine cells that should be collapsed in both meshes.
+         */
+        struct InterfaceCellQuality
+        {
+            g_index cell_interface;
+            float quality;
+        };
+
+        /**
          * @brief Describes a local interface in a MeshSlice.
          *
          * The interface vertices must be laid out continuously in memory, starting with tthe first index equal to `v_start`, the last to `v_start + v_count - 1`.
@@ -26,22 +37,25 @@ namespace moist
          */
         struct LocalInterface
         {
-            /** @brief Unique string identifier of this interface. */
+            /** @brief Unique identifier of this interface. */
             std::string index;
             /** @brief First interface-vertex. */
             g_index v_start;
             /** @brief Amount of interface-vertices. */
             g_index v_count;
+            /** @brief Flag to check if interface-tets have already been decimated on this interface. */
+            bool decimated;
         };
 
         /**
          * @brief Describes a MeshSlice as part of a GlobalMesh.
          *
          * This struct contains information for indexing into a GlobalMesh file, without having to read/write the entire file.
+         * This enables loading parts of a msh file as a slice.
          */
         struct MeshSlice
         {
-            /** @brief Unique string identifier of this interface. */
+            /** @brief Unique string identifier of this slice. */
             std::string index;
             /** @brief BoundingBox encompassing this mesh slice, used for preliminary intersection checking. */
             BoundingBox bbox;
@@ -49,7 +63,7 @@ namespace moist
             uint64_t v_byte_start;
             /** @brief Total size of vertices in bytes inside the global mesh file. */
             uint64_t v_byte_size;
-            /** @brief Byte offset of the first tetrahedra inside the global mesh file. */
+            /** @brief Byte offset of the first tetrahedron inside the global mesh file. */
             uint64_t t_byte_start;
             /** @brief Total size of tetrahedra in bytes inside the global mesh file. */
             uint64_t t_byte_size;

@@ -48,6 +48,8 @@ namespace moist
 
         std::unordered_set<geogram::index_t> _deleted_tets;
 
+        std::vector<moist::descriptor::LocalInterface> _interfaces;
+
         // global operations
         void InsertInterfaceVertices(moist::Interface& interface);
         void InsertInterfaceEdges(moist::Interface& interface);

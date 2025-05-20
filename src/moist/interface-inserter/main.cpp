@@ -20,6 +20,7 @@
 #include "moist/core/utils.hpp"
 #include "moist/core/attributes.inl"
 #include "moist/core/predicates.inl"
+#include "moist/core/metrics.inl"
 
 #include "slice.hpp"
 
@@ -80,8 +81,16 @@ int main(int argc, char* argv[])
         arguments.envelope_size
     });
 
+    moist::metrics::Metrics metrics_before{0};
+    moist::metrics::Metrics metrics_after{0};
+
+    moist::metrics::compute(metrics_before, slice);
     slice.InsertInterface(interface);
     slice.assert_is_valid();
+    moist::metrics::compute(metrics_after, slice);
+
+    OOC_DEBUG("[METRICS] before insertion: " << metrics_before);
+    OOC_DEBUG("[METRICS] after insertion: " << metrics_after);
 
     GEO::MeshIOFlags export_flags;
     export_flags.set_attribute(geogram::MESH_NO_ATTRIBUTES);

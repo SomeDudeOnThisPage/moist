@@ -61,6 +61,7 @@ void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tet
 
 void moist::MeshSlice::InsertInterface(moist::Interface& interface)
 {
+    moist::descriptor::LocalInterface descriptor;
     this->InsertInterfaceVertices(interface);
     this->InsertInterfaceEdges(interface);
 

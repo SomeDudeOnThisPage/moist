@@ -117,6 +117,7 @@ void moist::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, c
 {
     if (moist::predicates::point_of_tet(mesh, cell, point))
     {
+        // TODO: recreate vertex, as to "reorder" it to the back of the vertices array.
         return;
     }
 

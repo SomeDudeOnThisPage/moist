@@ -9,10 +9,14 @@ struct Arguments
     std::filesystem::path slice;
 };
 
-// Load interface tets of BigMesh (could be more than 1 interface!!!), load all tets of Slice
-// "merge", i.e. create one continuous mesh
-// decimate worst tet combinations along the interface plane
-// save back into part of the file...
+// Load both Slice descriptors.
+// Check the LocalInterface to be merged.
+// Determine tets to be decimated by checking both InterfaceCellQuality lists.
+
+// For each Slice:
+// Load into memory
+// Decimate required tets
+
 int main(int argc, char* argv[])
 {
     std::cout << "Hi!" << std::endl;
