@@ -18,7 +18,7 @@ namespace moist::metrics
         float skewness;
     };
 
-    std::ostream& operator<<(std::ostream& os, const Metrics& metrics)
+    inline std::ostream& operator<<(std::ostream& os, const Metrics& metrics)
     {
         os << std::format("aspect ratio: {:.5f}; skewness: {:.5f}", metrics.aspect_ratio, metrics.skewness);
         return os;
@@ -41,7 +41,7 @@ namespace moist::metrics
         return std::abs(geogram::dot(normal, p0 - p));
     }
 
-    static float tetrahedron_aspect_ratio(const g_index cell, const geogram::Mesh& mesh)
+    PURE INLINE float tetrahedron_aspect_ratio(const g_index cell, const geogram::Mesh& mesh)
     {
         // assert cell.nb_vertices() == 4;
         // assert cell.nb_edges() == 6;
@@ -81,7 +81,7 @@ namespace moist::metrics
      * @param mesh Mesh.
      * @return float Average aspect-ratio.
      */
-    float aspect_ratio(const geogram::Mesh& mesh)
+    PURE INLINE float aspect_ratio(const geogram::Mesh& mesh)
     {
         float aspect_ratio = 0.0f;
         for (const g_index cell : mesh.cells)
@@ -101,7 +101,7 @@ namespace moist::metrics
      * @param mesh
      * @return float
      */
-    float skewness(const geogram::Mesh& mesh)
+    PURE INLINE float skewness(const geogram::Mesh& mesh)
     {
         return 0.0f;
     }
@@ -112,12 +112,12 @@ namespace moist::metrics
      * @param mesh TODO
      * @return float TODO
      */
-    float volume_ratio(const geogram::Mesh& mesh)
+    PURE INLINE float volume_ratio(const geogram::Mesh& mesh)
     {
         return 0.0f;
     }
 
-    void compute(Metrics& metrics, const geogram::Mesh& mesh)
+    inline void compute(Metrics& metrics, const geogram::Mesh& mesh)
     {
         metrics.aspect_ratio = aspect_ratio(mesh);
         metrics.skewness = skewness(mesh);

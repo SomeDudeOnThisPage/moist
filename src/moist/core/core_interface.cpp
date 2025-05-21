@@ -1,6 +1,8 @@
+#include "core_interface.hpp"
+
 #include <geogram/mesh/mesh_io.h>
 
-#include "core_interface.hpp"
+#include "moist/core/attributes.inl"
 
 moist::Interface::Interface(const std::filesystem::path mesh_path, const AxisAlignedInterfacePlane plane) : _plane(std::make_shared<AxisAlignedInterfacePlane>(plane))
 {
@@ -32,6 +34,15 @@ moist::Interface::Interface(const std::filesystem::path mesh_path, const AxisAli
                 this->_triangulation->vertices.point(v).z = plane.extent;
                 break;
         }
+    }
+
+    if (this->_triangulation->cells.nb() == 0)
+    {
+        // create a "dummy" cell for storing metadata attributes (the plane extent, i.e. the "Interface Index")
+        // this is kind of a hack so I don't have to write an entire mesh saver / loader and can still retain metadata about this interface inside this file...
+        this->_triangulation->cells.create_tet(0, 0, 0, 0);
+        geogram::Attribute<double> m_plane(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_INDEX_A);
+        m_plane[0] = plane.extent;
     }
 }
 

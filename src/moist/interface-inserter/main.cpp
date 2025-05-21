@@ -39,13 +39,15 @@ int main(int argc, char* argv[])
     Arguments arguments{};
     cli::App app{argv[0]};
 
-    app.add_option("-m, --mesh", arguments.input, "Mesh (.mesh|.msh|.geogram) file")
+    app.add_option("-m, --mesh", arguments.input, "Mesh (.msh) file")
         ->required()
+        ->check(cli::ExistingFile);
+    app.add_option("--metadata", arguments.input, "Mesh metadata (.metadata) file")
         ->check(cli::ExistingFile);
     app.add_option("-i, --interface", arguments.interface, "Interface mesh (.mesh|.msh|.obj|.off|.geogram) file")
         ->required()
         ->check(cli::ExistingFile);
-    app.add_option("-o, --output", arguments.output, "Output Triangulation (.obj) file");
+    app.add_option("-o, --output", arguments.output, "Output Triangulation (.msh) file");
     app.add_option("-x, --axis", arguments.axis, "Interface axis (X|Y|Z)")
         ->required()
         ->transform(cli::CheckedTransformer(moist::AXIS_OPTION_ARGUMENT_MAP, cli::ignore_case));
@@ -93,11 +95,11 @@ int main(int argc, char* argv[])
     OOC_DEBUG("[METRICS] after insertion: " << metrics_after);
 
     GEO::MeshIOFlags export_flags;
-    export_flags.set_attribute(geogram::MESH_NO_ATTRIBUTES);
+    export_flags.set_attribute(geogram::MESH_ALL_ATTRIBUTES);
     export_flags.set_dimension(3);
     export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
     export_flags.set_verbose(true);
-    geogram::mesh_save(slice, "_test_export.geogram", export_flags);
-
+    geogram::mesh_save(slice, arguments.output.replace_extension(".msh"), export_flags);
+    geogram::mesh_save(*interface.Triangulation(), arguments.interface.replace_extension(".geogram"), export_flags); // re-save triangulation to re-apply f_quality changes
     return 0;
 }

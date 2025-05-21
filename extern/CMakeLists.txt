@@ -100,3 +100,13 @@ FetchContent_Declare(
     GIT_REPOSITORY https://gitlab.com/libtiff/libtiff.git
     GIT_TAG v4.7.0
 )
+
+#FetchContent_MakeAvailable(libtiff)
+
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.12.0
+)
+
+FetchContent_MakeAvailable(json)

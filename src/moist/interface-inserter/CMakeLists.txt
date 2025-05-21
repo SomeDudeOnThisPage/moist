@@ -23,7 +23,7 @@ file(GLOB_RECURSE HEADERS "*.hpp" "*.inl")
 add_executable(OutOfCore_Meshing_InterfaceInserter ${SOURCES} ${HEADERS})
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE geogram)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE CLI11::CLI11)
-
+target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE OutOfCore_Meshing_Core)
 target_include_directories(OutOfCore_Meshing_InterfaceInserter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

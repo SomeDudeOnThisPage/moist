@@ -6,12 +6,14 @@
 #include <geogram/basic/process.h>
 #endif
 
+#include "moist/core/attributes.inl"
 #include "moist/core/predicates.inl"
 
 moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2, false))
 {
     this->_triangulation = std::make_shared<geogram::Mesh>(3);
     this->_plane = std::make_shared<AxisAlignedInterfacePlane>(plane);
+    this->_unique_vertices = 0;
 }
 
 void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
@@ -32,6 +34,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
             std::lock_guard<std::mutex> lock(mtx);
         #endif
             g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
+            this->_unique_vertices++;
             mesh_to_interface[v] = interface_vertex_id;
         #ifndef NDEBUG
             this->_required_vertices.push_back(point);
@@ -121,6 +124,10 @@ void moist::InterfaceGenerator::Triangulate()
     this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
 
     TIMER_END;
+
+    this->_triangulation->cells.create_tet(0, 0, 0, 0);
+    geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
+    m_target_vertices[0] = this->_unique_vertices / 2.0;
 
 #ifndef NDEBUG
     OOC_DEBUG("checking for missing vertices...");

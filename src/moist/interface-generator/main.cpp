@@ -1,3 +1,5 @@
+#include <limits>
+
 #include <CLI/CLI.hpp>
 
 #include <geogram/basic/environment.h>
@@ -7,6 +9,7 @@
 #include <geogram/mesh/mesh_io.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/attributes.inl"
 #include "interface_generator.hpp"
 
 static bool load_mesh(const std::filesystem::path& path, moist::InterfaceGenerator& generator)
@@ -20,30 +23,13 @@ static bool load_mesh(const std::filesystem::path& path, moist::InterfaceGenerat
     geogram::Mesh mesh;
     if (!geogram::mesh_load(path, mesh))
     {
-        OOC_ERROR("Failed to load mesh A: " << path);
+        OOC_ERROR("Failed to load mesh: " << path);
         return false;
     }
     generator.AddConstraints(mesh);
     return true;
 }
 
-/**
- * Parameters:
- *  a {path}: Tetrahedal Mesh A (.msh/.mesh format)
- *  b {path}: Tetrahedal Mesh B (.msh/.mesh format)
- *  o {path}: Output-Triangle-Mesh containing the interface (geogram mesh format with metadata)
- *  axis {x|y|z}: Axis the interface plane lies on
- *  plane {double}: Extent of the interface plane
- *  eps {double, optional}: Epsilon to snap vertices from/to
- *
- * Output:
- *  Interface-Mesh in geogram format, with additional metadata.
- *
- * Description:
- *  Loads meshes sequentially, gathering all vertices on the interface plane, outputs a (constrained) triangulation of these vertices.
- *  Memory requirements are estimated as (max(mem(a), mem(b)) + max(mem(a), mem(b)) / slice_amount), where slice_amount is the amount of
- *  the max amount of slices of CT-data used to generate mesh a and b.
- */
 int main(int argc, char* argv[])
 {
     struct Arguments
@@ -106,6 +92,13 @@ int main(int argc, char* argv[])
     }
 
     generator.Triangulate();
+
+    // inject "quality" attribute on facets for later use...
+    geogram::Attribute<double> f_quality(generator.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
+    for (const g_index f : generator.Triangulation()->facets)
+    {
+        f_quality[f] = -std::numeric_limits<double>::max();
+    }
 
     GEO::MeshIOFlags export_flags;
     export_flags.set_dimension(3);

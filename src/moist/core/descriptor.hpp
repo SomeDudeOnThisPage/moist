@@ -25,8 +25,11 @@ namespace moist
          */
         struct InterfaceCellQuality
         {
-            g_index cell_interface;
-            float quality;
+            g_index facet_i;
+            g_index cell_a;
+            g_index cell_b;
+            float quality_a;
+            float quality_b;
         };
 
         /**

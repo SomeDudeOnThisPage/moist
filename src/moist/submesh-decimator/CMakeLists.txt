@@ -4,8 +4,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(
-    OutOfCore_Meshing_MeshMerger
-    DESCRIPTION "coplanar tetrahedral facet merger - interface mesh generator."
+    OutOfCore_Meshing_MeshDecimator
+    DESCRIPTION "coplanar tetrahedral facet merger - mesh decimator."
     LANGUAGES CXX
 )
 
@@ -17,11 +17,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 file(GLOB_RECURSE SOURCES "*.cpp")
 file(GLOB_RECURSE HEADERS "*.hpp" "*.inl")
 
-add_executable(OutOfCore_Meshing_MeshMerger ${SOURCES} ${HEADERS})
-target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE geogram)
-target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE CLI11::CLI11)
+add_executable(OutOfCore_Meshing_MeshDecimator ${SOURCES} ${HEADERS})
+target_link_libraries(OutOfCore_Meshing_MeshDecimator PRIVATE geogram)
+target_link_libraries(OutOfCore_Meshing_MeshDecimator PRIVATE CLI11::CLI11)
 
-target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE OutOfCore_Meshing_Core)
-target_include_directories(OutOfCore_Meshing_MeshMerger PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(OutOfCore_Meshing_MeshDecimator PRIVATE OutOfCore_Meshing_Core)
+target_include_directories(OutOfCore_Meshing_MeshDecimator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-set_target_properties(OutOfCore_Meshing_MeshMerger PROPERTIES OUTPUT_NAME "moist-merge")
+set_target_properties(OutOfCore_Meshing_MeshDecimator PROPERTIES OUTPUT_NAME "moist-decimate")

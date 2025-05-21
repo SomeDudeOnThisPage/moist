@@ -13,6 +13,11 @@
 #define ATTRIBUTE_CLUSTER_ONTO "ClusterOnto" // TODO: Make all this flags after testing, maybe keep "int" attributes for visualization in debug mode vorpaview
 #define ATTRIBUTE_DEBUG_V "Debug"
 
+#define ATTRIBUTE_INTERFACE_INDEX_A "InterfaceIndexA"
+#define ATTRIBUTE_INTERFACE_INDEX_B "InterfaceIndexB"
+#define ATTRIBUTE_INTERFACE_TARGET_VERTICES "InterfaceTargetVertices"
+#define ATTRIBUTE_INTERFACE_TETMERGE_QUALITY "TetrahedralMergeQuality"
+
 #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
     #define LOCK_ATTRIBUTES std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR)
 #else

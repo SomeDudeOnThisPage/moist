@@ -41,6 +41,7 @@ namespace moist
 #endif // NDEBUG
 
         geogram::Mesh _constraints;
+        size_t _unique_vertices;
     };
 }
 

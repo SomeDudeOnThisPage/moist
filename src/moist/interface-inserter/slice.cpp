@@ -8,6 +8,7 @@
 #include <limits>
 #include <mutex>
 
+#include "moist/core/metrics.inl"
 #include "moist/core/utils.hpp"
 #include "moist/core/attributes.inl"
 #include "moist/core/predicates.inl"
@@ -62,11 +63,57 @@ void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tet
 void moist::MeshSlice::InsertInterface(moist::Interface& interface)
 {
     moist::descriptor::LocalInterface descriptor;
+{
+    TIMER_START("inserting interface vertices into mesh");
     this->InsertInterfaceVertices(interface);
+    TIMER_END;
+}
+
+{
+    TIMER_START("inserting interface edges into mesh");
     this->InsertInterfaceEdges(interface);
+    TIMER_END;
+}
+
+    // Inject TetQualities into interface data structure for later decimation...
+    // for each facet in the interface, find the corresponding cell of this mesh... or the other way around...
+{
+    TIMER_START("inserting tetrahedral qualities into interface");
+    for (const g_index cell : this->cells)
+    {
+        if (!moist::predicates::cell_on_plane(cell, *this, *interface.Plane()))
+        {
+            continue;
+        }
+
+        // find corresponding interface facet to attach quality to
+        // TODO: make a reducing list like "unmatched_facets" so we don't need to iterate all for each cell?
+        // TODO: or simply parallelize this...
+        for (const g_index facet : interface.Triangulation()->facets)
+        {
+            if (!moist::predicates::facet_matches_cell(cell, facet, *this, *interface.Triangulation()))
+            {
+                continue;
+            }
+
+            geogram::Attribute<double> f_quality(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
+            // geogram::Attribute<geogram::index_t> f_index(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
+            if (f_quality[facet] == -std::numeric_limits<double>::max())
+            {
+                f_quality[facet] = moist::metrics::tetrahedron_aspect_ratio(cell, *this);
+            }
+            else // another mesh inserter has already written to this interface, merge the quality...
+            {
+                f_quality[facet] = (f_quality[facet] + moist::metrics::tetrahedron_aspect_ratio(cell, *this)) / 2.0;
+            }
+        }
+    }
+    TIMER_END;
+}
+
 
 #ifndef NDEBUG
-    this->Validate(interface);
+    // this->Validate(interface);
 #endif
 }
 
@@ -259,7 +306,7 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
 
         for (const auto cell : this->cells)
         {
-            if (geogram::mesh_cell_volume(*this, cell) == 0 || moist::geometry::has_duplicate_vertex(cell, *this))
+            if (moist::geometry::has_duplicate_vertex(cell, *this))
             {
                 _deleted_tets.insert(cell);
             }

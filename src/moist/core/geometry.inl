@@ -2,6 +2,7 @@
 #define MOIST_CORE_GEOMETRY_INL_
 
 #include <array>
+#include <unordered_set>
 
 #include <geogram/mesh/mesh.h>
 

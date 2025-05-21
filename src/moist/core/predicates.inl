@@ -20,6 +20,26 @@
  */
 namespace moist::predicates
 {
+    PURE INLINE bool facet_matches_cell(const g_index cell, const g_index facet, const geogram::Mesh& mesh, const geogram::Mesh& interface)
+    {
+        const vec3 f0 = interface.vertices.point(interface.facets.vertex(facet, 0));
+        const vec3 f1 = interface.vertices.point(interface.facets.vertex(facet, 1));
+        const vec3 f2 = interface.vertices.point(interface.facets.vertex(facet, 2));
+
+        // check if three vertices of the cell match the facet
+        size_t matches = 0;
+        for (g_index lv = 0; lv < mesh.cells.nb_vertices(cell); lv++)
+        {
+            const vec3 p = mesh.vertices.point(mesh.cells.vertex(cell, lv));
+            if (p == f0 || p == f1 || p == f2)
+            {
+                matches++;
+            }
+        }
+
+        return matches == 3;
+    }
+
     PURE INLINE bool vec_eq_2d(const geogram::vec3 &v0, const geogram::vec3 &v1, const moist::AxisAlignedInterfacePlane& plane)
     {
         switch (plane.axis)
@@ -77,9 +97,9 @@ namespace moist::predicates
     {
         unsigned char points_on_plane = 0;
     #ifdef OPTION_UNROLL_LOOPS
-        #pragma unroll 6
+        #pragma unroll 4
     #endif
-        for (unsigned char i = 0; i < /*mesh.cells.nb_vertices(cell)*/ 6; i++)
+        for (unsigned char i = 0; i < /*mesh.cells.nb_vertices(cell)*/ 4; i++)
         {
             if (point_on_plane(mesh.vertices.point(mesh.cells.vertex(cell, i)), plane))
             {
