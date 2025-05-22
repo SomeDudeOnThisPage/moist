@@ -2,33 +2,13 @@
 
 #include <CLI/CLI.hpp>
 
-#include <geogram/basic/environment.h>
-#include <geogram/basic/command_line.h>
-#include <geogram/basic/command_line_args.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/utils.hpp"
 #include "moist/core/attributes.inl"
 #include "interface_generator.hpp"
-
-static bool load_mesh(const std::filesystem::path& path, moist::InterfaceGenerator& generator)
-{
-    geogram::MeshIOFlags import_flags;
-    import_flags.set_elements(geogram::MeshElementsFlags(
-        geogram::MeshElementsFlags::MESH_ALL_ELEMENTS ||
-        geogram::MeshElementsFlags::MESH_ALL_SUBELEMENTS
-    ));
-
-    geogram::Mesh mesh;
-    if (!geogram::mesh_load(path, mesh))
-    {
-        OOC_ERROR("Failed to load mesh: " << path);
-        return false;
-    }
-    generator.AddConstraints(mesh);
-    return true;
-}
 
 int main(int argc, char* argv[])
 {
@@ -70,10 +50,7 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    geogram::initialize();
-    geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
-    geogram::CmdLine::set_arg("sys:compression_level", "0");
-    geogram::Logger::instance()->set_quiet(false);
+    moist::utils::geo::initialize();
 
     auto generator = moist::InterfaceGenerator(moist::AxisAlignedInterfacePlane {
         arguments.axis,
@@ -81,16 +58,12 @@ int main(int argc, char* argv[])
         arguments.envelope_size
     });
 
-    if (!load_mesh(arguments.path_mesh_a, generator))
-    {
-        return -1;
-    }
-
-    if (!load_mesh(arguments.path_mesh_b, generator))
-    {
-        return -1;
-    }
-
+    geogram::Mesh mesh;
+    moist::utils::geo::load(arguments.path_mesh_a, mesh);
+    generator.AddConstraints(mesh);
+    mesh.clear(false);
+    moist::utils::geo::load(arguments.path_mesh_b, mesh);
+    generator.AddConstraints(mesh);
     generator.Triangulate();
 
     // inject "quality" attribute on facets for later use...
@@ -100,15 +73,7 @@ int main(int argc, char* argv[])
         f_quality[f] = -std::numeric_limits<double>::max();
     }
 
-    GEO::MeshIOFlags export_flags;
-    export_flags.set_dimension(3);
-    export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
-    export_flags.set_verbose(true);
-    geogram::mesh_save(*generator.Triangulation(), arguments.path_mesh_out.replace_extension(".geogram"), export_flags);
-
-#ifndef NDEBUG
-    geogram::mesh_save(*generator.Triangulation(), arguments.path_mesh_out.replace_extension(".debug.obj"), export_flags);
-#endif
+    moist::utils::geo::save(arguments.path_mesh_out.replace_extension(".geogram"), *generator.Triangulation());
 
     return 0;
 }

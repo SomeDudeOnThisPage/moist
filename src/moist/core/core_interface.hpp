@@ -39,6 +39,8 @@ namespace moist
          */
         Interface(const std::filesystem::path mesh, const AxisAlignedInterfacePlane plane);
 
+        Interface(const std::filesystem::path mesh);
+
         /**
          * @brief Destroys the Interface object
          */
@@ -60,6 +62,9 @@ namespace moist
 
     protected:
         Interface() = default;
+        AxisAlignedInterfacePlane ReadMetadata() const;
+        void WriteMetadata();
+
         std::shared_ptr<geogram::Mesh> _triangulation;
         std::shared_ptr<AxisAlignedInterfacePlane> _plane;
     };

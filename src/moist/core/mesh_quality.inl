@@ -1,5 +1,5 @@
-#ifndef MOIST_CORE_METRICS_INL_
-#define MOIST_CORE_METRICS_INL_
+#ifndef MOIST_CORE_MESH_QUALITY_INL_
+#define MOIST_CORE_MESH_QUALITY_INL_
 
 #include <iostream>
 #include <string>
@@ -9,21 +9,10 @@
 #include <geogram/mesh/mesh_geometry.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/metrics.hpp"
 
-namespace moist::metrics
+namespace moist::mesh_quality
 {
-    struct Metrics
-    {
-        float aspect_ratio;
-        float skewness;
-    };
-
-    inline std::ostream& operator<<(std::ostream& os, const Metrics& metrics)
-    {
-        os << std::format("aspect ratio: {:.5f}; skewness: {:.5f}", metrics.aspect_ratio, metrics.skewness);
-        return os;
-    }
-
     /**
      * @brief Computes the distance from point p to a plane spanned by p0, a and b.
      *
@@ -117,11 +106,11 @@ namespace moist::metrics
         return 0.0f;
     }
 
-    inline void compute(Metrics& metrics, const geogram::Mesh& mesh)
+    inline void compute(moist::metrics::MeshQuality& metrics, const geogram::Mesh& mesh)
     {
-        metrics.aspect_ratio = aspect_ratio(mesh);
-        metrics.skewness = skewness(mesh);
+        metrics.aspect_ratio = 0; // aspect_ratio(mesh);
+        metrics.skewness = 0;// skewness(mesh);
     }
 }
 
-#endif // MOIST_CORE_METRICS_INL_
+#endif // MOIST_CORE_MESH_QUALITY_INL_

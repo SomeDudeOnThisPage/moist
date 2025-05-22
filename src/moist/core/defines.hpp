@@ -34,6 +34,11 @@ namespace moist
         {"Z", moist::Axis::Z}
     };
 //! @endinternal
+
+    class Context
+    {
+
+    };
 }
 
 //! @internal

@@ -10,6 +10,7 @@
 #include <geogram/basic/command_line_args.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/utils.hpp"
 #include "moist/core/descriptor.hpp"
 #include "moist/core/core_interface.hpp"
 #include "moist/core/attributes.inl"
@@ -76,6 +77,7 @@ static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, m
                 OOC_DEBUG("oi noi");
             }
 
+            // TODO: Must cluster all verts...
             const vec3 p0 = slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0));
             slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).x = p0.x;
             slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).y = p0.y;
@@ -120,27 +122,13 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
-    geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
-    //geogram::CmdLine::set_arg("sys:compression_level", "0");
-    geogram::Logger::instance()->set_quiet(true);
+    moist::utils::geo::initialize();
 
     auto interface = moist::Interface(arguments.interface, moist::AxisAlignedInterfacePlane {
         moist::Axis::Z,
         -1.0,
         0.0
     });
-    geogram::MeshIOFlags flags;
-    flags.set_elements(geogram::MeshElementsFlags(
-        geogram::MeshElementsFlags::MESH_ALL_SUBELEMENTS |
-        geogram::MeshElementsFlags::MESH_ALL_ELEMENTS
-    ));
-
-    GEO::MeshIOFlags export_flags;
-    export_flags.set_attribute(geogram::MESH_ALL_ATTRIBUTES);
-    export_flags.set_dimension(3);
-    export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
-    export_flags.set_verbose(true);
 
     auto triangulation = interface.Triangulation();
     geogram::Attribute<int> m_target_vertices(interface.Triangulation()->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
@@ -160,12 +148,7 @@ int main(int argc, char* argv[])
     });
 
     geogram::Mesh slice;
-    if (!geogram::mesh_load(arguments.a, slice))
-    {
-        OOC_ERROR("Failed to load mesh A: " << arguments.a);
-        return 1;
-    }
-
+    moist::utils::geo::load(arguments.a, slice);
     decimate(slice, facets, interface, n);
-    geogram::mesh_save(slice, arguments.a.replace_extension(".decimated.msh"), export_flags);
+    moist::utils::geo::save(arguments.a.replace_extension(".decimated.msh"), slice);
 }

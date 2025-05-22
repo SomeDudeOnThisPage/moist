@@ -9,18 +9,17 @@
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/mesh/mesh_AABB.h>
 #include <geogram/numerics/predicates.h>
-#include <geogram/basic/environment.h>
-#include <geogram/basic/command_line.h>
-#include <geogram/basic/command_line_args.h>
 
 #include <iostream>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/timer.hpp"
 #include "moist/core/core_interface.hpp"
 #include "moist/core/utils.hpp"
 #include "moist/core/attributes.inl"
 #include "moist/core/predicates.inl"
-#include "moist/core/metrics.inl"
+#include "moist/core/metrics.hpp"
+#include "moist/core/mesh_quality.inl"
 
 #include "slice.hpp"
 
@@ -36,70 +35,44 @@ struct Arguments
 
 int main(int argc, char* argv[])
 {
+    auto metrics = moist::metrics::TimeMetrics("InterfaceInserter");
+    moist::Timer timer("InterfaceInserter::Main", metrics);
+
     Arguments arguments{};
     cli::App app{argv[0]};
 
     app.add_option("-m, --mesh", arguments.input, "Mesh (.msh) file")
         ->required()
         ->check(cli::ExistingFile);
-    app.add_option("--metadata", arguments.input, "Mesh metadata (.metadata) file")
-        ->check(cli::ExistingFile);
-    app.add_option("-i, --interface", arguments.interface, "Interface mesh (.mesh|.msh|.obj|.off|.geogram) file")
+    app.add_option("-i, --interface", arguments.interface, "Interface mesh (.geogram) file")
         ->required()
         ->check(cli::ExistingFile);
-    app.add_option("-o, --output", arguments.output, "Output Triangulation (.msh) file");
-    app.add_option("-x, --axis", arguments.axis, "Interface axis (X|Y|Z)")
-        ->required()
-        ->transform(cli::CheckedTransformer(moist::AXIS_OPTION_ARGUMENT_MAP, cli::ignore_case));
-    app.add_option("-e, --envelope", arguments.envelope_size, "Envelope size around the interface plane.")
-        ->required();
-    app.add_option("-p, --plane", arguments.plane, "Interface plane along the axis (-x)")
+    app.add_option("-o, --output", arguments.output, "Output Triangulation (.msh) file")
         ->required();
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
-    geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
-    //geogram::CmdLine::set_arg("sys:compression_level", "0");
-    geogram::Logger::instance()->set_quiet(true);
-    moist::attributes::initialize();
+    moist::utils::geo::initialize();
 
-    geogram::MeshIOFlags flags;
-    flags.set_elements(geogram::MeshElementsFlags(
-        geogram::MeshElementsFlags::MESH_ALL_SUBELEMENTS |
-        geogram::MeshElementsFlags::MESH_ALL_ELEMENTS
-    ));
+    auto interface = moist::Interface(arguments.interface);
+
+    moist::metrics::MeshQuality metrics_before{0};
+    moist::metrics::MeshQuality metrics_after{0};
 
     moist::MeshSlice slice;
-    if (!geogram::mesh_load(arguments.input, slice))
+    moist::utils::geo::load(arguments.input, slice, 3, false);
+    moist::mesh_quality::compute(metrics_before, slice);
     {
-        OOC_ERROR("Failed to load mesh A: " << arguments.input);
-        return 1;
+        moist::Timer _scope_timer("MeshSlice::InsertInterface", metrics);
+        slice.InsertInterface(interface, metrics);
     }
-
-    auto interface = moist::Interface(arguments.interface, moist::AxisAlignedInterfacePlane {
-        arguments.axis,
-        arguments.plane,
-        arguments.envelope_size
-    });
-
-    moist::metrics::Metrics metrics_before{0};
-    moist::metrics::Metrics metrics_after{0};
-
-    moist::metrics::compute(metrics_before, slice);
-    slice.InsertInterface(interface);
-    slice.assert_is_valid();
-    moist::metrics::compute(metrics_after, slice);
+    moist::mesh_quality::compute(metrics_after, slice);
 
     OOC_DEBUG("[METRICS] before insertion: " << metrics_before);
     OOC_DEBUG("[METRICS] after insertion: " << metrics_after);
 
-    GEO::MeshIOFlags export_flags;
-    export_flags.set_attribute(geogram::MESH_ALL_ATTRIBUTES);
-    export_flags.set_dimension(3);
-    export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
-    export_flags.set_verbose(true);
-    geogram::mesh_save(slice, arguments.output.replace_extension(".msh"), export_flags);
-    geogram::mesh_save(*interface.Triangulation(), arguments.interface.replace_extension(".geogram"), export_flags); // re-save triangulation to re-apply f_quality changes
+    moist::utils::geo::save(arguments.output.replace_extension(".msh"), slice);
+    moist::utils::geo::save(arguments.interface.replace_extension(".geogram"), *interface.Triangulation());
+
     return 0;
 }

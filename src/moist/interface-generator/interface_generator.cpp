@@ -1,5 +1,7 @@
 #include "interface_generator.hpp"
 
+#include <unordered_set>
+
 #include <geogram/delaunay/delaunay.h>
 #include <geogram/mesh/mesh_repair.h>
 #ifndef OPTION_PARALLEL_LOCAL_OPERATIONS
@@ -14,6 +16,7 @@ moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane pl
     this->_triangulation = std::make_shared<geogram::Mesh>(3);
     this->_plane = std::make_shared<AxisAlignedInterfacePlane>(plane);
     this->_unique_vertices = 0;
+    this->WriteMetadata();
 }
 
 void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
@@ -90,8 +93,6 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
 
 void moist::InterfaceGenerator::Triangulate()
 {
-    TIMER_START("interface triangulation");
-
     // Only the constraint-mesh is required, must pass 0 and nullptr here to set_vertices when using triangle.
     // TODO: REALLY annoying thing about triangle... it seems to create a bbox ("master-triangles") where a vertex of the bbox corresponds with a vertex of the
     //       input, a double vertex is found and "ignored", which leads to a segfault when geogram tries to read the data back into it's
@@ -122,10 +123,27 @@ void moist::InterfaceGenerator::Triangulate()
     }
 
     this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
+    this->_triangulation->facets.compute_borders();
 
-    TIMER_END;
+    // assign attribute constraint edges to edges in triangulation
+    geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    for (const g_index constraint_edge : this->_constraints.edges)
+    {
+        const auto cep0 = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 0));
+        const auto cep1 = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 1));
 
-    this->_triangulation->cells.create_tet(0, 0, 0, 0);
+        // find edge in interface mesh, and mark it
+        for (const g_index edge : this->_triangulation->edges)
+        {
+            const vec3 ep0 = this->_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 0));
+            const vec3 ep1 = this->_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 1));
+            //if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
+            //{
+            //    e_constrained[edge] = 1;
+            //}
+        }
+    }
+
     geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
     m_target_vertices[0] = this->_unique_vertices / 2.0;
 

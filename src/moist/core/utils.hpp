@@ -5,22 +5,64 @@
 #include <string>
 #include <unordered_set>
 
+#ifdef GEOGRAM_API
+#include <filesystem>
+
+#include <geogram/basic/environment.h>
+#include <geogram/basic/command_line.h>
+#include <geogram/basic/command_line_args.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
+#endif // GEOGRAM_API
 
 namespace moist::utils {
-    /**
-     * Transforms string representations "(x,y,z)" into geogram vector.
-     */
-    inline geogram::vec3 parse_vector(std::string str) {
-        double x, y, z;
-        char none;
+#ifdef GEOGRAM_API
+    namespace geo
+    {
+        inline geogram::vec3 parse_vector(std::string str)
+        {
+            double x, y, z;
+            char none;
 
-        std::istringstream stream(str);
-        stream >> none >> x >> none >> y >> none >> z >> none;
+            std::istringstream stream(str);
+            stream >> none >> x >> none >> y >> none >> z >> none;
 
-        return geogram::vec3(x, y, z);
+            return geogram::vec3(x, y, z);
+        }
+
+        inline void initialize()
+        {
+            geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
+            geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
+            geogram::CmdLine::set_arg("sys:compression_level", "0");
+            geogram::Logger::instance()->set_quiet(true);
+        }
+
+        inline void load(const std::filesystem::path& file, geogram::Mesh& mesh, const geogram::index_t dimension = 0, const bool attributes = true)
+        {
+            geogram::MeshIOFlags flags;
+            flags.set_dimension(dimension != 0 ? dimension : mesh.vertices.dimension());
+            flags.set_attribute(attributes ? geogram::MESH_ALL_ATTRIBUTES : geogram::MESH_NO_ATTRIBUTES);
+            flags.set_elements(geogram::MeshElementsFlags(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS));
+            flags.set_verbose(false);
+
+            if (!geogram::mesh_load(file.string(), mesh, flags))
+            {
+                // TODO: Exception!
+            }
+        }
+
+        inline void save(const std::filesystem::path& file, const geogram::Mesh& mesh, bool attributes = true)
+        {
+            GEO::MeshIOFlags flags;
+            flags.set_dimension(mesh.vertices.dimension());
+            flags.set_attribute(attributes ? geogram::MESH_ALL_ATTRIBUTES : geogram::MESH_NO_ATTRIBUTES);
+            flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
+            flags.set_verbose(false);
+            geogram::mesh_save(mesh, file.string(), flags);
+        }
     }
+#endif // GEOGRAM_API
 
     template <typename T, typename H>
     inline std::unordered_set<T, H> symmetric_difference(const std::unordered_set<T, H>& a, const std::unordered_set<T, H>& b)
@@ -71,18 +113,6 @@ namespace moist::utils {
         }
         return count;
     }
-
-#ifndef NDEBUG
-    inline void dump_mesh(geogram::Mesh& mesh, std::string file)
-    {
-        GEO::MeshIOFlags export_flags;
-        export_flags.set_attribute(geogram::MESH_NO_ATTRIBUTES);
-        export_flags.set_dimension(3);
-        export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
-        export_flags.set_verbose(true);
-        geogram::mesh_save(mesh, file, export_flags);
-    }
-#endif
 }
 
 #endif // MOIST_CORE_UTILS_HPP_

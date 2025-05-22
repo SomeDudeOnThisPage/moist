@@ -7,6 +7,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/timer.hpp"
 #include "moist/core/descriptor.hpp"
 #include "moist/core/core_interface.hpp"
 
@@ -32,7 +33,7 @@ namespace moist
          *
          * @param interface The (initialized) interface reference.
          */
-        void InsertInterface(moist::Interface& interface);
+        void InsertInterface(moist::Interface& interface, moist::metrics::TimeMetrics_ptr metrics = nullptr);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
         void CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra);
@@ -53,8 +54,8 @@ namespace moist
         // global operations
         void InsertInterfaceVertices(moist::Interface& interface);
         void InsertInterfaceEdges(moist::Interface& interface);
+        void InsertTetQuality(moist::Interface& interface);
 
-        // utils
         void InsertVertex(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane);
         void CreateTetrahedra();
         void FlushTetrahedra();

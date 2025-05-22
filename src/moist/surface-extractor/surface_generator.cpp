@@ -27,7 +27,7 @@ moist::SurfaceGenerator::SurfaceGenerator(const Tiff &tiff, const uint32_t offse
     }
 }
 
-void moist::SurfaceGenerator::generate(geogram::Mesh &mesh, const float isovalue)
+void moist::SurfaceGenerator::Generate(geogram::Mesh &mesh, const float isovalue)
 {
     if (mesh.vertices.dimension() != 3)
     {
@@ -40,7 +40,6 @@ void moist::SurfaceGenerator::generate(geogram::Mesh &mesh, const float isovalue
     }
 
     _mc.calculate_isosurface(_surface, isovalue);
-
 
     geogram::vector<double> vertices(_surface.get_num_vertices() * 3);
     const float c_offset_x = (_center) ? static_cast<float>(_width)  / 2.0f : 0.0f;

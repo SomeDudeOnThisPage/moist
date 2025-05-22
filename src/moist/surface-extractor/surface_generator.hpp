@@ -5,6 +5,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/timer.hpp"
 
 #include "tiff_data.hpp"
 
@@ -16,7 +17,7 @@ namespace moist
         SurfaceGenerator(const Tiff& tiff, const uint32_t offset, const Axis axis = Axis::Z, const bool center = true, const bool invert = false);
         ~SurfaceGenerator() = default;
 
-        void generate(geogram::Mesh& mesh, const float isovalue);
+        void Generate(geogram::Mesh& mesh, const float isovalue);
     private:
         MC33 _mc;
         surface _surface;

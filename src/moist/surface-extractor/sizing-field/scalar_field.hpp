@@ -5,6 +5,8 @@
 
 #include <cuda_runtime.h>
 
+#include "moist/core/timer.hpp"
+
 #include "../tiff_data.hpp"
 
 namespace moist
@@ -39,7 +41,7 @@ namespace moist
         uint32_t* data;
     };
 
-    void generate_scalar_field(const Tiff& tiff, const IsoValue isovalue);
+    void generate_scalar_field(const Tiff& tiff, const IsoValue isovalue, moist::metrics::TimeMetrics_ptr metrics = nullptr);
 }
 
 #endif // __SCALAR_FIELD_HPP

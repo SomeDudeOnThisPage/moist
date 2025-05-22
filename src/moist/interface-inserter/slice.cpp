@@ -8,9 +8,10 @@
 #include <limits>
 #include <mutex>
 
-#include "moist/core/metrics.inl"
+#include "moist/core/metrics.hpp"
 #include "moist/core/utils.hpp"
 #include "moist/core/attributes.inl"
+#include "moist/core/mesh_quality.inl"
 #include "moist/core/predicates.inl"
 #include "moist/core/geometry.inl"
 
@@ -60,25 +61,31 @@ void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tet
     }
 }
 
-void moist::MeshSlice::InsertInterface(moist::Interface& interface)
+void moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metrics::TimeMetrics_ptr metrics)
 {
     moist::descriptor::LocalInterface descriptor;
-{
-    TIMER_START("inserting interface vertices into mesh");
-    this->InsertInterfaceVertices(interface);
-    TIMER_END;
+    {
+        auto timer = moist::Timer("MeshSlice::InsertInterfaceVertices", metrics);
+        this->InsertInterfaceVertices(interface);
+    }
+
+    {
+        auto timer = moist::Timer("MeshSlice::InsertInterfaceEdges", metrics);
+        this->InsertInterfaceEdges(interface);
+    }
+
+    {
+        auto timer = moist::Timer("MeshSlice::InsertTetQuality", metrics);
+        this->InsertTetQuality(interface);
+    }
+
+#ifndef NDEBUG
+    // this->Validate(interface);
+#endif
 }
 
+void moist::MeshSlice::InsertTetQuality(moist::Interface& interface)
 {
-    TIMER_START("inserting interface edges into mesh");
-    this->InsertInterfaceEdges(interface);
-    TIMER_END;
-}
-
-    // Inject TetQualities into interface data structure for later decimation...
-    // for each facet in the interface, find the corresponding cell of this mesh... or the other way around...
-{
-    TIMER_START("inserting tetrahedral qualities into interface");
     for (const g_index cell : this->cells)
     {
         if (!moist::predicates::cell_on_plane(cell, *this, *interface.Plane()))
@@ -97,29 +104,21 @@ void moist::MeshSlice::InsertInterface(moist::Interface& interface)
             }
 
             geogram::Attribute<double> f_quality(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
-            // geogram::Attribute<geogram::index_t> f_index(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
             if (f_quality[facet] == -std::numeric_limits<double>::max())
             {
-                f_quality[facet] = moist::metrics::tetrahedron_aspect_ratio(cell, *this);
+                f_quality[facet] = moist::mesh_quality::tetrahedron_aspect_ratio(cell, *this);
             }
             else // another mesh inserter has already written to this interface, merge the quality...
             {
-                f_quality[facet] = (f_quality[facet] + moist::metrics::tetrahedron_aspect_ratio(cell, *this)) / 2.0;
+                f_quality[facet] = (f_quality[facet] + moist::mesh_quality::tetrahedron_aspect_ratio(cell, *this)) / 2.0;
             }
         }
     }
-    TIMER_END;
 }
 
-
-#ifndef NDEBUG
-    // this->Validate(interface);
-#endif
-}
 
 void moist::MeshSlice::InsertInterfaceVertices(moist::Interface& interface)
 {
-    TIMER_START("insert interface vertices");
     const auto triangulation = interface.Triangulation();
     for (const g_index v : triangulation->vertices)
     {
@@ -155,7 +154,6 @@ void moist::MeshSlice::InsertInterfaceVertices(moist::Interface& interface)
     }
 
     this->FlushTetrahedra();
-    TIMER_END;
 
 #ifndef NDEBUG
     OOC_DEBUG("Validating point insertion...");
@@ -177,13 +175,12 @@ void moist::MeshSlice::InsertInterfaceVertices(moist::Interface& interface)
         }
     }
     OOC_DEBUG("Done validating point insertion...");
-    moist::utils::dump_mesh(*this, "after_point_insertion.geogram");
+    // moist::utils::save(*this, "after_point_insertion.geogram");
 #endif // NDEBUG
 }
 
 void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
 {
-
     const auto triangulation = interface.Triangulation();
     const auto plane = interface.Plane();
     const auto edges = moist::geometry::collect_edges(*triangulation);
@@ -312,7 +309,7 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
             }
         }
 
-    #ifndef NDEBUG
+    /*#ifndef NDEBUG
         // check if the edge actually exists...
         bool exists = false;
         for (const auto debug_cell : this->cells)
@@ -343,17 +340,13 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
                 }
             }
 
-            moist::utils::dump_mesh(*this, std::format("test/target/_after_edge_insert_fail{}.geogram", i));
+            // moist::utils::dump_mesh(*this, std::format("test/target/_after_edge_insert_fail{}.geogram", i));
         }
-    #endif
+    #endif*/
 
     }
 
     this->FlushTetrahedra();
-
-#ifndef NDEBUG
-    moist::utils::dump_mesh(*this, "test/target/__after_edge_insert_final.geogram");
-#endif
 }
 
 void moist::MeshSlice::CreateTetrahedra()

@@ -193,8 +193,9 @@ __global__ static void scalar_field_kernel(const float* __restrict__ input, uint
     output[cuda_utils::index(tidx, tidy, tidz, tiff_parameters.width, tiff_parameters.height)] = count;
 }
 
-void moist::generate_scalar_field(const Tiff& tiff, const IsoValue isovalue)
+void moist::generate_scalar_field(const Tiff& tiff, const IsoValue isovalue, moist::metrics::TimeMetrics_ptr metrics)
 {
+    moist::Timer timer("generate_scalar_field", metrics);
     const size_t size = tiff.width() * tiff.height() * tiff.depth();
 
     const CU_TiffParameters tiff_parameters

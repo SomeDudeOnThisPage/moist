@@ -6,16 +6,36 @@
 
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
-#include <geogram/basic/command_line.h>
-#include <geogram/basic/command_line_args.h>
 #include <geogram/mesh/mesh_geometry.h>
 
-#include <moist/core/defines.hpp>
-#include <moist/core/utils.hpp>
+#include "moist/core/defines.hpp"
+#include "moist/core/timer.hpp"
+#include "moist/core/utils.hpp"
 
 #include "tiff_data.hpp"
 #include "surface_generator.hpp"
 #include "sizing-field/scalar_field.hpp"
+
+struct Arguments
+{
+    std::string input;
+    std::string output;
+
+    uint32_t first;
+    uint32_t amount;
+    uint32_t sample_bits;
+
+    moist::Axis axis;
+
+    int32_t dir_offset;
+    float isovalue;
+    double scale_factor;
+    bool f_center;
+    bool f_invert;
+    bool f_generate_sizing_field;
+
+    float sizing_field_scale_denominator;
+};
 
 static cli::Validator PatternPlaceholderCountValidator(const std::size_t placeholders)
 {
@@ -29,26 +49,8 @@ static cli::Validator PatternPlaceholderCountValidator(const std::size_t placeho
 
 int main(int argc, char* argv[])
 {
-    struct Arguments
-    {
-        std::string input;
-        std::string output;
-
-        uint32_t first;
-        uint32_t amount;
-        uint32_t sample_bits;
-
-        moist::Axis axis;
-
-        int32_t dir_offset;
-        float isovalue;
-        double scale_factor;
-        bool f_center;
-        bool f_invert;
-        bool f_generate_sizing_field;
-
-        float sizing_field_scale_denominator;
-    };
+    auto metrics = moist::metrics::TimeMetrics("SurfaceExtractor");
+    moist::Timer timer("SurfaceExtractor::Main", metrics);
 
     Arguments arguments{};
     cli::App app{argv[0]};
@@ -90,28 +92,26 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
-    geogram::CmdLine::import_arg_group("sys");
-    geogram::Logger::instance()->set_quiet(true);
+    moist::utils::geo::initialize();
 
     const moist::Tiff tiff_data(arguments.input, arguments.first, arguments.amount);
     moist::SurfaceGenerator generator(tiff_data, arguments.first + arguments.dir_offset, arguments.axis, arguments.f_center, arguments.f_invert);
 
     geogram::Mesh mesh(3);
-    generator.generate(mesh, arguments.isovalue);
+    {
+        moist::Timer _scope_timer("SurfaceGenerator::Generate", metrics);
+        generator.Generate(mesh, arguments.isovalue);
+    }
 
-    geogram::MeshIOFlags export_flags;
-    export_flags.set_dimension(3);
-    export_flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
-    export_flags.set_verbose(true);
-    geogram::mesh_save(mesh, std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first)), export_flags);
+    const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first));
+    moist::utils::geo::save(std::filesystem::path(path), mesh);
 
     if (!arguments.f_generate_sizing_field)
     {
         return 0;
     }
 
-    moist::generate_scalar_field(tiff_data, moist::IsoValue(arguments.isovalue));
+    moist::generate_scalar_field(tiff_data, moist::IsoValue(arguments.isovalue), metrics);
 
     // TODO: Generate Sizing Field Mesh...
     return 0;
