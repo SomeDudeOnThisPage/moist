@@ -58,7 +58,7 @@ namespace moist::mesh_quality
         float max_edge_length = *std::max_element(edge_length, edge_length + nb_edges);
         float min_height = *std::min_element(heights, heights + nb_vertices);
 
-        return max_edge_length / min_height;
+        return std::sqrt(max_edge_length / min_height);
     }
 
     /**

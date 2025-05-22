@@ -1,5 +1,7 @@
 #include <iostream>
 #include <limits>
+#include <vector>
+#include <cmath>
 
 #include <CLI/CLI.hpp>
 
@@ -32,10 +34,101 @@ struct Arguments
 // Load into memory
 // Decimate required tets
 
+static vec3 middle(const vec3 v0, const vec3 v1)
+{
+    return vec3(
+        (v0.x + v1.x) / 2.0,
+        (v0.y + v1.y) / 2.0,
+        (v0.z + v1.z) / 2.0
+    );
+}
+
+    struct _Edge
+    {
+        vec3 p0;
+        vec3 p1;
+
+        bool operator==(const _Edge& other) const
+        {
+            return (p0 == other.p0 && p1 == other.p1) ||
+                   (p0 == other.p1 && p1 == other.p0);
+        }
+    };
+
 static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, moist::Interface interface, const size_t n)
 {
+
+    auto tri = interface.Triangulation();
+    std::vector<_Edge> to_collapse;
+    size_t to_decimate_n = 0;
+    // for each interface facet to be decimated add the shortest edge of the facet...
+    for (int i = 0; i < n; i++)
+    {
+        const g_index f = facets[i];
+        _Edge edge {};
+        double shortest_edge_length = std::numeric_limits<double>::max();
+        for (l_index lv = 0; lv < 3; lv++)
+        {
+            const vec3 p0 = tri->vertices.point(tri->facets.vertex(f, lv));
+            const vec3 p1 = tri->vertices.point(tri->facets.vertex(f, (lv + 1) % 3));
+            double distance = std::fabs(geogram::distance(p0, p1));
+            if (distance < shortest_edge_length)
+            {
+                shortest_edge_length = distance;
+                edge.p0 = p0;
+                edge.p1 = p1;
+            }
+        }
+        to_collapse.push_back(edge);
+        to_decimate_n++;
+    }
+
+    to_collapse.erase(std::unique(to_collapse.begin(), to_collapse.end()), to_collapse.end());
+
+    size_t decimated = 0;
+    for (const g_index cell : slice.cells)
+    {
+        // check if slice contains one of the edges to decimate
+        for (l_index le = 0; le < slice.cells.nb_edges(cell); le++)
+        {
+            const _Edge edge
+            {
+                slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)),
+                slice.vertices.point(slice.cells.edge_vertex(cell, le, 1))
+            };
+
+            if (std::find(to_collapse.begin(), to_collapse.end(), edge) != to_collapse.end())
+            {
+                const vec3 mid = middle(edge.p0, edge.p1);
+                for (g_index v : slice.vertices)
+                {
+                    vec3 p = slice.vertices.point(v);
+                    if (p == edge.p0 || p == edge.p1)
+                    {
+                        slice.vertices.point(v).x = mid.x;
+                        slice.vertices.point(v).y = mid.y;
+                        slice.vertices.point(v).z = mid.z;
+
+                        slice.vertices.point(v).x = mid.x;
+                        slice.vertices.point(v).y = mid.y;
+                        slice.vertices.point(v).z = mid.z;
+                        decimated++;
+                        /*slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)).x = mid.x;
+                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)).y = mid.y;
+                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)).z = -1.0;
+
+                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 1)).x = mid.x;
+                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 1)).y = mid.y;
+                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 1)).z = -1.0;*/
+                    }
+                }
+            }
+        }
+    }
+
+    OOC_DEBUG("to_decimate_n " << to_decimate_n << " decimated " << decimated);
     // find cells to be decimated...
-    for (g_index i = 0; i < n; i++)
+    /*for (g_index i = 0; i < n; i++)
     {
         for (const g_index cell : slice.cells)
         {
@@ -79,9 +172,16 @@ static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, m
 
             // TODO: Must cluster all verts...
             const vec3 p0 = slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0));
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).x = p0.x;
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).y = p0.y;
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).z = p0.z;
+            const vec3 p1 = slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1));
+            const vec3 m = middle(p0, p1);
+
+            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0)).x = m.x;
+            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0)).y = m.y;
+            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0)).z = m.z;
+
+            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).x = m.x;
+            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).y = m.y;
+            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).z = m.z;
 
             if (p0.z != -1.0)
             {
@@ -89,7 +189,7 @@ static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, m
             }
             //break; // edge is decimated, we don't need to check other cells here, they will all be deleted in the next step at once
         }
-    }
+    }*/
 
     geogram::vector<geogram::index_t> deleted(slice.cells.nb());
     for (const auto tet : slice.cells)
@@ -124,11 +224,7 @@ int main(int argc, char* argv[])
 
     moist::utils::geo::initialize();
 
-    auto interface = moist::Interface(arguments.interface, moist::AxisAlignedInterfacePlane {
-        moist::Axis::Z,
-        -1.0,
-        0.0
-    });
+    auto interface = moist::Interface(arguments.interface);
 
     auto triangulation = interface.Triangulation();
     geogram::Attribute<int> m_target_vertices(interface.Triangulation()->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
@@ -141,7 +237,7 @@ int main(int argc, char* argv[])
         facets.push_back(facet);
     }
 
-    std::sort(facets.begin(), facets.end(), [triangulation](const g_index& a, const g_index& b)
+    std::sort(facets.begin(), facets.end(), [&triangulation](const g_index& a, const g_index& b)
     {
         geogram::Attribute<double> f_quality(triangulation->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
         return f_quality[a] > f_quality[b]; // smaller is better in this case actually
