@@ -129,18 +129,21 @@ void moist::InterfaceGenerator::Triangulate()
     geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
     for (const g_index constraint_edge : this->_constraints.edges)
     {
-        const auto cep0 = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 0));
-        const auto cep1 = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 1));
+        // TODO: This also only works with z-growing...
+        const auto cep0p = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 0));
+        const auto cep1p = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 1));
+        const vec2 cep0 = vec2(cep0p[0], cep0p[1]);
+        const vec2 cep1 = vec2(cep1p[0], cep1p[1]);
 
         // find edge in interface mesh, and mark it
         for (const g_index edge : this->_triangulation->edges)
         {
-            const vec3 ep0 = this->_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 0));
-            const vec3 ep1 = this->_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 1));
-            //if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
-            //{
-            //    e_constrained[edge] = 1;
-            //}
+            const vec2 ep0 = reinterpret_cast<const vec2&>(_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 0)));
+            const vec2 ep1 = reinterpret_cast<const vec2&>(_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 1)));
+            if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
+            {
+                e_constrained[edge] = 1;
+            }
         }
     }
 

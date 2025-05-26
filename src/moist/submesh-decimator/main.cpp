@@ -57,7 +57,6 @@ static vec3 middle(const vec3 v0, const vec3 v1)
 
 static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, moist::Interface interface, const size_t n)
 {
-
     auto tri = interface.Triangulation();
     std::vector<_Edge> to_collapse;
     size_t to_decimate_n = 0;
