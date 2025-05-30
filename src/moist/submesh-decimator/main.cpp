@@ -112,13 +112,6 @@ static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, m
                         slice.vertices.point(v).y = mid.y;
                         slice.vertices.point(v).z = mid.z;
                         decimated++;
-                        /*slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)).x = mid.x;
-                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)).y = mid.y;
-                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 0)).z = -1.0;
-
-                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 1)).x = mid.x;
-                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 1)).y = mid.y;
-                        slice.vertices.point(slice.cells.edge_vertex(cell, le, 1)).z = -1.0;*/
                     }
                 }
             }
@@ -126,69 +119,6 @@ static void decimate(geogram::Mesh& slice, const std::vector<g_index>& facets, m
     }
 
     OOC_DEBUG("to_decimate_n " << to_decimate_n << " decimated " << decimated);
-    // find cells to be decimated...
-    /*for (g_index i = 0; i < n; i++)
-    {
-        for (const g_index cell : slice.cells)
-        {
-            if (!moist::predicates::facet_matches_cell(cell, facets[i], slice, *interface.Triangulation()))
-            {
-                continue;
-            }
-
-            // shortest edge collapse (of the three interface edges!)...
-            l_index shortest_edge = -1;
-            double shortest_edge_length = std::numeric_limits<double>::max();
-            bool already_decimated = false;
-            for (l_index le = 0; le < slice.cells.nb_edges(cell); le++)
-            {
-                const vec3 p0 = slice.vertices.point(slice.cells.edge_vertex(cell, le, 0));
-                const vec3 p1 = slice.vertices.point(slice.cells.edge_vertex(cell, le, 1));
-
-                // TODO: Disallow collapsing edges that are boundary adjacent (at least one of the two vertices is a boundary vertex of one of the meshes)
-                //       Make this an attribute in the interface mae
-                if (moist::predicates::point_on_plane(p0, *interface.Plane()) && moist::predicates::point_on_plane(p1, *interface.Plane()))
-                {
-                    const double distance = geogram::distance(p0, p1);
-                    if (distance == 0.0)
-                    {
-                        already_decimated = true;
-                        break;
-                    }
-                    if (distance < shortest_edge_length)
-                    {
-                        shortest_edge_length = distance;
-                        shortest_edge = le;
-                    }
-                }
-            }
-
-            // decimate le#p1 onto le#p0
-            if (shortest_edge == -1 || already_decimated)
-            {
-                OOC_DEBUG("oi noi");
-            }
-
-            // TODO: Must cluster all verts...
-            const vec3 p0 = slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0));
-            const vec3 p1 = slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1));
-            const vec3 m = middle(p0, p1);
-
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0)).x = m.x;
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0)).y = m.y;
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 0)).z = m.z;
-
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).x = m.x;
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).y = m.y;
-            slice.vertices.point(slice.cells.edge_vertex(cell, shortest_edge, 1)).z = m.z;
-
-            if (p0.z != -1.0)
-            {
-                OOC_DEBUG("oi noi");
-            }
-            //break; // edge is decimated, we don't need to check other cells here, they will all be deleted in the next step at once
-        }
-    }*/
 
     geogram::vector<geogram::index_t> deleted(slice.cells.nb());
     for (const auto tet : slice.cells)

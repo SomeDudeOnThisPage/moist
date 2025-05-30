@@ -78,7 +78,7 @@ moist::AxisAlignedInterfacePlane moist::Interface::ReadMetadata() const
     }
     else
     {
-        OOC_ERROR("failed to deserialize metadata");
+        OOC_ERROR("failed to deserialize metadata - expected 1 cell, got " << this->_triangulation->cells.nb());
         return AxisAlignedInterfacePlane {}; // TODO: exception
     }
 }

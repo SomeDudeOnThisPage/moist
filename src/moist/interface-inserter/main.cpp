@@ -7,6 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_geometry.h>
+#include <geogram/mesh/mesh_repair.h>
 #include <geogram/mesh/mesh_AABB.h>
 #include <geogram/numerics/predicates.h>
 
@@ -65,6 +66,7 @@ int main(int argc, char* argv[])
     {
         moist::Timer _scope_timer("MeshSlice::InsertInterface", metrics);
         slice.InsertInterface(interface, metrics);
+        geogram::mesh_repair(slice, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
     }
     moist::mesh_quality::compute(metrics_after, slice);
 

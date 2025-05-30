@@ -48,7 +48,7 @@ namespace moist::utils {
 
             if (!geogram::mesh_load(file.string(), mesh, flags))
             {
-                // TODO: Exception!
+                OOC_ERROR("Failed to load mesh '" << file << "'");
             }
         }
 

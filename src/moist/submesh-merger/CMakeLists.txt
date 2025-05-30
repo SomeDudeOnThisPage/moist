@@ -9,15 +9,35 @@ project(
     LANGUAGES CXX
 )
 
+if(OOC_WITH_TESTS)
+    add_library(MOIST_Merger_Units OBJECT
+        submesh_merger.hpp
+        submesh_merger.cpp
+    )
+    target_link_libraries(MOIST_Merger_Units PRIVATE geogram)
+    target_link_libraries(MOIST_Merger_Units PRIVATE OutOfCore_Meshing_Core)
+    set(SOURCES
+        main.cpp
+    )
+    set(HEADERS)
+else()
+    file(GLOB_RECURSE SOURCES "*.cpp")
+    file(GLOB_RECURSE HEADERS "*.hpp" "*.inl")
+endif()
+
+
+
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE HEADERS "*.hpp" "*.inl")
+if (OOC_WITH_TESTS)
+    add_executable(OutOfCore_Meshing_MeshMerger ${SOURCES} ${HEADERS} $<TARGET_OBJECTS:MOIST_Merger_Units>)
+else()
+    add_executable(OutOfCore_Meshing_MeshMerger ${SOURCES} ${HEADERS})
+endif()
 
-add_executable(OutOfCore_Meshing_MeshMerger ${SOURCES} ${HEADERS})
 target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE geogram)
 target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE CLI11::CLI11)
 

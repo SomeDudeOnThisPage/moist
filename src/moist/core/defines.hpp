@@ -1,6 +1,7 @@
 #ifndef MOIST_CORE_CORE_HPP_
 #define MOIST_CORE_CORE_HPP_
 
+#include <format>
 #include <string>
 #include <filesystem>
 #include <iostream>
@@ -25,7 +26,7 @@ namespace moist
     };
 
 //! @internal
-    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon(); // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
+    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon() * 10.0; // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
 
     const std::map<std::string, moist::Axis> AXIS_OPTION_ARGUMENT_MAP
     {
@@ -88,7 +89,10 @@ using vec2 = geogram::vec2;
 
 inline bool operator==(const geogram::vec3& a, const geogram::vec3& b)
 {
-    return a.x == b.x && a.y == b.y && a.z == b.z;
+    return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
+           std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON &&
+           std::fabs(a.z - b.z) < moist::__DOUBLE_EPSILON;
+    // return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 
 inline bool operator==(const geogram::vec2& a, const geogram::vec2& b)

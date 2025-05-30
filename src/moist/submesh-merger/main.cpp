@@ -1,25 +1,48 @@
 #include <iostream>
+#include <fstream>
+
+#include <CLI/CLI.hpp>
+
+#include <geogram/mesh/mesh.h>
+#include <geogram/basic/line_stream.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/utils.hpp"
 #include "moist/core/descriptor.hpp"
+#include "moist/core/core_interface.hpp"
+
+#include "submesh_merger.hpp"
 
 struct Arguments
 {
     std::filesystem::path mesh;
+    std::filesystem::path interface;
     std::filesystem::path slice;
 };
 
-// Load interface tets of BigMesh (could be more than 1 interface!!!), load all tets of Slice
-// "merge", i.e. create one continuous mesh
-// decimate worst tet combinations along the interface plane
-// save back into part of the file...
 int main(int argc, char* argv[])
 {
-    // keep file for vertices and file for elements... like tetgen format...
+    Arguments arguments{};
+    cli::App app{argv[0]};
 
-    // slice...
-    // find interface(s)...
-    // slice to files
+    app.add_option("-m, --mesh", arguments.mesh, "Mesh (.msh) file.")
+        ->required()
+        ->check(cli::ExistingFile);
+    app.add_option("-s, --slice", arguments.slice, "Slice (.msh) file.")
+        ->required()
+        ->check(cli::ExistingFile);
+    app.add_option("-i, --interface", arguments.interface, "Interface (.geogram) file.")
+        ->required()
+        ->check(cli::ExistingFile);
 
-    // merge vertices and elements files into one .msh file
+    CLI11_PARSE(app, argc, app.ensure_utf8(argv));
+
+    moist::utils::geo::initialize();
+
+    //geogram::Mesh slice;
+    //moist::utils::geo::load(arguments.slice, slice);
+
+    moist::Merger merger(arguments.mesh, arguments.slice);
+    merger.Merge();
+    merger.CopyToOriginal();
 }

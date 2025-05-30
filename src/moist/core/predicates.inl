@@ -22,9 +22,9 @@ namespace moist::predicates
 {
     PURE INLINE bool facet_matches_cell(const g_index cell, const g_index facet, const geogram::Mesh& mesh, const geogram::Mesh& interface)
     {
-        const vec3 f0 = interface.vertices.point(interface.facets.vertex(facet, 0));
-        const vec3 f1 = interface.vertices.point(interface.facets.vertex(facet, 1));
-        const vec3 f2 = interface.vertices.point(interface.facets.vertex(facet, 2));
+        vec3 f0 = interface.vertices.point(interface.facets.vertex(facet, 0));
+        vec3 f1 = interface.vertices.point(interface.facets.vertex(facet, 1));
+        vec3 f2 = interface.vertices.point(interface.facets.vertex(facet, 2));
 
         // check if three vertices of the cell match the facet
         size_t matches = 0;
@@ -37,7 +37,7 @@ namespace moist::predicates
             }
         }
 
-        return matches == 3;
+        return matches >= 3;
     }
 
     PURE INLINE bool vec_eq_2d(const geogram::vec3 &v0, const geogram::vec3 &v1, const moist::AxisAlignedInterfacePlane& plane)
