@@ -34,6 +34,7 @@ void moist::Merger::Merge()
 
     const auto tmp_msh_path = _tmp_folder_path / "merge";
     std::ofstream msh_tmp(tmp_msh_path);
+    msh_tmp.precision(16);
     msh_tmp << "$MeshFormat" << std::endl;
     msh_tmp << "2.2 0 8" << std::endl;
     msh_tmp << "$EndMeshFormat" << std::endl;
@@ -88,6 +89,8 @@ geogram::index_t moist::Merger::WriteNodes(geogram::LineInput& input)
 {
     geogram::index_t nb_vertices;
     std::ofstream v_swapfile(_v_swap_path);
+    v_swapfile.precision(16);
+
     while (input.get_line())
     {
         input.get_fields();
@@ -139,7 +142,7 @@ geogram::index_t moist::Merger::WriteNodes(geogram::LineInput& input)
                     _v_inverse_prefix_offset[v] = offset;
 
                     const vec3 point = _slice.vertices.point(v);
-                    v_swapfile << point.x << " " << point.y << " " << (point.z -0.5) << std::endl;
+                    v_swapfile << point.x << " " << point.y << " " << point.z << std::endl;
                     nb_vertices++;
                 }
             }
@@ -157,6 +160,7 @@ geogram::index_t moist::Merger::WriteElements(geogram::LineInput& input)
 {
     geogram::index_t nb_elements = 0;
     std::ofstream e_swapfile(_e_swap_path);
+    e_swapfile.precision(16);
 
     while (input.get_line())
     {

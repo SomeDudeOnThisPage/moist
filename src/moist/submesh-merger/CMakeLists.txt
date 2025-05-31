@@ -25,8 +25,6 @@ else()
     file(GLOB_RECURSE HEADERS "*.hpp" "*.inl")
 endif()
 
-
-
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -40,7 +38,6 @@ endif()
 
 target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE geogram)
 target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE CLI11::CLI11)
-
 target_link_libraries(OutOfCore_Meshing_MeshMerger PRIVATE OutOfCore_Meshing_Core)
 target_include_directories(OutOfCore_Meshing_MeshMerger PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
