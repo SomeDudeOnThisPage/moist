@@ -75,8 +75,8 @@ endif()
 #######################################
 FetchContent_Declare(
     mc33
-    GIT_REPOSITORY https://github.com/SomeDudeOnThisPage/MC33_CMake_CXX23.git
-    GIT_TAG main
+    GIT_REPOSITORY https://github.com/SomeDudeOnThisPage/mc33-cmake.git
+    GIT_TAG v5.2.0
 )
 
 set(MC33_ORTHOGONAL_GRID OFF)
@@ -110,3 +110,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(json)
+
+# TODO: Maybe create a "forked" github repo, port tetrahedron to cmake and c++23, and include via fetchcontent...
+add_subdirectory(tetrahedron)
+add_subdirectory(triangle)

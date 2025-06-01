@@ -41,6 +41,7 @@ namespace moist::metrics
     struct MeshQuality
     {
         float aspect_ratio;
+        float mean_ratio;
         float skewness;
     };
 

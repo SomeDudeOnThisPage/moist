@@ -42,6 +42,7 @@ namespace moist::predicates
 
     PURE INLINE bool vec_eq_2d(const geogram::vec3 &v0, const geogram::vec3 &v1, const moist::AxisAlignedInterfacePlane& plane)
     {
+        // TODO [Axis-Support]: Add support for all axis.
         switch (plane.axis)
         {
             case moist::Axis::X:
@@ -57,6 +58,7 @@ namespace moist::predicates
 
     PURE INLINE bool point_on_plane(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane)
     {
+        // TODO [Axis-Support]: Add support for all axis.
         switch (plane.axis)
         {
             case moist::Axis::X:
@@ -64,7 +66,7 @@ namespace moist::predicates
             case moist::Axis::Y:
                 return in_range(point.y, plane.extent, plane.epsilon);
             case moist::Axis::Z:
-                return point.z == plane.extent; // TODO
+                return point.z == plane.extent;
                 //return in_range(point.z, plane.extent, plane.epsilon);
         }
 
@@ -133,7 +135,6 @@ namespace moist::predicates
     }
 
     // Source: geogram/mesh/mesh_AABB.cpp#175
-    // TODO: this can likely be replaced with less instructions because we work in 2d...
     PURE INLINE bool point_in_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p, bool exclude_existing_points = false)
     {
         const auto p0 = mesh.vertices.point(mesh.cells.vertex(t, 0));

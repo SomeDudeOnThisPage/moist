@@ -102,16 +102,6 @@ void moist::MeshSlice::InsertTetQuality(moist::Interface& interface)
             {
                 continue;
             }
-
-            geogram::Attribute<double> f_quality(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
-            if (f_quality[facet] == -std::numeric_limits<double>::max())
-            {
-                f_quality[facet] = moist::mesh_quality::tetrahedron_aspect_ratio(cell, *this);
-            }
-            else // another mesh inserter has already written to this interface, merge the quality...
-            {
-                f_quality[facet] = (f_quality[facet] + moist::mesh_quality::tetrahedron_aspect_ratio(cell, *this)) / 2.0;
-            }
         }
     }
 }
