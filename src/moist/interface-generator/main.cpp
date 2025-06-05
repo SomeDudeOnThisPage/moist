@@ -65,13 +65,14 @@ int main(int argc, char* argv[])
     moist::utils::geo::load(arguments.path_mesh_b, mesh);
     generator.AddConstraints(mesh);
     generator.Triangulate();
+    //generator.Decimate();
 
     // inject "quality" attribute on facets for later use...
-    geogram::Attribute<double> f_quality(generator.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
-    for (const g_index f : generator.Triangulation()->facets)
-    {
-        f_quality[f] = -std::numeric_limits<double>::max();
-    }
+    // geogram::Attribute<double> f_quality(generator.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_TETMERGE_QUALITY);
+    // for (const g_index f : generator.Triangulation()->facets)
+    // {
+    //     f_quality[f] = -std::numeric_limits<double>::max();
+    // }
 
     moist::utils::geo::save(arguments.path_mesh_out.replace_extension(".geogram"), *generator.Triangulation());
 

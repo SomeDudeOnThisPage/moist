@@ -11,7 +11,8 @@ file(GLOB_RECURSE HEADERS "*.hpp" "*.inl")
 
 add_library(OutOfCore_Meshing_Core STATIC ${SOURCES} ${HEADERS})
 target_link_libraries(OutOfCore_Meshing_Core PRIVATE geogram)
-target_link_libraries(OutOfCore_Meshing_Core PUBLIC tetrahedron::tetrahedron)
+target_link_libraries(OutOfCore_Meshing_Core PUBLIC tetrahedron)
+target_link_libraries(OutOfCore_Meshing_Core PUBLIC triangle)
 target_link_libraries(OutOfCore_Meshing_Core PRIVATE nlohmann_json::nlohmann_json)
 
 target_include_directories(OutOfCore_Meshing_Core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../)

@@ -341,23 +341,24 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
 
 void moist::MeshSlice::CreateTetrahedra()
 {
-    //OOC_DEBUG("creating #" << this->_created_tets.size() << " tets");
     for (const auto tet : this->_created_tets)
     {
         const auto t = this->cells.create_tet(tet.v0, tet.v1, tet.v2, tet.v3);
         _created_tets_idx.push_back(t);
-    #ifndef NDEBUG
+
+        // TODO [Bugs]: Figure out why this happens. Also, figure out why this leads to a validatably correct output...
         const auto volume = geogram::mesh_cell_volume(*this, t);
-        if (volume <= 0.00000) // this happens because I insert existing vertices from the triangulation into the tetmesh...
+        if (volume <= 0.00000)
         {
+        #ifndef NDEBUG
             const auto p0 = this->vertices.point(tet.v0);
             const auto p1 = this->vertices.point(tet.v1);
             const auto p2 = this->vertices.point(tet.v2);
             const auto p3 = this->vertices.point(tet.v3);
             OOC_WARNING("cell t0 " << t << " has zero volume: " << volume);
+        #endif // NDEBUG
             _deleted_tets.insert(t);
         }
-    #endif // NDEBUG
     }
 
     this->_created_tets.clear();
@@ -374,7 +375,7 @@ void moist::MeshSlice::FlushTetrahedra()
     _deleted_tets.clear();
 }
 
-// very inefficient but this is only run in debug mode...
+// TODO [Testing]: Move this code into a gtest module...
 void moist::MeshSlice::Validate(moist::Interface& interface)
 {
     // validate vertices mesh -> interface

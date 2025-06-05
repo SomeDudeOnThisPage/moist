@@ -10,6 +10,7 @@
 
 #include "moist/core/attributes.inl"
 #include "moist/core/predicates.inl"
+#include "moist/core/mesh_quality.inl"
 
 moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2, false))
 {
@@ -174,4 +175,76 @@ void moist::InterfaceGenerator::Triangulate()
     }
     OOC_DEBUG("finished checking vertices, missing " << missing << " points...");
 #endif // NDEBUG
+}
+
+static vec3 middle(const vec3 v0, const vec3 v1)
+{
+    return vec3(
+        (v0.x + v1.x) / 2.0,
+        (v0.y + v1.y) / 2.0,
+        (v0.z + v1.z) / 2.0
+    );
+}
+
+void moist::InterfaceGenerator::Decimate()
+{
+    const size_t n = (this->_triangulation->facets.nb() - this->_constraints.edges.nb()) / 2;
+
+    // enumerate the n worst triangles
+    std::vector<g_index> triangles(this->_triangulation->facets.nb());
+    for (const g_index facet : this->_triangulation->facets)
+    {
+        triangles.push_back(facet);
+    }
+
+    const auto triangulation = this->_triangulation;
+    std::sort(triangles.begin(), triangles.end(), [triangulation](const g_index a, const g_index b)
+    {
+        return moist::mesh_quality::tri::aspect_ratio(a, *triangulation) > moist::mesh_quality::tri::aspect_ratio(b, *triangulation);
+    });
+
+    // decimate shortest edge of n triangles
+    for (size_t i = 0; i < n; i++)
+    {
+        const g_index f = triangles[i];
+        l_index shortest_edge = -1;
+        double shortest_edge_length = std::numeric_limits<double>::max();
+        for (l_index le = 0; le < 3; le++)
+        {
+            const vec3 p0 = triangulation->vertices.point(triangulation->facets.vertex(f, le));
+            const vec3 p1 = triangulation->vertices.point(triangulation->facets.vertex(f, (le + 1) % 3));
+            const double distance = geogram::distance(p0, p1);
+            if (distance < shortest_edge_length)
+            {
+                shortest_edge_length = distance;
+                shortest_edge = le;
+            }
+        }
+
+        const vec3 p0 = triangulation->vertices.point(triangulation->facets.vertex(f, shortest_edge));
+        const vec3 p1 = triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3));
+        const vec3 mid = middle(p0, p1);
+        triangulation->vertices.point(triangulation->facets.vertex(f, shortest_edge)).x = mid.x;
+        triangulation->vertices.point(triangulation->facets.vertex(f, shortest_edge)).y = mid.y;
+        triangulation->vertices.point(triangulation->facets.vertex(f, shortest_edge)).z = mid.z;
+        triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3)).x = mid.x;
+        triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3)).y = mid.y;
+        triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3)).z = mid.z;
+    }
+
+    // delete all resulting 0-volume triangles
+    geogram::vector<g_index> deleted_facets(triangulation->facets.nb());
+    for (g_index i = 0; i < triangulation->facets.nb(); i++)
+    {
+        const vec3 p0 = triangulation->vertices.point(triangulation->facets.vertex(i, 0));
+        const vec3 p1 = triangulation->vertices.point(triangulation->facets.vertex(i, 1));
+        const vec3 p2 = triangulation->vertices.point(triangulation->facets.vertex(i, 2));
+
+        if (p0 == p1 || p0 == p2 || p1 == p2)
+        {
+            deleted_facets[i] = 1;
+        }
+    }
+
+    triangulation->facets.delete_elements(deleted_facets, true);
 }

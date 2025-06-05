@@ -10,64 +10,28 @@
 
 #include "moist/core/defines.hpp"
 #include "moist/core/core_interface.hpp"
-#include "moist/core/attributes.inl"
-#include "moist/core/predicates.inl"
-#include "moist/core/geometry.inl"
 #include "moist/core/utils.hpp"
 
 #include "moist/submesh-merger/submesh_merger.hpp"
 
-TEST(MergeTest, ContainsAllEdges)
-{
-    size_t missing_facets = 0;
-    size_t found_facets = 0;
+#include "test_utils.hpp"
 
-    // load test meshes
+TEST(MergeTest, ContainsConstraints)
+{
     moist::utils::geo::initialize();
+    auto interface = moist::Interface("./data/interface_inserted.geogram");
 
     moist::Merger merger("./data/cube_inserted.msh", "./data/cylinder_inserted.msh");
     merger.Merge();
-    merger.CopyToOriginal("./data/cube_cylinder.msh");
+    merger.CopyToOriginal("./debug/test/cube_cylinder.msh");
 
     geogram::Mesh merged;
-    moist::utils::geo::load("./data/cube_cylinder.merged.msh", merged);
-    auto interface = moist::Interface("./data/interface_inserted.geogram");
-
+    moist::utils::geo::load("./debug/test/cube_cylinder.msh", merged);
     geogram::mesh_repair(merged);
-    geogram::parallel_for(0, merged.cells.nb(), [&merged, &interface, &found_facets] (const g_index c)
-    {
-        if (!moist::predicates::cell_on_plane(c, merged, *interface.Plane()))
-        {
-            return;
-        }
 
-        auto triangulation = interface.Triangulation();
-        for (const g_index f : interface.Triangulation()->facets)
-        {
-            if (!moist::predicates::facet_matches_cell(c, f, merged, *triangulation))
-            {
-                continue;
-            }
+    EXPECT_TRUE(moist::test::contains_constraints(merged, *interface.Triangulation()));
 
-            LOCK_ATTRIBUTES;
-            geogram::Attribute<double> f_found(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_FACET_FOUND_AFTER_MERGE);
-            if (!f_found[f])
-            {
-                f_found[f] = 1;
-                found_facets++;
-            }
-            break;
-        }
-    });
-
-    geogram::Attribute<double> f_found(interface.Triangulation()->facets.attributes(), ATTRIBUTE_INTERFACE_FACET_FOUND_AFTER_MERGE);
-    for (const g_index f : interface.Triangulation()->facets)
-    {
-        EXPECT_EQ(f_found[f], 1);
-    }
-
-    std::filesystem::remove("./data/cube_cylinder.merged.msh");
-
+    std::filesystem::remove("./debug/test/cube_cylinder.msh");
 #ifndef NDEBUG
     moist::utils::geo::save("./debug/test/interface_inserted.merge.geogram", *interface.Triangulation());
 #endif

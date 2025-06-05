@@ -34,6 +34,11 @@ namespace moist
          * @brief Performs the triangulation of all constraint vertices.
          */
         void Triangulate();
+
+        /**
+         * @brief Decimates n = ((total - constraints) / 2) edges belonging to the worst-quality triangles.
+         */
+        void Decimate();
     private:
 
 #ifndef NDEBUG

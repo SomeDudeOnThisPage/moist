@@ -81,7 +81,7 @@ void moist::Merger::CopyToOriginal(const std::filesystem::path &destination_over
         ? _mesh_path
         : destination_override;
 
-    destination.replace_extension(".merged.msh");
+    destination.replace_extension(".msh");
     std::filesystem::copy_file(_tmp_folder_path / "merge", destination, std::filesystem::copy_options::overwrite_existing);
 }
 

@@ -111,26 +111,41 @@ namespace moist::mesh_quality
         }
     }
 
-    PURE INLINE float aspect_ratio(const geogram::Mesh& mesh)
+    PURE INLINE float aspect_ratio(const geogram::Mesh& mesh, bool normalized = true)
     {
         float aspect_ratio = 0.0f;
+        float max = -std::numeric_limits<double>::max();
+        float min = std::numeric_limits<double>::max();
+
         for (const g_index cell : mesh.cells)
         {
-            aspect_ratio += tet::aspect_ratio(cell, mesh);
+            const double l_aspect_ratio = tet::aspect_ratio(cell, mesh);
+            if (l_aspect_ratio < min)
+            {
+                min = l_aspect_ratio;
+            }
+
+            if (l_aspect_ratio > max)
+            {
+                max = l_aspect_ratio;
+            }
+
+            aspect_ratio += l_aspect_ratio;
         }
 
         return aspect_ratio / static_cast<float>(mesh.cells.nb());
+        // TODO: Normalize.
     }
 
     PURE INLINE float mean_ratio(const geogram::Mesh& mesh)
     {
-        float aspect_ratio = 0.0f;
+        float mean_ratio = 0.0f;
         for (const g_index cell : mesh.cells)
         {
-            aspect_ratio += tet::mean_ratio(cell, mesh);
+            mean_ratio += tet::mean_ratio(cell, mesh);
         }
 
-        return aspect_ratio / static_cast<float>(mesh.cells.nb());
+        return mean_ratio / static_cast<float>(mesh.cells.nb());
     }
 
     /**

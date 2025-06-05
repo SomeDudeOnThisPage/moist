@@ -14,6 +14,6 @@ add_library(tetrahedron SHARED
 
 add_library(tetrahedron::tetrahedron ALIAS tetrahedron)
 
-target_compile_options(tetrahedron PRIVATE -Wall -I)
-target_compile_features(tetrahedron PUBLIC cxx_std_23)
+#target_compile_options(tetrahedron PRIVATE -Wall -MM)
+target_compile_features(tetrahedron PRIVATE cxx_std_23)
 target_include_directories(tetrahedron PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/source)

@@ -5,7 +5,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 enable_testing()
 add_executable(MOIST_Tests
+    inserter_test.gtest.cpp
     merger_test.gtest.cpp
+
+    test_utils.hpp
+    test_utils.cpp
+
+    $<TARGET_OBJECTS:MOIST_InterfaceInserter_Units>
     $<TARGET_OBJECTS:MOIST_Merger_Units>
 )
 
