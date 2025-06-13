@@ -9,7 +9,7 @@
 #include <map>
 
 #ifndef NDEBUG
-#undef OPTION_PARALLEL_LOCAL_OPERATIONS // dev
+// #define OPTION_PARALLEL_LOCAL_OPERATIONS // dev
 // #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
@@ -26,7 +26,7 @@ namespace moist
     };
 
 //! @internal
-    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon() * 10.0; // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
+    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon() * 3.0; // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
 
     const std::map<std::string, moist::Axis> AXIS_OPTION_ARGUMENT_MAP
     {

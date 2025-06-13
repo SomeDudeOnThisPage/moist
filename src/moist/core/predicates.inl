@@ -66,8 +66,7 @@ namespace moist::predicates
             case moist::Axis::Y:
                 return in_range(point.y, plane.extent, plane.epsilon);
             case moist::Axis::Z:
-                return point.z == plane.extent;
-                //return in_range(point.z, plane.extent, plane.epsilon);
+                return (plane.extent - plane.epsilon) < point.z && point.z < (plane.extent + plane.epsilon);
         }
 
         return false;
@@ -134,8 +133,17 @@ namespace moist::predicates
              || p == mesh.vertices.point(mesh.cells.vertex(t, 3));
     }
 
+    enum class PointInTet
+    {
+        NONE,
+        VERTEX,
+        EDGE,
+        FACET,
+        INSIDE
+    };
+
     // Source: geogram/mesh/mesh_AABB.cpp#175
-    PURE INLINE bool point_in_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p, bool exclude_existing_points = false)
+    PURE INLINE PointInTet point_in_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p, bool exclude_existing_points = false)
     {
         const auto p0 = mesh.vertices.point(mesh.cells.vertex(t, 0));
         const auto p1 = mesh.vertices.point(mesh.cells.vertex(t, 1));
@@ -148,22 +156,47 @@ namespace moist::predicates
         s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
         s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
 
-        const bool inside = (
+        const bool inside_or_on_boundary = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
             (s[0] <= 0 && s[1] <= 0 && s[2] <= 0 && s[3] <= 0)
         );
 
-        return (exclude_existing_points)
-            ? inside && !point_of_tet(mesh, t, p)
-            : inside;
+        int nz = 0;
+        for(int i = 0; i < 4; i++)
+        {
+            if(s[i] == 0)
+            {
+                nz++;
+            }
+        }
+
+        if (inside_or_on_boundary)
+        {
+            if (nz == 1)
+            {
+                return PointInTet::FACET;
+            }
+            else if (nz == 2)
+            {
+                return PointInTet::EDGE;
+            }
+            else if (nz == 3)
+            {
+                return PointInTet::VERTEX;
+            }
+        }
+
+        return PointInTet::NONE;
     }
 
     namespace xy
     {
         PURE INLINE bool check_lines_aabb(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
         {
-            return (std::min(p0.x, p1.x) <= std::max(p2.x, p3.x)) && (std::max(p0.x, p1.x) >= std::min(p2.x, p3.x))
-                && (std::min(p0.y, p1.y) <= std::max(p2.y, p3.y)) && (std::max(p0.y, p1.y) >= std::min(p2.y, p3.y));
+            // bugfix: Make sure to only include INSIDE line definitions (> and <, not >= and <=) to avoid deleting tets on accident when a line is only touching a vertex...
+            // this bug cost me about a week of debugging... :)
+            return (std::min(p0.x, p1.x) < std::max(p2.x, p3.x)) && (std::max(p0.x, p1.x) > std::min(p2.x, p3.x))
+                && (std::min(p0.y, p1.y) < std::max(p2.y, p3.y)) && (std::max(p0.y, p1.y) > std::min(p2.y, p3.y));
         }
 
         PURE INLINE bool point_in_facet(const geogram::vec2& point, const g_index facet, const geogram::Mesh& triangulation)
@@ -176,9 +209,6 @@ namespace moist::predicates
             s[0] = geogram::PCK::orient_2d(p0, p1, point);
             s[1] = geogram::PCK::orient_2d(p1, p2, point);
             s[2] = geogram::PCK::orient_2d(p2, p0, point);
-
-            bool has_neg = (s[0] < 0) || (s[1] < 0) || (s[2] < 0);
-            bool has_pos = (s[0] > 0) || (s[1] > 0) || (s[2] > 0);
 
             return (
                 (s[0] >= 0 && s[1] >= 0 && s[2] >= 0) ||

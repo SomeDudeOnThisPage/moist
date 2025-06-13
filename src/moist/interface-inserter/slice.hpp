@@ -56,11 +56,20 @@ namespace moist
         void InsertInterfaceEdges(moist::Interface& interface);
         void InsertTetQuality(moist::Interface& interface);
 
+        g_index ReorderCells(const moist::AxisAlignedInterfacePlane& plane);
         void InsertVertex(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane);
         void CreateTetrahedra();
         void FlushTetrahedra();
 
         void Validate(moist::Interface& interface);
+
+        bool CanMoveVertex(const g_index v, const vec3& p);
+
+    #ifndef NDEBUG
+        void DebugMesh(std::string file, std::vector<g_index>& tetrahedra);
+    #else
+        void DebugMesh(std::string file, std::vector<g_index>& tetrahedra) {};
+    #endif
     };
 }
 

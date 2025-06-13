@@ -2,18 +2,13 @@
 
 #include "moist/core/geometry.inl"
 #include "moist/core/attributes.inl"
+#include "moist/core/utils.hpp"
 
 #ifndef NDEBUG
 #define VECE(a, b, c, d) ((a) == (b) || (a) == (c) || (a) == (d) || \
                           (b) == (c) || (b) == (d) || \
                           (c) == (d))
 #endif // NDEBUG
-
-// NEW NEW IDEA:
-// Map created vertices to FACETS (or facet-edges, since they are shared) of the input triangulation
-// Then, in the first step, only decimate these vertices ALONG the interface edges, so the "supercells" (with edges corresponding to the interface triangles)
-//     exist, and have more edges/points inside them. That does not matter
-// Then, in a second step, decimate all remaining edges in whatever order inside the "supercells"
 
 void moist::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge, const AxisAlignedInterfacePlane &plane)
 {
@@ -33,13 +28,10 @@ void moist::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, cons
         // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
-        geogram::Attribute<int> v_interface_edge(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
 
         v_discard[edge.e_v0] = false;
         v_discard[edge.e_v1] = false;
         v_discard[edge.p] = true;
-
-        v_interface_edge[edge.p] = edge.e_interface;
     }
 
 #ifndef NDEBUG
@@ -49,9 +41,14 @@ void moist::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, cons
     const auto p2t = mesh.vertices.point(v_opposite);
     const auto p3t = mesh.vertices.point(edge.p);
     const auto p4t = mesh.vertices.point(edge.e_v1);
+
+    const auto c0 = mesh.vertices.point(mesh.cells.vertex(cell, 0));
+    const auto c1 = mesh.vertices.point(mesh.cells.vertex(cell, 1));
+    const auto c2 = mesh.vertices.point(mesh.cells.vertex(cell, 2));
+    const auto c3 = mesh.vertices.point(mesh.cells.vertex(cell, 3));
     if (VECE(p0t, p1t, p2t, p3t) || VECE(p4t, p1t, p2t, p3t))
     {
-        OOC_ERROR("zero volume tet");
+        OOC_WARNING("zero volume tet in 1->2 split");
     }
 #endif // NDEBUG
 
@@ -86,11 +83,6 @@ void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, cons
         // points must be marked as discardable, as they must ultimately be collapsed onto other vertices.
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
-        geogram::Attribute<int> v_interface(mesh.vertices.attributes(), ATTRIBUTE_INTERFACE);
-        geogram::Attribute<int> v_interface_edge(mesh.vertices.attributes(), ATTRIBUTE_CLUSTER_ONTO);
-
-        v_interface_edge[edge0.p] = edge0.e_interface;
-        v_interface_edge[edge1.p] = edge1.e_interface;
 
         v_discard[edge0.p] = true;
         v_discard[edge1.p] = true;
@@ -100,6 +92,62 @@ void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, cons
         v_discard[v_coplanar_opposite_p1] = false;
     }
 
+#ifndef NDEBUG
+{
+    // check to make sure bandaid-fix worked
+    const auto p0t = mesh.vertices.point(v_opposite);
+    const auto p1t = mesh.vertices.point(shared);
+    const auto p2t = mesh.vertices.point(edge0.p);
+    const auto p3t = mesh.vertices.point(edge1.p);
+    if (p2t.x == -0.5954272150993347 || p3t.x == -0.5954272150993347)
+    {
+        int i  = 222;
+    }
+
+
+    const auto e0v0 = mesh.vertices.point(edge0.e_v0);
+    const auto e0v1 = mesh.vertices.point(edge0.e_v1);
+    const auto e1v0 = mesh.vertices.point(edge1.e_v0);
+    const auto e1v1 = mesh.vertices.point(edge1.e_v1);
+    if (VECE(p0t, p1t, p2t, p3t))
+    {
+        OOC_WARNING("zero volume tet in 1->3 split");
+        LOCK_ATTRIBUTES;
+        geogram::Attribute<int> v_dbg(mesh.vertices.attributes(), "DebugAttribute");
+        v_dbg[edge0.p] = 10*10;
+        v_dbg[shared] = 10*10*10;
+        v_dbg[v_coplanar_opposite_p0] = 10*10*10*10;
+        v_dbg[v_coplanar_opposite_p1] = 10*10*10*10;
+        moist::utils::geo::save("debug_attribute_mesh_zero_volume.geogram", mesh);
+    }
+}
+
+{
+    // check to make sure bandaid-fix worked
+    const auto p0t = mesh.vertices.point(v_opposite);
+    const auto p1t = mesh.vertices.point(v_coplanar_opposite_p0);
+    const auto p2t = mesh.vertices.point(edge0.p);
+    const auto p3t = mesh.vertices.point(edge1.p);
+    if (VECE(p0t, p1t, p2t, p3t))
+    {
+        OOC_WARNING("zero volume tet in 1->3 split");
+    }
+}
+
+{
+    // check to make sure bandaid-fix worked
+    const auto p0t = mesh.vertices.point(v_opposite);
+    const auto p1t = mesh.vertices.point(v_coplanar_opposite_p0);
+    const auto p2t = mesh.vertices.point(edge0.p);
+    const auto p3t = mesh.vertices.point(v_coplanar_opposite_p1);
+    if (VECE(p0t, p1t, p2t, p3t))
+    {
+        OOC_WARNING("zero volume tet in 1->3 split");
+    }
+}
+
+#endif // NDEBUG
+
     mesh.CreateTetrahedra({
         {v_opposite, shared, edge0.p, edge1.p},
         {v_opposite, edge0.p, edge1.p, v_coplanar_opposite_p0},
@@ -108,9 +156,50 @@ void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, cons
     mesh.DeleteTetrahedra(cell);
 }
 
-void moist::operation::vertex_insert_1to2()
+static bool are_colinear(const vec3& a, const vec3& b, const vec3& c)
+{
+    return geogram::length(geogram::cross(b - a, c - a)) < moist::__DOUBLE_EPSILON;
+}
+
+void moist::operation::vertex_insert_1to2(MeshSlice &mesh, const g_index cell, const vec3& point, const moist::AxisAlignedInterfacePlane &plane)
 {
     // honestly this is so niche I don't have the time right now...
+    if (moist::predicates::point_of_tet(mesh, cell, point))
+    {
+        // TODO: recreate vertex, as to "reorder" it to the back of the vertices array.
+        return;
+    }
+
+    const g_index p = mesh.vertices.create_vertex(point.data());
+    const g_index v_opposite = moist::geometry::non_interface_vertex(cell, mesh, plane);
+    const auto [v0, v1, v2] = moist::geometry::other(cell, v_opposite, mesh);
+    const vec3 p0 = mesh.vertices.point(v0);
+    const vec3 p1 = mesh.vertices.point(v1);
+    const vec3 p2 = mesh.vertices.point(v2);
+    const vec3 p3 = mesh.vertices.point(v_opposite);
+    if (are_colinear(p0, p1, point))
+    {
+        mesh.CreateTetrahedra({
+            {v_opposite, v0, v2, p},
+            {v_opposite, v1, v2, p}
+        });
+    }
+    else if (are_colinear(p1, p2, point))
+    {
+        mesh.CreateTetrahedra({
+            {v_opposite, v0, v1, p},
+            {v_opposite, v0, v2, p}
+        });
+    }
+    else if (are_colinear(p0, p2, point))
+    {
+        mesh.CreateTetrahedra({
+            {v_opposite, v1, v0, p},
+            {v_opposite, v1, v2, p}
+        });
+    }
+
+    mesh.DeleteTetrahedra(cell);
 }
 
 void moist::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, const vec3 &point, const moist::AxisAlignedInterfacePlane &plane)

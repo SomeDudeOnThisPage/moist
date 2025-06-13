@@ -2,6 +2,7 @@
 #define MOIST_INTERFACE_GENERATOR_INTERFACE_GENERATOR_HPP_
 
 #include <map>
+#include <unordered_map>
 #include <utility>
 
 #include <geogram/mesh/mesh.h>
@@ -43,6 +44,7 @@ namespace moist
 
 #ifndef NDEBUG
         std::vector<geogram::vec3> _required_vertices;
+        std::unordered_map<g_index, vec3> _inserted_points;
 #endif // NDEBUG
 
         geogram::Mesh _constraints;

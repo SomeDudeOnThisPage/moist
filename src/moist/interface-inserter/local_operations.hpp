@@ -35,7 +35,7 @@ namespace moist
          * @brief Not implemented. Theoretically, this situation can arise when an inserted vertex lies exactly on an existing edge.
          * @todo  This should be generalized in one method, see `vertex_insert_1to3`.
          */
-        void vertex_insert_1to2();
+        void vertex_insert_1to2(MeshSlice &mesh, const g_index cell, const vec3 &point, const moist::AxisAlignedInterfacePlane &plane);
 
         /**
          * @brief Inserts a vertex into a given cell on a facet which lies on the given plane, resulting in three created tetrahedra.

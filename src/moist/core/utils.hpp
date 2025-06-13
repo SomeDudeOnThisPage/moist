@@ -35,7 +35,7 @@ namespace moist::utils {
             geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
             geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
             geogram::CmdLine::set_arg("sys:compression_level", "0");
-            geogram::Logger::instance()->set_quiet(true);
+            // geogram::Logger::instance()->set_quiet(false);
         }
 
         inline void load(const std::filesystem::path& file, geogram::Mesh& mesh, const geogram::index_t dimension = 0, const bool attributes = true)
@@ -44,7 +44,7 @@ namespace moist::utils {
             flags.set_dimension(dimension != 0 ? dimension : mesh.vertices.dimension());
             flags.set_attribute(attributes ? geogram::MESH_ALL_ATTRIBUTES : geogram::MESH_NO_ATTRIBUTES);
             flags.set_elements(geogram::MeshElementsFlags(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS));
-            flags.set_verbose(false);
+            flags.set_verbose(true);
 
             if (!geogram::mesh_load(file.string(), mesh, flags))
             {
@@ -58,7 +58,7 @@ namespace moist::utils {
             flags.set_dimension(mesh.vertices.dimension());
             flags.set_attribute(attributes ? geogram::MESH_ALL_ATTRIBUTES : geogram::MESH_NO_ATTRIBUTES);
             flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
-            flags.set_verbose(false);
+            flags.set_verbose(true);
             geogram::mesh_save(mesh, file.string(), flags);
         }
     }

@@ -180,13 +180,21 @@ namespace moist::geometry
         #endif
             for (size_t i = 0; i < 3; i++)
             {
-                const vec3 p0 = mesh.vertices.point(mesh.facets.vertex(f, i));
-                const vec3 p1 = mesh.vertices.point(mesh.facets.vertex(f, (i + 1) % 3));
+                g_index v0 = mesh.facets.vertex(f, i);
+                g_index v1 = mesh.facets.vertex(f, (i + 1) % 3);
+
+                if (v0 > v1)
+                {
+                    std::swap(v0, v1);
+                }
+
+                const vec3 p0 = mesh.vertices.point(v0);
+                const vec3 p1 = mesh.vertices.point(v1);
                 if (moist::predicates::point_on_plane(p0, plane) && moist::predicates::point_on_plane(p1, plane))
                 {
                     edges.emplace(
-                        mesh.facets.vertex(f, i),
-                        mesh.facets.vertex(f, (i + 1) % 3)
+                        v0,
+                        v1
                     );
                 }
             }
@@ -194,10 +202,36 @@ namespace moist::geometry
         return edges; // return by value not ideal should probably be passed as reference parameter
     }
 
+    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_interface_edges(const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
+    {
+        std::unordered_set<Edge, EdgeHash> edges;
+        for (const g_index c : mesh.cells)
+        {
+            for (g_index le = 0; le < mesh.cells.nb_edges(c); le++)
+            {
+                const g_index v0 = mesh.cells.edge_vertex(c, le, 0);
+                const g_index v1 = mesh.cells.edge_vertex(c, le, 1);
+                const vec3 cp0 = mesh.vertices.point(v0);
+                const vec3 cp1 = mesh.vertices.point(v1);
+
+                if (!moist::predicates::edge_on_plane(cp0, cp1, plane))
+                {
+                    continue;
+                }
+
+                edges.emplace(
+                    mesh.cells.edge_vertex(c, le, 0),
+                    mesh.cells.edge_vertex(c, le, 1)
+                );
+            }
+        }
+
+        return edges;
+    }
+
     PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geogram::Mesh& mesh)
     {
         std::unordered_set<Edge, EdgeHash> edges;
-        edges.reserve(mesh.vertices.nb());
         for (const g_index f : mesh.facets)
         {
         #ifdef OPTION_UNROLL_LOOPS

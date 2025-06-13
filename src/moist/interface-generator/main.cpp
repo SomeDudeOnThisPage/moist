@@ -4,6 +4,7 @@
 
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
+#include <geogram/mesh/mesh_repair.h>
 
 #include "moist/core/defines.hpp"
 #include "moist/core/utils.hpp"
@@ -58,11 +59,13 @@ int main(int argc, char* argv[])
         arguments.envelope_size
     });
 
-    geogram::Mesh mesh;
+    geogram::Mesh mesh, mesh2;
     moist::utils::geo::load(arguments.path_mesh_a, mesh);
+    geogram::mesh_repair(mesh, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
     generator.AddConstraints(mesh);
-    mesh.clear(false);
+    mesh.clear(false, false);
     moist::utils::geo::load(arguments.path_mesh_b, mesh);
+    geogram::mesh_repair(mesh, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
     generator.AddConstraints(mesh);
     generator.Triangulate();
     //generator.Decimate();
@@ -75,6 +78,7 @@ int main(int argc, char* argv[])
     // }
 
     moist::utils::geo::save(arguments.path_mesh_out.replace_extension(".geogram"), *generator.Triangulation());
+    moist::utils::geo::save(arguments.path_mesh_out.replace_extension(".debug.msh"), *generator.Triangulation());
 
     return 0;
 }

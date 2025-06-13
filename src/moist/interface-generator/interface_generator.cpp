@@ -1,5 +1,7 @@
 #include "interface_generator.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <unordered_set>
 
 #include <geogram/delaunay/delaunay.h>
@@ -20,43 +22,71 @@ moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane pl
     this->WriteMetadata();
 }
 
+static double round16(double value)
+{
+    const double threshold = 1e-15;
+    value = std::round(value * 1e16) / 1e16;
+    return (std::abs(value) < threshold) ? 0.0 : value;
+}
+
 void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
 {
     std::map<g_index, g_index> mesh_to_interface;
     std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map; // if we have more than 255 incident edges we have a waaaay bigger problem anyway...
 
-#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-    std::mutex mtx;
-    geogram::parallel_for(0, mesh.vertices.nb(), [this, &mesh, &mtx, &mesh_to_interface](const g_index v) {
-#else
-    for (const g_index v : mesh.vertices) {
-#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
-        const vec3 point = mesh.vertices.point(v);
+    for (const g_index v : mesh.vertices)
+    {
+        // geogram uses precision values up to 16 decimal places...
+        vec3 point = mesh.vertices.point(v);
+        point.x = round16(point.x);
+        point.y = round16(point.y);
+        point.z = round16(point.z);
+
         if (predicates::point_on_plane(point, *this->_plane))
         {
-        #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-            std::lock_guard<std::mutex> lock(mtx);
-        #endif
-            g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
-            this->_unique_vertices++;
-            mesh_to_interface[v] = interface_vertex_id;
-        #ifndef NDEBUG
-            this->_required_vertices.push_back(point);
-        #endif // NDEBUG
+            bool is_duplicate = false;
+            for (const auto& p : _inserted_points)
+            {
+                const vec3 o = p.second;
+                if (o.x == point.x && o.y == point.y)
+                {
+                    //mesh_to_interface[v] = p.first;
+                    is_duplicate = true;
+                    break;
+                }
+            }
+
+            if (!is_duplicate)
+            {
+                g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
+                this->_unique_vertices++;
+                mesh_to_interface[v] = interface_vertex_id;
+                _inserted_points[interface_vertex_id] = point;
+            }
         }
     }
-#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-    );
-#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
 
-//#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-//    geogram::parallel_for(0, mesh.facets.nb(), [this, &mesh, &edge_count_map, &mtx](const g_index f) {
-//#else
-    for (const g_index f : mesh.facets) {
-//#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
-    //#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS // even when locking the entire parallel lambda, inside triangle occurs a segfault...
-    //    std::lock_guard<std::mutex> lock(mtx);
-    //#endif
+    for (const g_index v0 : this->_constraints.vertices)
+    {
+        const auto p0 =_constraints.vertices.point_ptr(v0);
+        for (const g_index v1 : this->_constraints.vertices)
+        {
+            if (v0 == v1)
+            {
+                continue;
+            }
+
+            const auto p1 =_constraints.vertices.point_ptr(v1);
+            if (p0[0] == p1[0] && p0[1] == p1[1])
+            {
+                OOC_DEBUG("equal points " << v0 << ", " << v1 << " at " << p0[0] << ", " << p0[1]);
+                break;
+            }
+
+        }
+    }
+    for (const g_index f : mesh.facets)
+    {
         if (predicates::facet_on_plane(f, mesh, *this->_plane))
         {
             const geogram::index_t nb_local_vertices = mesh.facets.nb_vertices(f);
@@ -76,9 +106,11 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
             }
         }
     }
-//#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-//    );
-//#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
+
+    // if (this->_constraints.edges.nb() != 0)
+    // {
+    //     return;
+    // }
 
     for (const auto& entry : edge_count_map)
     {
@@ -87,7 +119,10 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
         {
             // translate edge-vertices from mesh-global index to interface-local index.
             auto global = entry.first;
-            this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
+            if (mesh_to_interface.contains(global.first) && mesh_to_interface.contains(global.second))
+            {
+                this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
+            }
         }
     }
 }
@@ -99,8 +134,9 @@ void moist::InterfaceGenerator::Triangulate()
     //       input, a double vertex is found and "ignored", which leads to a segfault when geogram tries to read the data back into it's
     //       own data structure... somehow create own bbox for triangle?
     // TODO: this doesn't actually help fix things...
-    geogram::mesh_repair(this->_constraints, geogram::MESH_REPAIR_COLOCATE);
+    geogram::mesh_repair(this->_constraints, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
 
+    g_index nb_edges = this->_constraints.edges.nb();
     auto delaunay = geogram::Delaunay::create(2, "triangle");
     delaunay->set_constraints(&this->_constraints);
     delaunay->set_vertices(0, nullptr);
@@ -124,10 +160,10 @@ void moist::InterfaceGenerator::Triangulate()
     }
 
     this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
-    this->_triangulation->facets.compute_borders();
+    // this->_triangulation->facets.compute_borders();
 
     // assign attribute constraint edges to edges in triangulation
-    geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    /*geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
     for (const g_index constraint_edge : this->_constraints.edges)
     {
         // TODO: This also only works with z-growing...
@@ -149,32 +185,7 @@ void moist::InterfaceGenerator::Triangulate()
     }
 
     geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
-    m_target_vertices[0] = this->_unique_vertices / 2.0;
-
-#ifndef NDEBUG
-    OOC_DEBUG("checking for missing vertices...");
-    uint32_t missing = 0;
-    for (const g_index v : this->_triangulation->vertices)
-    {
-        const vec3 point = this->_triangulation->vertices.point(v);
-        bool found = false;
-        for (const vec3 other : this->_required_vertices) // too lazy to add operator==...
-        {
-            if (reinterpret_cast<const vec2&>(point) == reinterpret_cast<const vec2&>(other))
-            {
-                found = true;
-                break;
-            }
-        }
-
-        if (!found)
-        {
-            OOC_DEBUG("missing point " << point);
-            missing++;
-        }
-    }
-    OOC_DEBUG("finished checking vertices, missing " << missing << " points...");
-#endif // NDEBUG
+    m_target_vertices[0] = this->_unique_vertices / 2.0;*/
 }
 
 static vec3 middle(const vec3 v0, const vec3 v1)

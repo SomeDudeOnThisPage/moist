@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
         generator.Generate(mesh, arguments.isovalue);
     }
 
-    const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first));
+    const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first - 1));
     moist::utils::geo::save(std::filesystem::path(path), mesh);
 
     if (!arguments.f_generate_sizing_field)
