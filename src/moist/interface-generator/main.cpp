@@ -61,11 +61,11 @@ int main(int argc, char* argv[])
 
     geogram::Mesh mesh, mesh2;
     moist::utils::geo::load(arguments.path_mesh_a, mesh);
-    geogram::mesh_repair(mesh, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
+    geogram::mesh_repair(mesh);
     generator.AddConstraints(mesh);
     mesh.clear(false, false);
     moist::utils::geo::load(arguments.path_mesh_b, mesh);
-    geogram::mesh_repair(mesh, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
+    geogram::mesh_repair(mesh);
     generator.AddConstraints(mesh);
     generator.Triangulate();
     //generator.Decimate();

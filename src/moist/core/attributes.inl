@@ -19,6 +19,7 @@
 #define ATTRIBUTE_INTERFACE_TARGET_VERTICES "InterfaceTargetVertices"
 #define ATTRIBUTE_INTERFACE_TETMERGE_QUALITY "TetrahedralMergeQuality"
 #define ATTRIBUTE_INTERFACE_FACET_FOUND_AFTER_MERGE "FoundAfterMerge"
+#define ATTRIBUTE_VERTEX_STEINER_POINT "VertexIsSteinerPoint"
 
 // Interface Meta Attributes
 #define ATTRIBUTE_META_PLANE_EXTENT "meta.extent"

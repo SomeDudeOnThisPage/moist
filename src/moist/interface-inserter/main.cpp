@@ -26,9 +26,13 @@
 
 struct Arguments
 {
-    std::filesystem::path input;
+    std::filesystem::path input_a;
+    std::filesystem::path input_b;
+
     std::filesystem::path interface;
-    std::filesystem::path output;
+    std::filesystem::path output_a;
+    std::filesystem::path output_b;
+
     double plane;
     double envelope_size;
     moist::Axis axis;
@@ -42,13 +46,18 @@ int main(int argc, char* argv[])
     Arguments arguments{};
     cli::App app{argv[0]};
 
-    app.add_option("-m, --mesh", arguments.input, "Mesh (.msh) file")
+    app.add_option("-a, --mesh-a", arguments.input_a, "Mesh A (.msh) file")
+        ->required()
+        ->check(cli::ExistingFile);
+    app.add_option("-b, --mesh-b", arguments.input_b, "Mesh A (.msh) file")
         ->required()
         ->check(cli::ExistingFile);
     app.add_option("-i, --interface", arguments.interface, "Interface mesh (.geogram) file")
         ->required()
         ->check(cli::ExistingFile);
-    app.add_option("-o, --output", arguments.output, "Output Triangulation (.msh) file")
+    app.add_option("--output-a", arguments.output_a, "Output Triangulation A (.msh) file")
+        ->required();
+    app.add_option("--output-b", arguments.output_b, "Output Triangulation B (.msh) file")
         ->required();
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
@@ -59,21 +68,51 @@ int main(int argc, char* argv[])
 
     moist::metrics::MeshQuality metrics_before{0};
     moist::metrics::MeshQuality metrics_after{0};
+    moist::SteinerPoints steiner_points;
 
-    moist::MeshSlice slice;
-    moist::utils::geo::load(arguments.input, slice, 3, false);
-    moist::mesh_quality::compute(metrics_before, slice);
+    moist::MeshSlice slice_a, slice_b;
+    moist::utils::geo::load(arguments.input_a, slice_a, 3, false);
+    moist::utils::geo::load(arguments.input_b, slice_b, 3, false);
+
     {
-        moist::Timer _scope_timer("MeshSlice::InsertInterface", metrics);
-        slice.InsertInterface(interface, metrics);
-        geogram::mesh_repair(slice, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
+        moist::Timer _scope_timer("A::MeshSlice::InsertInterface", metrics);
+        auto sps = slice_a.InsertInterface(interface, metrics);
+        steiner_points.insert(sps.begin(), sps.end());
     }
-    moist::mesh_quality::compute(metrics_after, slice);
+
+    {
+        moist::Timer _scope_timer("B::MeshSlice::InsertInterface", metrics);
+        auto sps = slice_b.InsertInterface(interface, metrics);
+        steiner_points.insert(sps.begin(), sps.end());
+    }
+
+    geogram::mesh_repair(slice_a);
+    geogram::mesh_repair(slice_b);
+
+    if (!steiner_points.empty())
+    {
+        slice_a.FlushTetrahedra(true);
+        slice_b.FlushTetrahedra(true);
+        OOC_DEBUG("inserting " << steiner_points.size() << " steiner points into both meshes...");
+        for (const vec3& steiner_point : steiner_points)
+        {
+            slice_a.InsertVertex(steiner_point, *interface.Plane());
+            slice_b.InsertVertex(steiner_point, *interface.Plane());
+        }
+
+    }
+
+    slice_a.FlushTetrahedra(false);
+    slice_b.FlushTetrahedra(false);
 
     OOC_DEBUG("[METRICS] before insertion: " << metrics_before);
     OOC_DEBUG("[METRICS] after insertion: " << metrics_after);
 
-    moist::utils::geo::save(arguments.output.replace_extension(".msh"), slice);
+    moist::utils::geo::save(arguments.output_a.replace_extension(".mesh"), slice_a);
+    moist::utils::geo::save(arguments.output_b.replace_extension(".mesh"), slice_b);
+
+
+
     moist::utils::geo::save(arguments.interface.replace_extension(".geogram"), *interface.Triangulation());
 
     return 0;

@@ -39,6 +39,7 @@ int main(int argc, char* argv[])
 
     moist::utils::geo::initialize();
 
+    // TODO: Insert Steiner Points of Slices into each other...
     //geogram::Mesh slice;
     //moist::utils::geo::load(arguments.slice, slice);
 

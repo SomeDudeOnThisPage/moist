@@ -26,7 +26,7 @@ namespace moist
     };
 
 //! @internal
-    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon() * 3.0; // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
+    const double __DOUBLE_EPSILON = std::numeric_limits<double>::epsilon() * 2.0; // https://stackoverflow.com/questions/48133572/what-can-stdnumeric-limitsdoubleepsilon-be-used-for
 
     const std::map<std::string, moist::Axis> AXIS_OPTION_ARGUMENT_MAP
     {
@@ -97,9 +97,8 @@ inline bool operator==(const geogram::vec3& a, const geogram::vec3& b)
 
 inline bool operator==(const geogram::vec2& a, const geogram::vec2& b)
 {
-    //return std::fabs(a.x - b.x) < incremental_meshing::__DOUBLE_EPSILON &&
-    //       std::fabs(a.y - b.y) < incremental_meshing::__DOUBLE_EPSILON;
-    return a.x == b.x && a.y == b.y;
+    return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
+           std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON;
 }
 
 #endif // GEOGRAM_API

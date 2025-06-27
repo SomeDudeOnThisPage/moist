@@ -20,6 +20,54 @@
  */
 namespace moist::predicates
 {
+
+    static double round16(double value)
+    {
+        return value;
+        //const double threshold = 1e-3;
+        //value = std::round(value * 1e3) / 1e3;
+        //return (std::abs(value) < threshold) ? 0.0 : value;
+    }
+
+    /**
+     * @brief Epsilon-tolerant implementation of orient3d to treat rounded steiner points...
+     * Very roughly adapter from geogram::PCK::orient3d().
+     *
+     * @param p0
+     * @param p1
+     * @param p2
+     * @param p3
+     * @return Sign
+     */
+    PURE INLINE geogram::Sign orient3d(const vec3& a, const vec3& b, const vec3& c, const vec3& d)
+    {
+        double abx = round16(b[0] - a[0]);
+        double aby = round16(b[1] - a[1]);
+        double abz = round16(b[2] - a[2]);
+
+        double acx = round16(c[0] - a[0]);
+        double acy = round16(c[1] - a[1]);
+        double acz = round16(c[2] - a[2]);
+
+        double adx = round16(d[0] - a[0]);
+        double ady = round16(d[1] - a[1]);
+        double adz = round16(d[2] - a[2]);
+
+        // scalar triple product?
+        const double volume = abx * (acy * adz - acz * ady)
+                    - aby * (acx * adz - acz * adx)
+                    + abz * (acx * ady - acy * adx);
+
+        if (std::abs(volume) < 1e-12)
+        {
+            return geogram::Sign::ZERO;
+        }
+
+        return (volume > 0)
+            ? geogram::Sign::POSITIVE
+            : geogram::Sign::NEGATIVE;
+    }
+
     PURE INLINE bool facet_matches_cell(const g_index cell, const g_index facet, const geogram::Mesh& mesh, const geogram::Mesh& interface)
     {
         vec3 f0 = interface.vertices.point(interface.facets.vertex(facet, 0));
@@ -66,7 +114,7 @@ namespace moist::predicates
             case moist::Axis::Y:
                 return in_range(point.y, plane.extent, plane.epsilon);
             case moist::Axis::Z:
-                return (plane.extent - plane.epsilon) < point.z && point.z < (plane.extent + plane.epsilon);
+                return std::abs(point.z - plane.extent) <= plane.epsilon;
         }
 
         return false;
@@ -96,7 +144,6 @@ namespace moist::predicates
 
     PURE INLINE bool cell_on_plane(const geogram::index_t cell, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
     {
-        unsigned char points_on_plane = 0;
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
     #endif
@@ -104,11 +151,11 @@ namespace moist::predicates
         {
             if (point_on_plane(mesh.vertices.point(mesh.cells.vertex(cell, i)), plane))
             {
-                points_on_plane++;
+                return true;
             }
         }
 
-        return points_on_plane == 3;
+        return false;
     }
 
     PURE INLINE bool cell_facet_on_plane(const geogram::index_t cell, const geogram::index_t lf, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
@@ -127,10 +174,12 @@ namespace moist::predicates
 
     PURE INLINE bool point_of_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p)
     {
-        return p == mesh.vertices.point(mesh.cells.vertex(t, 0))
-             || p == mesh.vertices.point(mesh.cells.vertex(t, 1))
-             || p == mesh.vertices.point(mesh.cells.vertex(t, 2))
-             || p == mesh.vertices.point(mesh.cells.vertex(t, 3));
+        const vec3 p0 = mesh.vertices.point(mesh.cells.vertex(t, 0));
+        const vec3 p1 = mesh.vertices.point(mesh.cells.vertex(t, 1));
+        const vec3 p2 = mesh.vertices.point(mesh.cells.vertex(t, 2));
+        const vec3 p3 = mesh.vertices.point(mesh.cells.vertex(t, 3));
+
+        return p == p0 || p == p1 || p == p2 || p == p3;
     }
 
     enum class PointInTet
@@ -151,11 +200,14 @@ namespace moist::predicates
         const auto p3 = mesh.vertices.point(mesh.cells.vertex(t, 3));
 
         geogram::Sign s[4];
+        //s[0] = moist::predicates::orient3d(p, p1, p2, p3);
+        //s[1] = moist::predicates::orient3d(p0, p, p2, p3);
+        //s[2] = moist::predicates::orient3d(p0, p1, p, p3);
+        //s[3] = moist::predicates::orient3d(p0, p1, p2, p);
         s[0] = geogram::PCK::orient_3d(p, p1, p2, p3);
         s[1] = geogram::PCK::orient_3d(p0, p, p2, p3);
         s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
         s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
-
         const bool inside_or_on_boundary = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
             (s[0] <= 0 && s[1] <= 0 && s[2] <= 0 && s[3] <= 0)
@@ -172,6 +224,10 @@ namespace moist::predicates
 
         if (inside_or_on_boundary)
         {
+            if (nz == 0)
+            {
+                return PointInTet::INSIDE;
+            }
             if (nz == 1)
             {
                 return PointInTet::FACET;
@@ -193,8 +249,6 @@ namespace moist::predicates
     {
         PURE INLINE bool check_lines_aabb(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
         {
-            // bugfix: Make sure to only include INSIDE line definitions (> and <, not >= and <=) to avoid deleting tets on accident when a line is only touching a vertex...
-            // this bug cost me about a week of debugging... :)
             return (std::min(p0.x, p1.x) < std::max(p2.x, p3.x)) && (std::max(p0.x, p1.x) > std::min(p2.x, p3.x))
                 && (std::min(p0.y, p1.y) < std::max(p2.y, p3.y)) && (std::max(p0.y, p1.y) > std::min(p2.y, p3.y));
         }
@@ -216,8 +270,14 @@ namespace moist::predicates
             );
         }
 
-        PURE /* INLINE */ inline std::optional<geogram::vec2> get_line_intersection(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
+        PURE /* INLINE */ inline std::optional<geogram::vec2> get_line_intersection(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3, const double rnd = 1e12)
         {
+            // prevent line from cutting itself by checking if a point of the line is also a point checked...
+            if (p0 == p2 || p1 == p3 || p0 == p3 || p1 == p2)
+            {
+                return std::nullopt;
+            }
+
             geogram::Sign s[4];
             s[0] = geogram::PCK::orient_2d(p0, p1, p2);
             s[1] = geogram::PCK::orient_2d(p0, p1, p3);
@@ -235,15 +295,10 @@ namespace moist::predicates
                 const auto eps = 2 * moist::__DOUBLE_EPSILON;
                 if ((t >= eps && t <= 1.0 - eps) && (u >= eps && u <= 1.0 - eps))
                 {
-                    // we don't work with real predicates, so we have to have a rounding factor in these vertices...
-                    // since these are not inserted interface vertices, but created in both meshes by intersections,
-                    // this SHOULD have no effect on the merging process...
-                    return vec2 {
-                        //p0.x + t * (p1.x - p0.x),
-                        //p0.y + t * (p1.y - p0.y)
-
-                        std::round((p0.x + t * (p1.x - p0.x)) * 1e12) / 1e12,
-                        std::round((p0.y + t * (p1.y - p0.y)) * 1e12) / 1e12
+                    return vec2
+                    {
+                        std::round((p0.x + t * (p1.x - p0.x)) * rnd) / rnd,
+                        std::round((p0.y + t * (p1.y - p0.y)) * rnd) / rnd
                     };
                 }
             }

@@ -7,6 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_geometry.h>
+#include <geogram/mesh/mesh_repair.h>
 
 #include "moist/core/defines.hpp"
 #include "moist/core/timer.hpp"
@@ -62,7 +63,7 @@ int main(int argc, char* argv[])
         ->required()
         ->check(PatternPlaceholderCountValidator(2));
     app.add_option("-f, --first", arguments.first, "Initial file number.")
-        ->check(cli::PositiveNumber)
+        ->check(cli::NonNegativeNumber)
         ->required();
     app.add_option("-n, --amount", arguments.amount, "Total number of files to mesh into this slice.")
         ->check(cli::PositiveNumber)
@@ -102,6 +103,8 @@ int main(int argc, char* argv[])
         moist::Timer _scope_timer("SurfaceGenerator::Generate", metrics);
         generator.Generate(mesh, arguments.isovalue);
     }
+
+    geogram::mesh_repair(mesh);
 
     const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first - 1));
     moist::utils::geo::save(std::filesystem::path(path), mesh);

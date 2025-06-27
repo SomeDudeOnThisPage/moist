@@ -38,9 +38,9 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
     {
         // geogram uses precision values up to 16 decimal places...
         vec3 point = mesh.vertices.point(v);
-        point.x = round16(point.x);
-        point.y = round16(point.y);
-        point.z = round16(point.z);
+        //point.x = round16(point.x);
+        //point.y = round16(point.y);
+        //point.z = round16(point.z);
 
         if (predicates::point_on_plane(point, *this->_plane))
         {
@@ -50,7 +50,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
                 const vec3 o = p.second;
                 if (o.x == point.x && o.y == point.y)
                 {
-                    //mesh_to_interface[v] = p.first;
+                    mesh_to_interface[v] = p.first;
                     is_duplicate = true;
                     break;
                 }
@@ -61,7 +61,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
                 g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
                 this->_unique_vertices++;
                 mesh_to_interface[v] = interface_vertex_id;
-                _inserted_points[interface_vertex_id] = point;
+                _inserted_points[interface_vertex_id] = vec3(point.x, point.y, this->_plane->extent);
             }
         }
     }
@@ -85,6 +85,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
 
         }
     }
+
     for (const g_index f : mesh.facets)
     {
         if (predicates::facet_on_plane(f, mesh, *this->_plane))
@@ -107,13 +108,14 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
         }
     }
 
-    // if (this->_constraints.edges.nb() != 0)
-    // {
-    //     return;
-    // }
+    //if (this->_constraints.edges.nb() != 0)
+    //{
+    //    return;
+    //}
 
     for (const auto& entry : edge_count_map)
     {
+        std::unordered_set<g_index> to_delete;
         // one adjacent interface facet -> edge must be a boundary edge.
         if (entry.second == 1)
         {
@@ -121,7 +123,56 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
             auto global = entry.first;
             if (mesh_to_interface.contains(global.first) && mesh_to_interface.contains(global.second))
             {
-                this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
+                bool intersected = false;
+                for (const g_index e : this->_constraints.edges)
+                {
+                    if (to_delete.contains(e))
+                    {
+                        continue;
+                    }
+
+                    const vec2 p0 = vec2(this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(e, 0)));
+                    const vec2 p1 = vec2(this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(e, 1)));
+
+                    const vec2 cp0 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.first]));
+                    const vec2 cp1 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.second]));
+
+                    const auto intersection = moist::predicates::xy::get_line_intersection(p0, p1, cp0, cp1, 1e16);
+
+                    if (intersection != std::nullopt)
+                    {
+                        // create vertex and re-create edges around it
+                        const g_index v = this->_constraints.vertices.create_vertex(intersection.value());
+
+                        // split the original edge...
+                        //this->_constraints.edges.create_edge(this->_constraints.edges.vertex(e, 0), v);
+                        //this->_constraints.edges.create_edge(v, this->_constraints.edges.vertex(e, 1));
+
+                        // create the new edge as split edge
+                        //this->_constraints.edges.create_edge(mesh_to_interface[global.first], v);
+                        //this->_constraints.edges.create_edge(v, mesh_to_interface[global.second]);
+
+                        //to_delete.insert(e);
+                        intersected = true;
+                    }
+                }
+
+                // if no intersecting edge has been found, just create the edge in the constraints...
+                if (!intersected)
+                {
+                    this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
+                }
+
+                geogram::vector<g_index> deleted(this->_constraints.edges.nb());
+                for (const g_index d : to_delete)
+                {
+                    deleted[d] = true;
+                }
+                this->_constraints.edges.delete_elements(deleted, false);
+            }
+            else
+            {
+                OOC_WARNING("attempt to constrain edge of nonexistent interface vertices...");
             }
         }
     }
@@ -160,10 +211,10 @@ void moist::InterfaceGenerator::Triangulate()
     }
 
     this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
-    // this->_triangulation->facets.compute_borders();
+    this->_triangulation->facets.compute_borders();
 
     // assign attribute constraint edges to edges in triangulation
-    /*geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
     for (const g_index constraint_edge : this->_constraints.edges)
     {
         // TODO: This also only works with z-growing...
@@ -184,8 +235,8 @@ void moist::InterfaceGenerator::Triangulate()
         }
     }
 
-    geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
-    m_target_vertices[0] = this->_unique_vertices / 2.0;*/
+    //geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
+    //m_target_vertices[0] = this->_unique_vertices / 2.0;
 }
 
 static vec3 middle(const vec3 v0, const vec3 v1)

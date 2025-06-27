@@ -11,14 +11,23 @@ moist::SurfaceGenerator::SurfaceGenerator(const Tiff &tiff, const uint32_t offse
     _center = center;
 
     // create a "skirt" of 0-values around the entire mesh to close it off
-    _grid.set_grid_dimensions(tiff.width() + 2, tiff.height() + 2, tiff.depth() + 2);
+    // _grid.set_grid_dimensions(tiff.width() + 2, tiff.height() + 2, tiff.depth() + 2);
+
+    //const size_t sx = tiff.width();
+    //const size_t sy = tiff.height();
+    const size_t sz = tiff.depth();
+
+    const size_t sx = 100;
+    const size_t sy = 100;
+
+    _grid.set_grid_dimensions(sx + 2, sy + 2, sz + 2);
     _mc.set_grid3d(_grid);
 
-    for (size_t x = 1; x < tiff.width() + 1; x++)
+    for (size_t x = 1; x < sx + 1; x++)
     {
-        for (size_t y = 1; y < tiff.height() + 1; y++)
+        for (size_t y = 1; y < sy + 1; y++)
         {
-            for (size_t z = 1; z < tiff.depth() + 1; z++)
+            for (size_t z = 1; z < sz + 1; z++)
             {
                 const float datapoint = tiff.data[(z - 1) * tiff.width() * tiff.height() + (y - 1) * tiff.width() + x - 1];
                 _grid.set_grid_value(x, y, z, (invert) ? 1.0 - datapoint : datapoint);

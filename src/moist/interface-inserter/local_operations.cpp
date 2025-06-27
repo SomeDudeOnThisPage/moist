@@ -29,8 +29,6 @@ void moist::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, cons
         LOCK_ATTRIBUTES;
         geogram::Attribute<int> v_discard(mesh.vertices.attributes(), ATTRIBUTE_DISCARD);
 
-        v_discard[edge.e_v0] = false;
-        v_discard[edge.e_v1] = false;
         v_discard[edge.p] = true;
     }
 
@@ -86,10 +84,6 @@ void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, cons
 
         v_discard[edge0.p] = true;
         v_discard[edge1.p] = true;
-        v_discard[v_opposite] = false;
-        v_discard[shared] = false;
-        v_discard[v_coplanar_opposite_p0] = false;
-        v_discard[v_coplanar_opposite_p1] = false;
     }
 
 #ifndef NDEBUG
@@ -158,7 +152,7 @@ void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, cons
 
 static bool are_colinear(const vec3& a, const vec3& b, const vec3& c)
 {
-    return geogram::length(geogram::cross(b - a, c - a)) < moist::__DOUBLE_EPSILON;
+    return geogram::length(geogram::cross(b - a, c - a)) < 0.0001;
 }
 
 void moist::operation::vertex_insert_1to2(MeshSlice &mesh, const g_index cell, const vec3& point, const moist::AxisAlignedInterfacePlane &plane)

@@ -37,6 +37,22 @@ namespace moist::geometry
         }
     };
 
+    PURE INLINE bool vertex_of_cell(const geogram::Mesh& mesh, const g_index cell, const g_index v)
+    {
+    #ifdef OPTION_UNROLL_LOOPS
+        #pragma unroll 4
+    #endif
+        for (l_index lv = 0; lv < 4; lv++)
+        {
+            if (mesh.cells.vertex(cell, lv) == v)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     PURE INLINE bool point_of_cell(const geogram::Mesh &mesh, const g_index cell, const vec3 &point)
     {
     #ifdef OPTION_UNROLL_LOOPS
@@ -204,6 +220,7 @@ namespace moist::geometry
 
     PURE INLINE std::unordered_set<Edge, EdgeHash> collect_interface_edges(const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
     {
+        const auto nv = mesh.cells.nb();
         std::unordered_set<Edge, EdgeHash> edges;
         for (const g_index c : mesh.cells)
         {

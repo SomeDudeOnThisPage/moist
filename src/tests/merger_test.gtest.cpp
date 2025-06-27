@@ -29,7 +29,7 @@ TEST(MergeTest, ContainsConstraints)
     moist::utils::geo::load("./debug/test/cube_cylinder.msh", merged);
     geogram::mesh_repair(merged);
 
-    EXPECT_TRUE(moist::test::contains_constraints(merged, *interface.Triangulation()));
+    EXPECT_TRUE(moist::test::contains_constraints(merged, *interface.Triangulation(), interface));
 
     std::filesystem::remove("./debug/test/cube_cylinder.msh");
 #ifndef NDEBUG

@@ -26,7 +26,6 @@ add_subdirectory(src/moist/core)
 add_subdirectory(src/moist/surface-extractor)
 add_subdirectory(src/moist/interface-generator)
 add_subdirectory(src/moist/interface-inserter)
-add_subdirectory(src/moist/submesh-decimator)
 add_subdirectory(src/moist/submesh-merger)
 
 if(OOC_WITH_TESTS)

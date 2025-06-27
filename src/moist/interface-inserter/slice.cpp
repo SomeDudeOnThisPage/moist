@@ -7,6 +7,7 @@
 #include <geogram/basic/process.h>
 #include <limits>
 #include <format>
+#include <cmath>
 #include <mutex>
 
 #include "moist/core/metrics.hpp"
@@ -18,39 +19,15 @@
 
 #include "local_operations.hpp"
 
-struct Vec3HashOperator
-{
-    std::size_t operator()(const vec3& v) const
-    {
-        std::hash<double> hasher;
-        std::size_t hx = hasher(v.x);
-        std::size_t hy = hasher(v.y);
-        std::size_t hz = hasher(v.z);
-
-        return hx ^ (hy << 1) ^ (hz << 2);
-    }
-};
-
-struct Vec3EqualOperator
-{
-    bool operator()(const GEO::vecng<3, double>& a, const GEO::vecng<3, double>& b) const
-    {
-        return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
-            std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON &&
-            std::fabs(a.z - b.z) < moist::__DOUBLE_EPSILON;
-    }
-};
-
 moist::MeshSlice::MeshSlice(geogram::index_t dimension, bool single_precision) : geogram::Mesh(dimension, single_precision)
 {
-    _deleted_tets = std::unordered_set<geogram::index_t>();
 }
 
 void moist::MeshSlice::CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra)
 {
     for (const CreatedTetrahedon tet : tetrahedra)
     {
-        _created_tets.push_back(tet);
+        _created_cells.push_back(tet);
     }
 }
 
@@ -58,12 +35,15 @@ void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tet
 {
     for (const g_index tet : tetrahedra)
     {
-        _deleted_tets.insert(tet);
+        _deleted_cells.insert(tet);
     }
 }
 
-void moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metrics::TimeMetrics_ptr metrics)
+moist::SteinerPoints moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metrics::TimeMetrics_ptr metrics)
 {
+    this->_start_interface_cell = this->ReorderCells(*interface.Plane());
+
+    SteinerPoints steiner_points;
     moist::descriptor::LocalInterface descriptor;
     {
         auto timer = moist::Timer("MeshSlice::InsertInterfaceVertices", metrics);
@@ -72,7 +52,7 @@ void moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metri
 
     {
         auto timer = moist::Timer("MeshSlice::InsertInterfaceEdges", metrics);
-        this->InsertInterfaceEdges(interface);
+        this->InsertInterfaceEdges(interface, steiner_points);
     }
 
     {
@@ -80,9 +60,7 @@ void moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metri
         this->InsertTetQuality(interface);
     }
 
-#ifndef NDEBUG
-    // this->Validate(interface);
-#endif
+    return steiner_points;
 }
 
 void moist::MeshSlice::InsertTetQuality(moist::Interface& interface)
@@ -107,61 +85,108 @@ void moist::MeshSlice::InsertTetQuality(moist::Interface& interface)
     }
 }
 
+void moist::MeshSlice::InsertVertex(const geogram::vec3 &point, const moist::AxisAlignedInterfacePlane &plane)
+{
+    this->_created_cell_ids.clear();
+    std::mutex m_deleted_tets;
+    size_t edge_insert_cells = 0;
+//#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
+//    geogram::parallel_for(_start_interface_cell, this->cells.nb(), [this, &point, &plane, &m_deleted_tets, &edge_insert_cells](const g_index cell)
+//    {
+//#else
+    const size_t nb = this->cells.nb();
+    for (g_index cell = 0; cell < nb; cell++)
+    {
+//#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
+
+        {
+            std::lock_guard<std::mutex> lock(m_deleted_tets);
+            if (_deleted_cells.contains(cell))
+            {
+                PARALLEL_CONTINUE;
+            }
+        }
+
+        // 0, -0.583800, -1
+        moist::predicates::PointInTet pit = moist::predicates::point_in_tet(*this, cell, point, true);
+        if (pit == moist::predicates::PointInTet::FACET)
+        {
+            std::lock_guard<std::mutex> lock(m_deleted_tets);
+            geogram::Mesh dbg(3);
+            const g_index t = dbg.cells.create_tet(
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 0))),
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 1))),
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 2))),
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 3)))
+            );
+            //moist::utils::geo::save("debug/dbg-crossed-cell.msh", dbg);
+            moist::operation::vertex_insert_1to3(*this, cell, point, plane);
+            PARALLEL_BREAK;
+        }
+
+        if (pit == moist::predicates::PointInTet::EDGE)
+        {
+            std::lock_guard<std::mutex> lock(m_deleted_tets);
+            geogram::Mesh dbg(3);
+            const g_index t = dbg.cells.create_tet(
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 0))),
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 1))),
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 2))),
+                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 3)))
+            );
+            //moist::utils::geo::save("debug/dbg-crossed-cell.msh", dbg);
+            moist::operation::vertex_insert_1to2(*this, cell, point, plane);
+            edge_insert_cells++;
+            PARALLEL_CONTINUE;
+        }
+
+        if (pit == moist::predicates::PointInTet::VERTEX)
+        {
+            int isd = 0;
+            PARALLEL_BREAK;
+        }
+    }
+//ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
+//    );
+//#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
+
+    // if (edge_insert_cells > 0 && edge_insert_cells == 1)
+    // {
+        // OOC_WARNING("inserted vertex on edge - only one cell was split... possible boundary cell, otherwise invalid geometry...");
+    // }
+
+    this->CreateTetrahedra();
+    if (!this->_created_cell_ids.empty())
+    {
+        //this->DebugMesh("debug/dbg-created_cells.msh", this->_created_cell_ids);
+        this->_created_cell_ids.clear();
+    }
+}
 
 void moist::MeshSlice::InsertInterfaceVertices(moist::Interface& interface)
 {
     const auto triangulation = interface.Triangulation();
+    const auto plane = interface.Plane();
+    int i = 0;
+    for (const g_index v : this->vertices)
+    {
+        i++;
+        if (moist::predicates::point_on_plane(this->vertices.point(v), *plane))
+        {
+            this->vertices.point(v).z = plane->extent;
+        }
+    }
+
+    this->_start_interface_cell = this->ReorderCells(*plane);
     for (const g_index v : triangulation->vertices)
     {
-        const vec3 p = triangulation->vertices.point(v);
-        std::mutex m_deleted_tets;
-        size_t edge_insert_cells = 0;
-    #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-        geogram::parallel_for(0, this->cells.nb(), [this, point, plane](const g_index cell)
-        {
-    #else
-        for (const g_index cell : this->cells)
-        {
-    #endif // OPTION_PARALLEL_LOCAL_OPERATIONS
-
-            {
-                std::lock_guard<std::mutex> lock(m_deleted_tets);
-                if (_deleted_tets.contains(cell))
-                {
-                    PARALLEL_CONTINUE;
-                }
-            }
-
-            // 0, -0.583800, -1
-            moist::predicates::PointInTet pit = moist::predicates::point_in_tet(*this, cell, p, true);
-            if (pit == moist::predicates::PointInTet::FACET)
-            {
-                moist::operation::vertex_insert_1to3(*this, cell, p, *interface.Plane());
-                PARALLEL_CONTINUE;
-            }
-
-            if (pit == moist::predicates::PointInTet::EDGE)
-            {
-                moist::operation::vertex_insert_1to2(*this, cell, p, *interface.Plane());
-                edge_insert_cells++;
-                PARALLEL_CONTINUE;
-            }
-        }
-    #ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-        );
-    #endif // OPTION_PARALLEL_LOCAL_OPERATIONS
-
-        if (edge_insert_cells > 0 && edge_insert_cells == 1)
-        {
-            OOC_WARNING("inserted vertex on edge - only one cell was split... possible boundary cell, otherwise invalid geometry...");
-        }
-        this->CreateTetrahedra();
+        this->InsertVertex(triangulation->vertices.point(v), *interface.Plane());
     }
 
     this->FlushTetrahedra();
     OOC_DEBUG("mesh after vertex insertion: " << this->vertices.nb() << " vertices, " << this->cells.nb() << " cells");
 
-    geogram::mesh_repair(*this, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
+    // geogram::mesh_repair(*this, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
     for (const g_index cell : this->cells)
     {
         if (geogram::mesh_cell_volume(*this, cell) == 0.0 || moist::geometry::has_duplicate_vertex(cell, *this))
@@ -169,37 +194,193 @@ void moist::MeshSlice::InsertInterfaceVertices(moist::Interface& interface)
             OOC_DEBUG("0 volume cell after insert...");
         }
     }
+
+#ifndef NDEBUG
+    for (const g_index iv : triangulation->vertices)
+    {
+        bool found = false;
+        const vec3 ip = triangulation->vertices.point(iv);
+        for (const g_index v : this->vertices)
+        {
+            if (this->vertices.point(v) == ip)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            OOC_WARNING("missing point [" << ip.x << ", " << ip.y << ", " << ip.z << "]");
+        }
+    }
     moist::utils::geo::save("after_insert.msh", *this);
+#endif
 }
 
-bool moist::MeshSlice::CanMoveVertex(const g_index v, const vec3& p)
+bool moist::MeshSlice::CanMoveVertex(const g_index v, const vec3& p, const std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator>& cluster)
 {
-    std::vector<geogram::Sign> signs(this->_created_tets_idx.size());
-    for (size_t c = 0; c < this->_created_tets_idx.size(); c++)
+    std::vector<geogram::Sign> signs(0);
+    for (size_t ci = 0; ci < this->_created_cell_ids.size(); ci++)
     {
-        signs.push_back(geogram::geo_sgn(geogram::mesh_cell_volume(*this, _created_tets_idx[c])));
+        const g_index c = this->_created_cell_ids[ci];
+
+        const vec3 p0 = this->vertices.point(this->cells.vertex(c, 0));
+        const vec3 p1 = this->vertices.point(this->cells.vertex(c, 1));
+        const vec3 p2 = this->vertices.point(this->cells.vertex(c, 2));
+        const vec3 p3 = this->vertices.point(this->cells.vertex(c, 3));
+        signs.push_back(geogram::geo_sgn(geogram::Geom::tetra_signed_volume(p0, p1, p2, p3)));
     }
 
     const auto original_pos = this->vertices.point(v);
 
-    this->vertices.point(v) = p;
-    for (size_t c = 0; c < this->_created_tets_idx.size(); c++)
+    for (const g_index cv : cluster.at(original_pos))
     {
-        if (_deleted_tets.contains(_created_tets_idx[c])) continue;
+        this->vertices.point(cv) = p;
+    }
 
-        const auto sign = geogram::geo_sgn(geogram::mesh_cell_volume(*this, _created_tets_idx[c]));
-        if (sign != geogram::Sign::ZERO && sign != signs[c])
+    for (size_t ci = 0; ci < this->_created_cell_ids.size(); ci++)
+    {
+        if (_deleted_cells.contains(_created_cell_ids[ci])) continue;
+
+        const g_index c = this->_created_cell_ids[ci];
+        const vec3 p0 = this->vertices.point(this->cells.vertex(c, 0));
+        const vec3 p1 = this->vertices.point(this->cells.vertex(c, 1));
+        const vec3 p2 = this->vertices.point(this->cells.vertex(c, 2));
+        const vec3 p3 = this->vertices.point(this->cells.vertex(c, 3));
+        const auto volume = geogram::Geom::tetra_signed_volume(p0, p1, p2, p3);
+        const auto sign = geogram::geo_sgn(std::round(volume * 1e12) / 1e12);
+        // TODO: add _deleted_cells during decimation, so I can remove signs[ci] != geogram::Sign::ZERO
+        if (signs[ci] != geogram::Sign::ZERO && sign != geogram::Sign::ZERO && sign != signs[ci])
         {
-            this->vertices.point(v) = original_pos;
+            for (const g_index cv : cluster.at(original_pos))
+            {
+                this->vertices.point(cv) = original_pos;
+            }
             return false;
         }
     }
 
-    this->vertices.point(v) = original_pos;
+    for (const g_index cv : cluster.at(original_pos))
+    {
+        this->vertices.point(cv) = original_pos;
+    }
     return true;
 }
 
-void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
+void moist::MeshSlice::DecimateCreatedTetrahedra(const vec3& e0, const vec3& e1, const std::unordered_set<g_index>& vertices, SteinerPoints& steiner_points)
+{
+    std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator> cluster;
+    std::unordered_map<g_index, std::unordered_set<g_index>> adjacencies;
+
+    geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+
+    // Preprocess: Initialize cluster and adjacency data.
+    for (const g_index v : vertices)
+    {
+        const vec3 p = this->vertices.point(v);
+        if (!cluster.contains(p))
+        {
+            cluster.emplace(p, std::unordered_set<g_index>());
+        }
+        cluster[p].insert(v);
+    }
+
+    cluster.emplace(e0, std::unordered_set<g_index>());
+    cluster.emplace(e1, std::unordered_set<g_index>());
+
+    for (const g_index v : vertices)
+    {
+        bool must_be_steiner = true;
+        const vec3 p = this->vertices.point(v);
+        // Find neighbouring vertices in tetrahedra...
+        std::unordered_set<vec3, Vec3HashOperator, Vec3EqualOperator> neighbours;
+        for (const g_index c : this->_created_cell_ids)
+        {
+            // If vertex is part of cell, we can search this cell for other points on the line...
+            if (!moist::geometry::point_of_cell(*this, c, p))
+            {
+                continue;
+            }
+
+            if (moist::geometry::has_duplicate_vertex(c, *this))
+            {
+                continue;
+            }
+
+            for (const g_index cv : moist::geometry::cell_vertices(c, *this))
+            {
+                const vec3 cvp = this->vertices.point(cv);
+                if (cluster.contains(cvp) && cvp != p)
+                {
+                    neighbours.insert(cvp);
+                }
+            }
+        }
+
+        // Attempt to first cluster onto line endpoints...
+        if (neighbours.contains(e0) || neighbours.contains(e1))
+        {
+            // Can contain both (last decimation)...
+            if (neighbours.contains(e0) && this->CanMoveVertex(v, e0, cluster))
+            {
+                for (const g_index cluster_v : cluster[p])
+                {
+                    this->vertices.point(cluster_v) = e0;
+                    cluster[e0].insert(cluster_v);
+                }
+                cluster.erase(p);
+                must_be_steiner = false;
+                continue;
+            }
+
+            if (neighbours.contains(e1) && this->CanMoveVertex(v, e1, cluster))
+            {
+                for (const g_index cluster_v : cluster[p])
+                {
+                    this->vertices.point(cluster_v) = e1;
+                    cluster[e1].insert(cluster_v);
+                }
+                cluster.erase(p);
+                must_be_steiner = false;
+                continue;
+            }
+        }
+
+        // Find a neighbour to cluster onto...
+        bool moved = false;
+        for (const vec3 neighbour : neighbours)
+        {
+            if (this->CanMoveVertex(v, neighbour, cluster))
+            {
+                for (const g_index cluster_v : cluster[p])
+                {
+                    this->vertices.point(cluster_v) = neighbour;
+                    cluster[neighbour].insert(cluster_v);
+                }
+                cluster.erase(p);
+                must_be_steiner = false;
+                break;
+            }
+        }
+
+        if (must_be_steiner)
+        {
+            OOC_DEBUG("inserting interface steiner point " << v << " at [" << p.x << ", " << p.y << ", " << p.z << "]");
+            steiner_points.insert(p);
+        }
+    }
+
+    for (const g_index c : this->_created_cell_ids)
+    {
+        if (geogram::mesh_cell_volume(*this, c) == 0.0 || moist::geometry::has_duplicate_vertex(c, *this))
+        {
+            _deleted_cells.insert(c);
+        }
+    }
+}
+
+void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface, moist::SteinerPoints& steiner_points)
 {
     const auto triangulation = interface.Triangulation();
     const auto plane = interface.Plane();
@@ -207,10 +388,11 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
 
     uint32_t i = 0;
     uint32_t highest = 0;
+
     for (const auto edge : edges)
     {
         i++;
-        this->_created_tets_idx.clear();
+        this->_created_cell_ids.clear();
 
         vec3 p0 = triangulation->vertices.point(edge.v0);
         vec3 p1 = triangulation->vertices.point(edge.v1);
@@ -220,31 +402,30 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
         // find all tetrahedra that lie on the line between the two points
         const auto cells = this->cells.nb();
         std::vector<CreatedTetrahedon> crossed_cells;
+        std::unordered_set<g_index> edge_vertices(0);
 
         size_t nb_created_cells = 0;
         size_t nb_crossed_cells = 0;
         geogram::Mesh dbg_crossed_cells(3);
         geogram::Mesh dbg_created_cells(3);
-        bool p_eql = false;
 
-        for (g_index cell = 0; cell < cells; cell++)
+        std::unordered_map<vec3, g_index, Vec3HashOperator, Vec3EqualOperator> created_vertices(0);
+        for (g_index cell = _start_interface_cell; cell < cells; cell++)
         {
             nb_created_cells = 0;
-            if (_deleted_tets.contains(cell))
+            if (_deleted_cells.contains(cell))
             {
                 continue;
             }
 
             if (geogram::mesh_cell_volume(*this, cell) == 0.0)
             {
-                p_eql = true;
-                _deleted_tets.insert(cell);
+                _deleted_cells.insert(cell);
                 continue;
             }
 
             // insert vertices where the line crosses edges of the tetrahedra
             std::vector<CrossedEdge> crossed_edges;
-            std::unordered_map<vec3, g_index, Vec3HashOperator, Vec3EqualOperator> created_vertices;
             for (g_index e_id = 0; e_id < this->cells.nb_edges(cell); e_id++)
             {
                 const g_index v0 = this->cells.edge_vertex(cell, e_id, 0);
@@ -281,20 +462,23 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
                 }
 
                 const vec3 new_vertex = vec3(intersection_opt.value().x, intersection_opt.value().y, plane->extent);
-                const g_index p = created_vertices.find(new_vertex) != created_vertices.end()
+                const g_index p = created_vertices.contains(new_vertex)
                     ? created_vertices.at(new_vertex)
                     : this->vertices.create_vertex(new_vertex.data());
 
                 created_vertices.emplace(new_vertex, p);
                 crossed_edges.push_back({ v0, v1, p });
-            #ifndef NDEBUG
+                edge_vertices.insert(p);
+
+#ifndef NDEBUG
                 dbg_crossed_cells.cells.create_tet(
                     dbg_crossed_cells.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 0))),
                     dbg_crossed_cells.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 1))),
                     dbg_crossed_cells.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 2))),
                     dbg_crossed_cells.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 3)))
                 );
-            #endif // NDEBUG
+#endif // NDEBUG
+
             }
 
             if (crossed_edges.size() > 0)
@@ -311,12 +495,7 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
                 case 2:
                     if (crossed_edges[0].p == crossed_edges[1].p)
                     {
-                        vec3 pp0 = this->vertices.point(this->cells.vertex(cell, 0));
-                        vec3 pp1 = this->vertices.point(this->cells.vertex(cell, 1));
-                        vec3 pp2 = this->vertices.point(this->cells.vertex(cell, 2));
-                        vec3 pp3 = this->vertices.point(this->cells.vertex(cell, 3));
-                        p_eql = true;
-                        //moist::operation::edge_split_1to3(*this, cell, crossed_edges[0], crossed_edges[1], *plane);
+                        OOC_WARNING("invalid edge split configuration...");
                     }
                     else
                     {
@@ -337,197 +516,58 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface)
             }
         }
 
-        if (i == 97) moist::utils::geo::save("dbg-crossed-cells.msh", dbg_crossed_cells);
-        if (i == 97) this->DebugMesh("dbg-created-cells.msh", this->_created_tets_idx);
+        // if (_is) this->DebugMesh("dbg-created-cells.msh", this->_created_cell_ids);
+        const size_t num_steiner_points = steiner_points.size();
+        this->DecimateCreatedTetrahedra(p0, p1, edge_vertices, steiner_points);
+        // if (_is) this->DebugMesh("dbg-after-decimation.msh", this->_created_cell_ids);
 
-        std::vector<g_index> moved_vertices;
-        std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator> cluster;
-        geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
-        for (const g_index cc : this->_created_tets_idx)
-        {
-            for (l_index lv = 0; lv < 4; lv++)
-            {
-                const g_index v = this->cells.vertex(cc, lv);
-                const vec3 p = this->vertices.point(v);
-
-                if (!moist::predicates::point_on_plane(p, *plane)) continue;
-                if (!cluster.contains(p))
-                {
-                    cluster.emplace(p, std::unordered_set<g_index>());
-                }
-                cluster[p].insert(v);
-            }
-        }
-        // move a vertex of every cell in a way that leads to no inversions (zeroeing tets is allowed...)
-        for (const g_index cc : this->_created_tets_idx)
-        {
-            // find candidate vertices
-            std::unordered_set<g_index> candidates;
-            g_index candidate_edge_v = geogram::NO_VERTEX;
-
-            for (l_index lv = 0; lv < 4; lv++)
-            {
-                const g_index v = this->cells.vertex(cc, lv);
-                const vec3 p = this->vertices.point(v);
-                if (v_discard[v])
-                {
-                    candidates.insert(v);
-                }
-
-                if (p == p0 || p == p1)
-                {
-                    candidate_edge_v = v;
-                }
-            }
-
-            // """"simple"""" case: Edge ends in one of the cells' vertices
-            if (candidate_edge_v != geogram::NO_VERTEX)
-            {
-                const auto to = this->vertices.point(candidate_edge_v);
-                for (const g_index v : candidates)
-                {
-                    if (v == candidate_edge_v)
-                    {
-                        continue;
-                    }
-
-                    const auto from = this->vertices.point(v);
-                    for (const g_index vm : cluster[from])
-                    {
-                        if (vm >= this->vertices.nb()) continue;
-                        this->vertices.point(vm) = to;
-                        cluster[to].insert(vm);
-                        v_discard[vm] = false;
-                    }
-                }
-            }
-            // difficult case: tet needs to be decimated to not cause inversion to any other tet
-            else if (!candidates.empty())
-            {
-                int ffffff = 0;
-
-                if (candidates.size() > 1)
-                {
-                    g_index first = geogram::NO_VERTEX;
-                    for (const g_index candidate : candidates)
-                    {
-                        if (v_discard[candidate])
-                        {
-                            first = candidate;
-                            break;
-                        }
-                    }
-
-                    if (first == geogram::NO_VERTEX)
-                    {
-                        OOC_WARNING("invalid geometry...");
-                        continue;
-                    }
-
-                    for (const g_index candidate : candidates)
-                    {
-                        const vec3 to = this->vertices.point(first);
-                        for (const g_index vm : cluster[this->vertices.point(candidate)])
-                        {
-                            const vec3 from = this->vertices.point(vm);
-                            if (vm >= this->vertices.nb()) continue;
-
-                            if (this->CanMoveVertex(vm, to))
-                            {
-                                this->vertices.point(vm) = this->vertices.point(first);
-                                cluster[this->vertices.point(first)].insert(vm);
-                                v_discard[vm] = true;//v_discard[first];
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                OOC_WARNING("did not find suitable decimation direction...");
-            }
-
-            if (geogram::mesh_cell_volume(*this, cc) == 0.0 || moist::geometry::has_duplicate_vertex(cc, *this))
-            {
-                //_deleted_tets.insert(cc);
-            }
-        }
-
-        for (const g_index c : this->_created_tets_idx)
-        {
-            if (geogram::mesh_cell_volume(*this, c) == 0.0 || moist::geometry::has_duplicate_vertex(c, *this))
-            {
-                _deleted_tets.insert(c);
-            }
-        }
-
-        if (i == 67 || i == 68)
-        {
-            this->FlushTetrahedra();
-            moist::utils::geo::save(std::format("dbg-{}.msh", i), *this);
-        }
-        // 64 is teh bad one
-        if (i == 97) this->DebugMesh("dbg-after-decimation.msh", this->_created_tets_idx);
-
-    #ifndef NDEBUG
-        bool _found = false;
-        for (g_index _cell = 0; _cell < this->cells.nb(); _cell++)
-        {
-            for (g_index e_id = 0; e_id < this->cells.nb_edges(_cell); e_id++)
-            {
-                const g_index v0 = this->cells.edge_vertex(_cell, e_id, 0);
-                const g_index v1 = this->cells.edge_vertex(_cell, e_id, 1);
-                const vec3 cp0 = this->vertices.point(v0);
-                const vec3 cp1 = this->vertices.point(v1);
-
-                if (cp0 == p0 && cp1 == p1 || cp0 == p1 && cp1 == p0)
-                {
-                    _found = true;
-                    break;
-                }
-            }
-
-            if (_found)
-            {
-                break;
-            }
-        }
-    #endif // NDEBUG
-
+        this->_created_cell_ids.clear();
     }
 
-    this->FlushTetrahedra();
-
-    moist::utils::geo::save("before_other_decimation.msh", *this);
-
-    for (const g_index cell : this->cells)
-    {
-        if (moist::geometry::has_duplicate_vertex(cell, *this))
-        {
-            _deleted_tets.insert(cell);
-        }
-    }
-
-    this->FlushTetrahedra();
+    this->FlushTetrahedra(true);
 }
 
-void moist::MeshSlice::CreateTetrahedra()
+g_index moist::MeshSlice::ReorderCells(const moist::AxisAlignedInterfacePlane &plane)
 {
-    for (const auto tet : this->_created_tets)
+    for (const g_index c : this->cells)
+    {
+        if (moist::predicates::cell_on_plane(c, *this, plane))
+        {
+            this->CreateTetrahedra({
+                this->cells.vertex(c, 0),
+                this->cells.vertex(c, 1),
+                this->cells.vertex(c, 2),
+                this->cells.vertex(c, 3)
+            });
+            this->DeleteTetrahedra(c);
+        }
+    }
+
+    this->FlushTetrahedra();
+    return this->CreateTetrahedra();
+}
+
+g_index moist::MeshSlice::CreateTetrahedra()
+{
+    g_index first = geogram::NO_CELL;
+    for (const auto tet : this->_created_cells)
     {
         const auto t = this->cells.create_tet(tet.v0, tet.v1, tet.v2, tet.v3);
-        _created_tets_idx.push_back(t);
-
-        // TODO [Bugs]: Figure out why this happens. Also, figure out why this leads to a validatably correct output...
-        const auto volume = geogram::mesh_cell_volume(*this, t);
-        if (volume == 0.0)
+        if (first == geogram::NO_CELL)
         {
-        #ifndef NDEBUG
+            first = t;
+        }
+
+        _created_cell_ids.push_back(t);
+
+    #ifndef NDEBUG
+        if (geogram::mesh_cell_volume(*this, t) <= 0.0)
+        {
             const auto p0 = this->vertices.point(tet.v0);
             const auto p1 = this->vertices.point(tet.v1);
             const auto p2 = this->vertices.point(tet.v2);
             const auto p3 = this->vertices.point(tet.v3);
-            OOC_WARNING("cell t0 " << t << " has zero volume: " << volume);
+            OOC_WARNING("cell " << t << " has zero volume");
             geogram::Mesh dbg(3);
             dbg.cells.create_tet(
                 dbg.vertices.create_vertex(p0.data()),
@@ -536,23 +576,38 @@ void moist::MeshSlice::CreateTetrahedra()
                 dbg.vertices.create_vertex(p3.data())
             );
             moist::utils::geo::save(std::format("debug/dbg-zerotet-{}.msh", t), dbg);
-        #endif // NDEBUG
-            _deleted_tets.insert(t);
+            //_deleted_cells.insert(t);
+        }
+     #endif // NDEBUG
+    }
+
+    this->_created_cells.clear();
+
+    return first;
+}
+
+void moist::MeshSlice::FlushTetrahedra(bool delete_zero_volume)
+{
+    geogram::vector<g_index> flushed_elements(this->cells.nb());
+
+    if (delete_zero_volume)
+    {
+        for (const g_index c : this->cells)
+        {
+            if (geogram::mesh_cell_volume(*this, c) == 0.0)
+            {
+                flushed_elements[c] = true;
+            }
         }
     }
 
-    this->_created_tets.clear();
-}
-
-void moist::MeshSlice::FlushTetrahedra()
-{
-    geogram::vector<geogram::index_t> tets_to_delete(this->cells.nb());
-    for (geogram::index_t deleted_tet : _deleted_tets)
+    for (const g_index c : _deleted_cells)
     {
-        tets_to_delete[deleted_tet] = 1;
+        flushed_elements[c] = true;
     }
-    this->cells.delete_elements(tets_to_delete, false);
-    _deleted_tets.clear();
+
+    this->cells.delete_elements(flushed_elements, false);
+    _deleted_cells.clear();
 }
 
 // TODO [Testing]: Move this code into a gtest module...
@@ -662,19 +717,29 @@ void moist::MeshSlice::Validate(moist::Interface& interface)
 void moist::MeshSlice::DebugMesh(std::string file, std::vector<g_index>& tetrahedra)
 {
     geogram::Mesh dbg(3);
+    geogram::Attribute<int> v_discard(this->vertices.attributes(), ATTRIBUTE_DISCARD);
+    geogram::Attribute<int> v_discard_dbg(dbg.vertices.attributes(), ATTRIBUTE_DISCARD);
+
     for (const g_index c : tetrahedra)
     {
-        if (!_deleted_tets.contains(c) && c < this->cells.nb())
+        if (!_deleted_cells.contains(c) && c < this->cells.nb())
         {
-            dbg.cells.create_tet(
-                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(c, 0))),
-                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(c, 1))),
-                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(c, 2))),
-                dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(c, 3)))
-            );
+            g_index vertices[4];
+            for (l_index lv = 0; lv < 4; lv++)
+            {
+                const g_index v = this->cells.vertex(c, lv);
+                vertices[lv] = dbg.vertices.create_vertex(this->vertices.point(v));
+                // if (v_discard[v])
+                // {
+                //     dbg.vertices.point(vertices[lv]).z -= 0.5;
+                // }
+                v_discard_dbg[vertices[lv]] = v_discard[v];
+            }
+            dbg.cells.create_tet(vertices[0], vertices[1], vertices[2], vertices[3]);
         }
     }
 
+    //geogram::mesh_repair(dbg, geogram::MeshRepairMode::MESH_REPAIR_DEFAULT);
     moist::utils::geo::save(file, dbg);
 }
 #endif
