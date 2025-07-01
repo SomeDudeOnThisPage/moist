@@ -57,7 +57,7 @@ namespace moist
          *
          * @param interface The (initialized) interface reference.
          */
-        SteinerPoints InsertInterface(moist::Interface& interface, moist::metrics::TimeMetrics_ptr metrics = nullptr);
+        SteinerPoints InsertInterface(moist::Interface& interface, moist::metrics::Metrics_ptr metrics = nullptr);
         void InsertVertex(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }

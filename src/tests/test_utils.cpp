@@ -9,12 +9,13 @@
 #include "moist/core/attributes.inl"
 
 // all of this code is shit, and only used for testing...
-bool moist::test::contains_overlapping_constraints(geogram::Mesh& a, geogram::Mesh& b, moist::Interface& interface)
+size_t moist::test::contains_overlapping_constraints(geogram::Mesh& a, geogram::Mesh& b, moist::Interface& interface)
 {
     // check if a and b have any overlapping edges on interface
     const auto edges_a = moist::geometry::collect_interface_edges(a, *interface.Plane());
     const auto edges_b = moist::geometry::collect_interface_edges(b, *interface.Plane());
 
+    size_t overlap = 0;
     for (const auto e0 : edges_a)
     {
         const vec3 e0p0 = a.vertices.point(e0.v0);
@@ -52,7 +53,8 @@ bool moist::test::contains_overlapping_constraints(geogram::Mesh& a, geogram::Me
                 continue;
             }
 
-            if (intersection_opt.value() == reinterpret_cast<const vec2&>(e0p0) || intersection_opt.value() == reinterpret_cast<const vec2&>(e0p1))
+            if (intersection_opt.value() == reinterpret_cast<const vec2&>(e0p0) || intersection_opt.value() == reinterpret_cast<const vec2&>(e0p1)
+             || intersection_opt.value() == reinterpret_cast<const vec2&>(e1p0) || intersection_opt.value() == reinterpret_cast<const vec2&>(e1p1))
             {
                 // we don't handle the "intersecting on a vertex case" here
                 continue;
@@ -60,9 +62,12 @@ bool moist::test::contains_overlapping_constraints(geogram::Mesh& a, geogram::Me
 
             OOC_WARNING("intersecting edges [" << e0p0.x << ", " << e0p0.y << "] -> [" << e0p1.x << ", " << e0p1.y << "], ["
                 << e1p0.x << ", " << e1p0.y << "] -> [" << e1p1.x << ", " << e1p1.y << "] " << " at [" << intersection_opt.value().x << ", " << intersection_opt.value().y << "]");
+
+            overlap++;
         }
     }
-    return true;
+
+    return overlap;
 }
 
 // this code is shit

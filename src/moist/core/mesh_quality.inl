@@ -13,6 +13,8 @@
 
 #include "moist/core/defines.hpp"
 #include "moist/core/metrics.hpp"
+#include "moist/core/predicates.inl"
+#include "moist/core/geometry.inl"
 
 namespace moist::mesh_quality
 {
@@ -111,14 +113,20 @@ namespace moist::mesh_quality
         }
     }
 
-    PURE INLINE float aspect_ratio(const geogram::Mesh& mesh, bool normalized = true)
+    PURE INLINE float aspect_ratio(const geogram::Mesh& mesh, /* ugly but fine */ moist::Interface* interface = nullptr)
     {
         float aspect_ratio = 0.0f;
         float max = -std::numeric_limits<double>::max();
         float min = std::numeric_limits<double>::max();
 
+        size_t nb_cells = 0;
         for (const g_index cell : mesh.cells)
         {
+            if (interface != nullptr && !moist::predicates::cell_on_plane(cell, mesh, *interface->Plane()))
+            {
+                continue;
+            }
+
             const double l_aspect_ratio = tet::aspect_ratio(cell, mesh);
             if (l_aspect_ratio < min)
             {
@@ -131,21 +139,28 @@ namespace moist::mesh_quality
             }
 
             aspect_ratio += l_aspect_ratio;
+            nb_cells++;
         }
 
-        return aspect_ratio / static_cast<float>(mesh.cells.nb());
-        // TODO: Normalize.
+        return aspect_ratio / static_cast<float>(nb_cells);
     }
 
-    PURE INLINE float mean_ratio(const geogram::Mesh& mesh)
+    PURE INLINE float mean_ratio(const geogram::Mesh& mesh, moist::Interface* interface = nullptr)
     {
         float mean_ratio = 0.0f;
+        size_t nb_cells = 0;
         for (const g_index cell : mesh.cells)
         {
+            if (interface != nullptr && !moist::predicates::cell_on_plane(cell, mesh, *interface->Plane()))
+            {
+                continue;
+            }
+
             mean_ratio += tet::mean_ratio(cell, mesh);
+            nb_cells++;
         }
 
-        return mean_ratio / static_cast<float>(mesh.cells.nb());
+        return mean_ratio / static_cast<float>(nb_cells);
     }
 
     /**
@@ -167,6 +182,37 @@ namespace moist::mesh_quality
         metrics.aspect_ratio = aspect_ratio(mesh);
         metrics.mean_ratio = mean_ratio(mesh);
         metrics.skewness = skewness(mesh);
+
+        metrics.nb_vertices = mesh.vertices.nb();
+        metrics.nb_edges = 0; // not needed for eval
+        metrics.nb_cells = mesh.cells.nb();
+    }
+
+    inline void compute(moist::metrics::MeshQuality& metrics, const geogram::Mesh& mesh, moist::Interface& interface)
+    {
+        metrics.aspect_ratio = aspect_ratio(mesh, &interface);
+        metrics.mean_ratio = mean_ratio(mesh, &interface);
+        metrics.skewness = skewness(mesh);
+
+        metrics.nb_vertices = 0;
+        for (const g_index v : mesh.vertices)
+        {
+            if (moist::predicates::point_on_plane(mesh.vertices.point(v), *interface.Plane()))
+            {
+                metrics.nb_vertices++;
+            }
+        }
+
+        metrics.nb_edges = moist::geometry::collect_interface_edges(mesh, *interface.Plane()).size();
+
+        metrics.nb_cells = 0;
+        for (const g_index c : mesh.cells)
+        {
+            if (moist::predicates::cell_on_plane(c, mesh, *interface.Plane()))
+            {
+                metrics.nb_cells++;
+            }
+        }
     }
 }
 

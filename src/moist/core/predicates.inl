@@ -58,7 +58,7 @@ namespace moist::predicates
                     - aby * (acx * adz - acz * adx)
                     + abz * (acx * ady - acy * adx);
 
-        if (std::abs(volume) < 1e-12)
+        if (std::abs(volume) < 1e-12) // That's right fellas, we're doing epsilon shenanigans again...
         {
             return geogram::Sign::ZERO;
         }
@@ -200,14 +200,14 @@ namespace moist::predicates
         const auto p3 = mesh.vertices.point(mesh.cells.vertex(t, 3));
 
         geogram::Sign s[4];
-        //s[0] = moist::predicates::orient3d(p, p1, p2, p3);
-        //s[1] = moist::predicates::orient3d(p0, p, p2, p3);
-        //s[2] = moist::predicates::orient3d(p0, p1, p, p3);
-        //s[3] = moist::predicates::orient3d(p0, p1, p2, p);
-        s[0] = geogram::PCK::orient_3d(p, p1, p2, p3);
-        s[1] = geogram::PCK::orient_3d(p0, p, p2, p3);
-        s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
-        s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
+        s[0] = moist::predicates::orient3d(p, p1, p2, p3);
+        s[1] = moist::predicates::orient3d(p0, p, p2, p3);
+        s[2] = moist::predicates::orient3d(p0, p1, p, p3);
+        s[3] = moist::predicates::orient3d(p0, p1, p2, p);
+        //s[0] = geogram::PCK::orient_3d(p, p1, p2, p3);
+        //s[1] = geogram::PCK::orient_3d(p0, p, p2, p3);
+        //s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
+        //s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
         const bool inside_or_on_boundary = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
             (s[0] <= 0 && s[1] <= 0 && s[2] <= 0 && s[3] <= 0)

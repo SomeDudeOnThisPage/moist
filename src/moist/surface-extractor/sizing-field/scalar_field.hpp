@@ -41,7 +41,7 @@ namespace moist
         uint32_t* data;
     };
 
-    void generate_scalar_field(const Tiff& tiff, const IsoValue isovalue, moist::metrics::TimeMetrics_ptr metrics = nullptr);
+    void generate_scalar_field(const Tiff& tiff, const IsoValue isovalue, moist::metrics::Metrics_ptr metrics = nullptr);
 }
 
 #endif // __SCALAR_FIELD_HPP

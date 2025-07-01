@@ -39,24 +39,24 @@ void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tet
     }
 }
 
-moist::SteinerPoints moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metrics::TimeMetrics_ptr metrics)
+moist::SteinerPoints moist::MeshSlice::InsertInterface(moist::Interface& interface, moist::metrics::Metrics_ptr metrics)
 {
     this->_start_interface_cell = this->ReorderCells(*interface.Plane());
 
     SteinerPoints steiner_points;
     moist::descriptor::LocalInterface descriptor;
     {
-        auto timer = moist::Timer("MeshSlice::InsertInterfaceVertices", metrics);
+        //auto timer = moist::Timer("MeshSlice::InsertInterfaceVertices", metrics);
         this->InsertInterfaceVertices(interface);
     }
 
     {
-        auto timer = moist::Timer("MeshSlice::InsertInterfaceEdges", metrics);
+        //auto timer = moist::Timer("MeshSlice::InsertInterfaceEdges", metrics);
         this->InsertInterfaceEdges(interface, steiner_points);
     }
 
     {
-        auto timer = moist::Timer("MeshSlice::InsertTetQuality", metrics);
+        //auto timer = moist::Timer("MeshSlice::InsertTetQuality", metrics);
         this->InsertTetQuality(interface);
     }
 
@@ -119,9 +119,16 @@ void moist::MeshSlice::InsertVertex(const geogram::vec3 &point, const moist::Axi
                 dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 2))),
                 dbg.vertices.create_vertex(this->vertices.point(this->cells.vertex(cell, 3)))
             );
-            //moist::utils::geo::save("debug/dbg-crossed-cell.msh", dbg);
             moist::operation::vertex_insert_1to3(*this, cell, point, plane);
-            PARALLEL_BREAK;
+
+            //if (cell == 898)
+            //{
+            //    moist::utils::geo::save("debug/dbg-crossed-cell.msh", dbg);
+            //    this->CreateTetrahedra();
+            //    this->DebugMesh("debug/dbg-created_cells.msh", this->_created_cell_ids);
+            //}
+            //PARALLEL_BREAK;
+            continue;
         }
 
         if (pit == moist::predicates::PointInTet::EDGE)
@@ -137,13 +144,15 @@ void moist::MeshSlice::InsertVertex(const geogram::vec3 &point, const moist::Axi
             //moist::utils::geo::save("debug/dbg-crossed-cell.msh", dbg);
             moist::operation::vertex_insert_1to2(*this, cell, point, plane);
             edge_insert_cells++;
-            PARALLEL_CONTINUE;
+            //PARALLEL_CONTINUE;
+            continue;
         }
 
         if (pit == moist::predicates::PointInTet::VERTEX)
         {
             int isd = 0;
-            PARALLEL_BREAK;
+            // PARALLEL_BREAK;
+            continue;
         }
     }
 //ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
@@ -268,8 +277,13 @@ bool moist::MeshSlice::CanMoveVertex(const g_index v, const vec3& p, const std::
     return true;
 }
 
-void moist::MeshSlice::DecimateCreatedTetrahedra(const vec3& e0, const vec3& e1, const std::unordered_set<g_index>& vertices, SteinerPoints& steiner_points)
+void moist::MeshSlice::DecimateCreatedTetrahedra(const vec3& p_e0, const vec3& p_e1, const std::unordered_set<g_index>& vertices, SteinerPoints& steiner_points)
 {
+    if (vertices.empty() || this->_created_cell_ids.empty())
+    {
+        return;
+    }
+
     std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator> cluster;
     std::unordered_map<g_index, std::unordered_set<g_index>> adjacencies;
 
@@ -285,6 +299,61 @@ void moist::MeshSlice::DecimateCreatedTetrahedra(const vec3& e0, const vec3& e1,
         }
         cluster[p].insert(v);
     }
+
+    // we can have cases where edges lead out of the boundary with envelope boundaries e.g. with tetwild...
+    // in this case, e0 or e1 may not be part of created vertices...
+    // need to take the closest vertex in that case and make it "fake" e0 or "fake" e1...
+    double nearest_e0 = 9999.99;
+    double nearest_e1 = 9999.99;
+    g_index nearest_v_e0 = geogram::NO_VERTEX;
+    g_index nearest_v_e1 = geogram::NO_VERTEX;
+    vec3 e0, e1;
+    for (const g_index c : this->_created_cell_ids)
+    {
+        if (nearest_v_e0 == -1.0 && nearest_v_e1 == -1.0)
+        {
+            break;
+        }
+        for (const g_index lv : moist::geometry::cell_vertices(c, *this))
+        {
+            if (nearest_v_e0 == -1.0 && nearest_v_e1 == -1.0)
+            {
+                break;
+            }
+            const vec3 p = this->vertices.point(lv);
+
+            if (!vertices.contains(lv) && p != p_e0 && p != p_e1)
+            {
+                continue;
+            }
+
+            if (p == p_e0)
+            {
+                nearest_e0 = -1.0;
+                continue;
+            }
+            else if (p == p_e1)
+            {
+                nearest_e1 = -1.0;
+                continue;
+            }
+
+            if (geogram::distance(p, p_e0) < nearest_e0)
+            {
+                nearest_e0 = geogram::distance(p, p_e0);
+                nearest_v_e0 = lv;
+            }
+
+            if (geogram::distance(p, p_e1) < nearest_e1)
+            {
+                nearest_e1 = geogram::distance(p, p_e1);
+                nearest_v_e1 = lv;
+            }
+        }
+    }
+
+    e0 = nearest_e0 != -1 ? this->vertices.point(nearest_v_e0) : p_e0;
+    e1 = nearest_e1 != -1 ? this->vertices.point(nearest_v_e1) : p_e1;
 
     cluster.emplace(e0, std::unordered_set<g_index>());
     cluster.emplace(e1, std::unordered_set<g_index>());
@@ -462,13 +531,13 @@ void moist::MeshSlice::InsertInterfaceEdges(moist::Interface& interface, moist::
                 }
 
                 const vec3 new_vertex = vec3(intersection_opt.value().x, intersection_opt.value().y, plane->extent);
-                const g_index p = created_vertices.contains(new_vertex)
+                const g_index v = created_vertices.contains(new_vertex)
                     ? created_vertices.at(new_vertex)
                     : this->vertices.create_vertex(new_vertex.data());
 
-                created_vertices.emplace(new_vertex, p);
-                crossed_edges.push_back({ v0, v1, p });
-                edge_vertices.insert(p);
+                created_vertices.emplace(new_vertex, v);
+                crossed_edges.push_back({ v0, v1, v });
+                edge_vertices.insert(v);
 
 #ifndef NDEBUG
                 dbg_crossed_cells.cells.create_tet(

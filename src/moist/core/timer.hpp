@@ -18,14 +18,14 @@ namespace moist
     class Timer
     {
     public:
-        Timer(const std::string& name, metrics::TimeMetrics_ptr metrics = nullptr);
+        Timer(const std::string& name, metrics::Metrics_ptr metrics = nullptr);
         ~Timer();
 
         long long Elapsed();
     private:
         std::string _name;
         std::chrono::time_point<std::chrono::system_clock> _start;
-        metrics::TimeMetrics_ptr _metrics;
+        metrics::Metrics_ptr _metrics;
     };
 }
 

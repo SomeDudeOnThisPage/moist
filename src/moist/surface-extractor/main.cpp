@@ -50,7 +50,7 @@ static cli::Validator PatternPlaceholderCountValidator(const std::size_t placeho
 
 int main(int argc, char* argv[])
 {
-    auto metrics = moist::metrics::TimeMetrics("SurfaceExtractor");
+    auto metrics = moist::metrics::Metrics("SurfaceExtractor");
     moist::Timer timer("SurfaceExtractor::Main", metrics);
 
     Arguments arguments{};
