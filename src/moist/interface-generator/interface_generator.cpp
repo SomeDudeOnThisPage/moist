@@ -13,6 +13,7 @@
 #include "moist/core/attributes.inl"
 #include "moist/core/predicates.inl"
 #include "moist/core/mesh_quality.inl"
+#include "moist/core/utils.hpp"
 
 moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2, false))
 {
@@ -213,8 +214,15 @@ void moist::InterfaceGenerator::Triangulate()
     this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
     this->_triangulation->facets.compute_borders();
 
+#ifndef NDEBUG
     // assign attribute constraint edges to edges in triangulation
-    geogram::Attribute<int> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    geogram::Attribute<double> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    for (const g_index edge : this->_triangulation->edges)
+    {
+        e_constrained[edge] = 0.5;
+    }
+
+    OOC_DEBUG("total of " << this->_triangulation->edges.nb() << " edges...");
     for (const g_index constraint_edge : this->_constraints.edges)
     {
         // TODO: This also only works with z-growing...
@@ -230,11 +238,13 @@ void moist::InterfaceGenerator::Triangulate()
             const vec2 ep1 = reinterpret_cast<const vec2&>(_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 1)));
             if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
             {
-                e_constrained[edge] = 1;
+                e_constrained[edge] = 1.0;
             }
         }
     }
 
+    moist::utils::geo::save("interface.constraints.geogram", this->_constraints);
+#endif // NDEBUG
     //geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
     //m_target_vertices[0] = this->_unique_vertices / 2.0;
 }

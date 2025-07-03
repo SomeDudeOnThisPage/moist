@@ -57,7 +57,8 @@ namespace moist
          *
          * @param interface The (initialized) interface reference.
          */
-        SteinerPoints InsertInterface(moist::Interface& interface, moist::metrics::Metrics_ptr metrics = nullptr);
+        moist::SteinerPoints InsertInterface(moist::Interface& interface, moist::metrics::Metrics_ptr metrics = nullptr);
+
         void InsertVertex(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
@@ -66,22 +67,21 @@ namespace moist
         void DeleteTetrahedra(const std::initializer_list<g_index> tetrahedra);
         void FlushTetrahedra(bool delete_zero_volume = false);
 
+        void GetFixedGeometry(geogram::Mesh& mesh);
     private:
 
         std::vector<g_index> _created_cell_ids;
         std::vector<CreatedTetrahedon> _created_cells;
         std::unordered_set<geogram::index_t> _deleted_cells;
         g_index _start_interface_cell;
+        g_index _start_interface_vertex;
 
         // global operations
         void InsertInterfaceVertices(moist::Interface& interface);
         void InsertInterfaceEdges(moist::Interface& interface, SteinerPoints& steiner_points);
-        void InsertTetQuality(moist::Interface& interface);
 
         g_index ReorderCells(const moist::AxisAlignedInterfacePlane& plane);
         g_index CreateTetrahedra();
-
-        void Validate(moist::Interface& interface);
 
         bool CanMoveVertex(const g_index v, const vec3& p, const std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator>& cluster);
 

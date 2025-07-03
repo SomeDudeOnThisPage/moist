@@ -115,6 +115,10 @@ int main(int argc, char* argv[])
              << moist::metrics::Metric {"A::after::nb_vertices", slice_a.vertices.nb()}
              << moist::metrics::Metric {"B::before::nb_vertices", slice_b.vertices.nb()};
 
+    geogram::Mesh steiner_mesh_a, steiner_mesh_b;
+    slice_a.GetFixedGeometry(steiner_mesh_a);
+    slice_b.GetFixedGeometry(steiner_mesh_b);
+
     if (!steiner_points.empty())
     {
         slice_a.FlushTetrahedra(true);

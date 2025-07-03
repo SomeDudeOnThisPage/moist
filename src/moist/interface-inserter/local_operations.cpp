@@ -157,14 +157,15 @@ static bool are_colinear(const vec3& a, const vec3& b, const vec3& c)
 
 void moist::operation::vertex_insert_1to2(MeshSlice &mesh, const g_index cell, const vec3& point, const moist::AxisAlignedInterfacePlane &plane)
 {
-    // honestly this is so niche I don't have the time right now...
     if (moist::predicates::point_of_tet(mesh, cell, point))
     {
-        // TODO: recreate vertex, as to "reorder" it to the back of the vertices array.
         return;
     }
 
-    const g_index p = mesh.vertices.create_vertex(point.data());
+    const g_index v = mesh.vertices.create_vertex(point.data());
+    geogram::Attribute<bool> v_interface(mesh.vertices.attributes(), "v_interface");
+    v_interface[v] = true;
+
     const g_index v_opposite = moist::geometry::non_interface_vertex(cell, mesh, plane);
     const auto [v0, v1, v2] = moist::geometry::other(cell, v_opposite, mesh);
     const vec3 p0 = mesh.vertices.point(v0);
@@ -174,22 +175,22 @@ void moist::operation::vertex_insert_1to2(MeshSlice &mesh, const g_index cell, c
     if (are_colinear(p0, p1, point))
     {
         mesh.CreateTetrahedra({
-            {v_opposite, v0, v2, p},
-            {v_opposite, v1, v2, p}
+            {v_opposite, v0, v2, v},
+            {v_opposite, v1, v2, v}
         });
     }
     else if (are_colinear(p1, p2, point))
     {
         mesh.CreateTetrahedra({
-            {v_opposite, v0, v1, p},
-            {v_opposite, v0, v2, p}
+            {v_opposite, v0, v1, v},
+            {v_opposite, v0, v2, v}
         });
     }
     else if (are_colinear(p0, p2, point))
     {
         mesh.CreateTetrahedra({
-            {v_opposite, v1, v0, p},
-            {v_opposite, v1, v2, p}
+            {v_opposite, v1, v0, v},
+            {v_opposite, v1, v2, v}
         });
     }
 
@@ -200,11 +201,12 @@ void moist::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, c
 {
     if (moist::predicates::point_of_tet(mesh, cell, point))
     {
-        // TODO: recreate vertex, as to "reorder" it to the back of the vertices array.
         return;
     }
 
-    const g_index p = mesh.vertices.create_vertex(point.data());
+    const g_index v = mesh.vertices.create_vertex(point.data());
+    geogram::Attribute<bool> v_interface(mesh.vertices.attributes(), "v_interface");
+    v_interface[v] = true;
     const g_index v_opposite = moist::geometry::non_interface_vertex(cell, mesh, plane);
     const auto [v0, v1, v2] = moist::geometry::other(cell, v_opposite, mesh);
 
@@ -213,18 +215,18 @@ void moist::operation::vertex_insert_1to3(MeshSlice &mesh, const g_index cell, c
     const auto p0t = mesh.vertices.point(v0);
     const auto p1t = mesh.vertices.point(v1);
     const auto p2t = mesh.vertices.point(v2);
-    const auto p3t = mesh.vertices.point(p);
+    const auto p3t = mesh.vertices.point(v);
     const auto p4t = mesh.vertices.point(v_opposite);
-    if (VECE(v_opposite, v0, v1, p) || VECE(v_opposite, v1, v2, p) || VECE(v_opposite, v2, v0, p))
+    if (VECE(v_opposite, v0, v1, v) || VECE(v_opposite, v1, v2, v) || VECE(v_opposite, v2, v0, v))
     {
         OOC_ERROR("zero volume tet");
     }
 #endif // NDEBUG
 
     mesh.CreateTetrahedra({
-        {v_opposite, v0, v1, p},
-        {v_opposite, v1, v2, p},
-        {v_opposite, v2, v0, p}
+        {v_opposite, v0, v1, v},
+        {v_opposite, v1, v2, v},
+        {v_opposite, v2, v0, v}
     });
     mesh.DeleteTetrahedra(cell);
 }

@@ -58,7 +58,7 @@ namespace moist::predicates
                     - aby * (acx * adz - acz * adx)
                     + abz * (acx * ady - acy * adx);
 
-        if (std::abs(volume) < 1e-12) // That's right fellas, we're doing epsilon shenanigans again...
+        if (std::abs(volume) < 1e-10) // That's right fellas, we're doing epsilon shenanigans again...
         {
             return geogram::Sign::ZERO;
         }
@@ -102,6 +102,17 @@ namespace moist::predicates
         }
 
         return false;
+    }
+
+    PURE INLINE bool is_interface_cell(const g_index c, const geogram::Mesh& mesh)
+    {
+        const geogram::Attribute<bool> v_interface = geogram::Attribute<bool>(mesh.vertices.attributes(), "v_interface");
+        return (
+            v_interface[mesh.cells.vertex(c, 0)] ||
+            v_interface[mesh.cells.vertex(c, 1)] ||
+            v_interface[mesh.cells.vertex(c, 2)] ||
+            v_interface[mesh.cells.vertex(c, 3)]
+        );
     }
 
     PURE INLINE bool point_on_plane(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane)
