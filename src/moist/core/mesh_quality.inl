@@ -27,7 +27,7 @@ namespace moist::mesh_quality
         //     vec3 center;
         // };
 
-        static void get_data(double* data, const g_index cell, const geogram::Mesh& mesh)
+        static void get_data(double* data, const g_index cell, const geo::Mesh& mesh)
         {
             #pragma unroll 4
             for (l_index lv = 0; lv < 4; lv++)
@@ -46,9 +46,9 @@ namespace moist::mesh_quality
          * @param mesh
          * @return float
          */
-        PURE inline float aspect_ratio(const g_index cell, const geogram::Mesh& mesh)
+        PURE inline float aspect_ratio(const g_index cell, const geo::Mesh& mesh)
         {
-            const geogram::index_t nb_vertices = mesh.cells.nb_vertices(cell);
+            const geo::index_t nb_vertices = mesh.cells.nb_vertices(cell);
             if (nb_vertices != 4) throw std::runtime_error("cell#nb_vertices != 4");
 
             double data[12];
@@ -77,9 +77,9 @@ namespace moist::mesh_quality
          * @param mesh
          * @return float
          */
-        PURE inline float mean_ratio(const g_index cell, const geogram::Mesh& mesh)
+        PURE inline float mean_ratio(const g_index cell, const geo::Mesh& mesh)
         {
-            const geogram::index_t nb_vertices = mesh.cells.nb_vertices(cell);
+            const geo::index_t nb_vertices = mesh.cells.nb_vertices(cell);
             if (nb_vertices != 4) throw std::runtime_error("cell#nb_vertices != 4");
 
             double data[12];
@@ -91,9 +91,9 @@ namespace moist::mesh_quality
 
     namespace tri
     {
-        PURE inline float aspect_ratio(const g_index facet, const geogram::Mesh& mesh)
+        PURE inline float aspect_ratio(const g_index facet, const geo::Mesh& mesh)
         {
-            const geogram::index_t nb_vertices = mesh.facets.nb_vertices(facet);
+            const geo::index_t nb_vertices = mesh.facets.nb_vertices(facet);
             if (nb_vertices != 3) throw std::runtime_error("facet#nb_vertices != 3");
 
             double data[6];
@@ -113,7 +113,7 @@ namespace moist::mesh_quality
         }
     }
 
-    PURE INLINE float aspect_ratio(const geogram::Mesh& mesh, /* ugly but fine */ moist::Interface* interface = nullptr)
+    PURE INLINE float aspect_ratio(const geo::Mesh& mesh, /* ugly but fine */ moist::Interface* interface = nullptr)
     {
         float aspect_ratio = 0.0f;
         float max = -std::numeric_limits<double>::max();
@@ -145,7 +145,7 @@ namespace moist::mesh_quality
         return aspect_ratio / static_cast<float>(nb_cells);
     }
 
-    PURE INLINE float mean_ratio(const geogram::Mesh& mesh, moist::Interface* interface = nullptr)
+    PURE INLINE float mean_ratio(const geo::Mesh& mesh, moist::Interface* interface = nullptr)
     {
         float mean_ratio = 0.0f;
         size_t nb_cells = 0;
@@ -172,12 +172,12 @@ namespace moist::mesh_quality
      * @param mesh
      * @return float
      */
-    PURE INLINE float skewness(const geogram::Mesh& mesh)
+    PURE INLINE float skewness(const geo::Mesh& mesh)
     {
         return 0.0f;
     }
 
-    inline void compute(moist::metrics::MeshQuality& metrics, const geogram::Mesh& mesh)
+    inline void compute(moist::metrics::MeshQuality& metrics, const geo::Mesh& mesh)
     {
         metrics.aspect_ratio = aspect_ratio(mesh);
         metrics.mean_ratio = mean_ratio(mesh);
@@ -188,7 +188,7 @@ namespace moist::mesh_quality
         metrics.nb_cells = mesh.cells.nb();
     }
 
-    inline void compute(moist::metrics::MeshQuality& metrics, const geogram::Mesh& mesh, moist::Interface& interface)
+    inline void compute(moist::metrics::MeshQuality& metrics, const geo::Mesh& mesh, moist::Interface& interface)
     {
         metrics.aspect_ratio = aspect_ratio(mesh, &interface);
         metrics.mean_ratio = mean_ratio(mesh, &interface);

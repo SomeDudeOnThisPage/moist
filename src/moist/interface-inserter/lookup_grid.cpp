@@ -4,7 +4,12 @@ moist::LookupGrid::LookupGrid(const vec2 grid_size, const vec2 cell_size) : _gri
 {
 }
 
-void moist::LookupGrid::GetGridCells(const geogram::Box2d &aabb, std::vector<g_index> &cells)
+static void get_interface_aabb()
+{
+
+}
+
+void moist::LookupGrid::GetGridCells(const GEO::Box2d &aabb, std::vector<g_index> &cells)
 {
     vec2 min = {aabb.xy_min[0], aabb.xy_min[1]};
     vec2 max = {aabb.xy_max[0], aabb.xy_max[1]};
@@ -26,16 +31,16 @@ void moist::LookupGrid::GetGridCells(const geogram::Box2d &aabb, std::vector<g_i
     }
 }
 
-void moist::LookupGrid::Insert(const g_index c, const geogram::Mesh &mesh)
+void moist::LookupGrid::Insert(const g_index c, const GEO::Mesh &mesh)
 {
-
+    mesh.cells.points(c);
 }
 
-void moist::LookupGrid::Erase(const g_index c, const geogram::Mesh &mesh)
+void moist::LookupGrid::Erase(const g_index c, const GEO::Mesh &mesh)
 {
 }
 
 std::vector<g_index> &moist::LookupGrid::GetGridCell(const g_index &index)
 {
-    return _cells.at(index);
+    //return _cells.at(index);
 }

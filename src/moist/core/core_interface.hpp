@@ -24,7 +24,7 @@ namespace moist
         double extent;
         /** @brief Defines an "envelope" in which vertices will be snapped onto the interface plane. */
         double epsilon;
-    } AxisAlignedInterfacePlane;
+    } AxisAlignedPlane;
 
     class Interface
     {
@@ -37,7 +37,7 @@ namespace moist
          * @param mesh Filesystem path to the (two-dimensional) mesh file (.geogram|.obj|.msh).
          * @param plane Plane to project the interface onto. Any local operations will use the plane as a reference.
          */
-        Interface(const std::filesystem::path mesh, const AxisAlignedInterfacePlane plane);
+        Interface(const std::filesystem::path mesh, const AxisAlignedPlane plane);
 
         Interface(const std::filesystem::path mesh);
 
@@ -51,22 +51,22 @@ namespace moist
          *
          * @return std::shared_ptr<geogram::Mesh> The interface-triangulation.
          */
-        std::shared_ptr<geogram::Mesh> Triangulation();
+        std::shared_ptr<geo::Mesh> Triangulation();
 
         /**
          * @brief Returns a pointer to the contained plane.
          *
          * @return std::shared_ptr<AxisAlignedInterfacePlane> The plane.
          */
-        std::shared_ptr<AxisAlignedInterfacePlane> Plane();
+        std::shared_ptr<AxisAlignedPlane> Plane();
 
     protected:
         Interface() = default;
-        AxisAlignedInterfacePlane ReadMetadata() const;
+        AxisAlignedPlane ReadMetadata() const;
         void WriteMetadata();
 
-        std::shared_ptr<geogram::Mesh> _triangulation;
-        std::shared_ptr<AxisAlignedInterfacePlane> _plane;
+        std::shared_ptr<geo::Mesh> _triangulation;
+        std::shared_ptr<AxisAlignedPlane> _plane;
     };
 }
 

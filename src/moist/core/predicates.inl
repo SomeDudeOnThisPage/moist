@@ -39,7 +39,7 @@ namespace moist::predicates
      * @param p3
      * @return Sign
      */
-    PURE INLINE geogram::Sign orient3d(const vec3& a, const vec3& b, const vec3& c, const vec3& d)
+    PURE INLINE geo::Sign orient3d(const vec3& a, const vec3& b, const vec3& c, const vec3& d)
     {
         double abx = round16(b[0] - a[0]);
         double aby = round16(b[1] - a[1]);
@@ -60,15 +60,15 @@ namespace moist::predicates
 
         if (std::abs(volume) < 1e-10) // That's right fellas, we're doing epsilon shenanigans again...
         {
-            return geogram::Sign::ZERO;
+            return geo::Sign::ZERO;
         }
 
         return (volume > 0)
-            ? geogram::Sign::POSITIVE
-            : geogram::Sign::NEGATIVE;
+            ? geo::Sign::POSITIVE
+            : geo::Sign::NEGATIVE;
     }
 
-    PURE INLINE bool facet_matches_cell(const g_index cell, const g_index facet, const geogram::Mesh& mesh, const geogram::Mesh& interface)
+    PURE INLINE bool facet_matches_cell(const g_index cell, const g_index facet, const geo::Mesh& mesh, const geo::Mesh& interface)
     {
         vec3 f0 = interface.vertices.point(interface.facets.vertex(facet, 0));
         vec3 f1 = interface.vertices.point(interface.facets.vertex(facet, 1));
@@ -88,7 +88,7 @@ namespace moist::predicates
         return matches >= 3;
     }
 
-    PURE INLINE bool vec_eq_2d(const geogram::vec3 &v0, const geogram::vec3 &v1, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool vec_eq_2d(const geo::vec3 &v0, const geo::vec3 &v1, const moist::AxisAlignedPlane& plane)
     {
         // TODO [Axis-Support]: Add support for all axis.
         switch (plane.axis)
@@ -104,9 +104,9 @@ namespace moist::predicates
         return false;
     }
 
-    PURE INLINE bool is_interface_cell(const g_index c, const geogram::Mesh& mesh)
+    PURE INLINE bool is_interface_cell(const g_index c, const geo::Mesh& mesh)
     {
-        const geogram::Attribute<bool> v_interface = geogram::Attribute<bool>(mesh.vertices.attributes(), "v_interface");
+        const geo::Attribute<bool> v_interface = geo::Attribute<bool>(mesh.vertices.attributes(), "v_interface");
         return (
             v_interface[mesh.cells.vertex(c, 0)] ||
             v_interface[mesh.cells.vertex(c, 1)] ||
@@ -115,7 +115,7 @@ namespace moist::predicates
         );
     }
 
-    PURE INLINE bool point_on_plane(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool point_on_plane(const geo::vec3& point, const moist::AxisAlignedPlane& plane)
     {
         // TODO [Axis-Support]: Add support for all axis.
         switch (plane.axis)
@@ -131,12 +131,12 @@ namespace moist::predicates
         return false;
     }
 
-    PURE INLINE bool edge_on_plane(const geogram::vec3& p0, const geogram::vec3& p1, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool edge_on_plane(const geo::vec3& p0, const geo::vec3& p1, const moist::AxisAlignedPlane& plane)
     {
         return point_on_plane(p0, plane) && point_on_plane(p1, plane);
     }
 
-    PURE INLINE bool facet_on_plane(const geogram::index_t facet, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool facet_on_plane(const geo::index_t facet, const geo::Mesh& mesh, const moist::AxisAlignedPlane& plane)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 3
@@ -153,7 +153,23 @@ namespace moist::predicates
         return true;
     }
 
-    PURE INLINE bool cell_on_plane(const geogram::index_t cell, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool cell_full_facet_on_plane(const geo::index_t cell, const geo::Mesh& mesh, const moist::AxisAlignedPlane& plane)
+    {
+        uint32_t num_vertices_on_plane = 0;
+
+        #pragma unroll 4
+        for (geo::index_t lv = 0; lv < /* mesh.cells.nb_vertices(cell) */ 4; lv++)
+        {
+            if (point_on_plane(mesh.vertices.point(mesh.cells.vertex(cell, lv)), plane))
+            {
+                num_vertices_on_plane++;
+            }
+        }
+
+        return num_vertices_on_plane == 3;
+    }
+
+    PURE INLINE bool cell_on_plane(const geo::index_t cell, const geo::Mesh& mesh, const moist::AxisAlignedPlane& plane)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -169,9 +185,9 @@ namespace moist::predicates
         return false;
     }
 
-    PURE INLINE bool cell_facet_on_plane(const geogram::index_t cell, const geogram::index_t lf, const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE bool cell_facet_on_plane(const geo::index_t cell, const geo::index_t lf, const geo::Mesh& mesh, const moist::AxisAlignedPlane& plane)
     {
-        for (geogram::index_t lv = 0; lv < /*mesh.cells.facet_nb_vertices(cell, lf)*/ 3; lv++)
+        for (geo::index_t lv = 0; lv < /*mesh.cells.facet_nb_vertices(cell, lf)*/ 3; lv++)
         {
             const auto point = mesh.vertices.point(mesh.cells.facet_vertex(cell, lf, lv));
             if (!point_on_plane(point, plane))
@@ -183,7 +199,7 @@ namespace moist::predicates
         return true;
     }
 
-    PURE INLINE bool point_of_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p)
+    PURE INLINE bool point_of_tet(const geo::Mesh& mesh, const geo::index_t t, const geo::vec3& p)
     {
         const vec3 p0 = mesh.vertices.point(mesh.cells.vertex(t, 0));
         const vec3 p1 = mesh.vertices.point(mesh.cells.vertex(t, 1));
@@ -203,14 +219,14 @@ namespace moist::predicates
     };
 
     // Source: geogram/mesh/mesh_AABB.cpp#175
-    PURE INLINE PointInTet point_in_tet(const geogram::Mesh& mesh, const geogram::index_t t, const geogram::vec3& p, bool exclude_existing_points = false)
+    PURE INLINE PointInTet point_in_tet(const geo::Mesh& mesh, const geo::index_t t, const geo::vec3& p, bool exclude_existing_points = false)
     {
         const auto p0 = mesh.vertices.point(mesh.cells.vertex(t, 0));
         const auto p1 = mesh.vertices.point(mesh.cells.vertex(t, 1));
         const auto p2 = mesh.vertices.point(mesh.cells.vertex(t, 2));
         const auto p3 = mesh.vertices.point(mesh.cells.vertex(t, 3));
 
-        geogram::Sign s[4];
+        geo::Sign s[4];
         s[0] = moist::predicates::orient3d(p, p1, p2, p3);
         s[1] = moist::predicates::orient3d(p0, p, p2, p3);
         s[2] = moist::predicates::orient3d(p0, p1, p, p3);
@@ -258,22 +274,22 @@ namespace moist::predicates
 
     namespace xy
     {
-        PURE INLINE bool check_lines_aabb(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
+        PURE INLINE bool check_lines_aabb(const geo::vec2& p0, const geo::vec2& p1, const geo::vec2& p2, const geo::vec2& p3)
         {
             return (std::min(p0.x, p1.x) < std::max(p2.x, p3.x)) && (std::max(p0.x, p1.x) > std::min(p2.x, p3.x))
                 && (std::min(p0.y, p1.y) < std::max(p2.y, p3.y)) && (std::max(p0.y, p1.y) > std::min(p2.y, p3.y));
         }
 
-        PURE INLINE bool point_in_facet(const geogram::vec2& point, const g_index facet, const geogram::Mesh& triangulation)
+        PURE INLINE bool point_in_facet(const geo::vec2& point, const g_index facet, const geo::Mesh& triangulation)
         {
-            const auto p0 = reinterpret_cast<const geogram::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 0)));
-            const auto p1 = reinterpret_cast<const geogram::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 1)));
-            const auto p2 = reinterpret_cast<const geogram::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 2)));
+            const auto p0 = reinterpret_cast<const geo::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 0)));
+            const auto p1 = reinterpret_cast<const geo::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 1)));
+            const auto p2 = reinterpret_cast<const geo::vec2&>(triangulation.vertices.point(triangulation.facets.vertex(facet, 2)));
 
-            geogram::Sign s[3];
-            s[0] = geogram::PCK::orient_2d(p0, p1, point);
-            s[1] = geogram::PCK::orient_2d(p1, p2, point);
-            s[2] = geogram::PCK::orient_2d(p2, p0, point);
+            geo::Sign s[3];
+            s[0] = geo::PCK::orient_2d(p0, p1, point);
+            s[1] = geo::PCK::orient_2d(p1, p2, point);
+            s[2] = geo::PCK::orient_2d(p2, p0, point);
 
             return (
                 (s[0] >= 0 && s[1] >= 0 && s[2] >= 0) ||
@@ -281,7 +297,7 @@ namespace moist::predicates
             );
         }
 
-        PURE /* INLINE */ inline std::optional<geogram::vec2> get_line_intersection(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3, const double rnd = 1e12)
+        PURE /* INLINE */ inline std::optional<geo::vec2> get_line_intersection(const geo::vec2& p0, const geo::vec2& p1, const geo::vec2& p2, const geo::vec2& p3, const double rnd = 1e12)
         {
             // prevent line from cutting itself by checking if a point of the line is also a point checked...
             if (p0 == p2 || p1 == p3 || p0 == p3 || p1 == p2)
@@ -289,11 +305,11 @@ namespace moist::predicates
                 return std::nullopt;
             }
 
-            geogram::Sign s[4];
-            s[0] = geogram::PCK::orient_2d(p0, p1, p2);
-            s[1] = geogram::PCK::orient_2d(p0, p1, p3);
-            s[2] = geogram::PCK::orient_2d(p2, p3, p0);
-            s[3] = geogram::PCK::orient_2d(p2, p3, p1);
+            geo::Sign s[4];
+            s[0] = geo::PCK::orient_2d(p0, p1, p2);
+            s[1] = geo::PCK::orient_2d(p0, p1, p3);
+            s[2] = geo::PCK::orient_2d(p2, p3, p0);
+            s[3] = geo::PCK::orient_2d(p2, p3, p1);
 
             if (s[0] != s[1] && s[2] != s[3])
             {
@@ -318,13 +334,13 @@ namespace moist::predicates
         }
     }
 
-    PURE INLINE bool lines_intersect(const geogram::vec2& p0, const geogram::vec2& p1, const geogram::vec2& p2, const geogram::vec2& p3)
+    PURE INLINE bool lines_intersect(const geo::vec2& p0, const geo::vec2& p1, const geo::vec2& p2, const geo::vec2& p3)
     {
-        geogram::Sign s[4];
-        s[0] = geogram::PCK::orient_2d(p0, p1, p2);
-        s[1] = geogram::PCK::orient_2d(p0, p1, p3);
-        s[2] = geogram::PCK::orient_2d(p2, p3, p0);
-        s[3] = geogram::PCK::orient_2d(p2, p3, p1);
+        geo::Sign s[4];
+        s[0] = geo::PCK::orient_2d(p0, p1, p2);
+        s[1] = geo::PCK::orient_2d(p0, p1, p3);
+        s[2] = geo::PCK::orient_2d(p2, p3, p0);
+        s[3] = geo::PCK::orient_2d(p2, p3, p1);
 
         if (s[0] != s[1] && s[2] != s[3])
         {

@@ -27,20 +27,20 @@ struct MshMoistMetadata
 };
 
 // modified from geogram meshio
-void moist::slice_io::msh::save(const std::filesystem::path file, const geogram::Mesh& slice, const geogram::MeshIOFlags ioflags)
+void moist::slice_io::msh::save(const std::filesystem::path file, const geo::Mesh& slice, const geo::MeshIOFlags ioflags)
 {
-    const geogram::index_t id_offset_msh = 1;
-    const geogram::index_t msh2geo_hex[8] = {1, 3, 7, 5, 0, 2, 6, 4 };
-    const geogram::index_t msh2geo_def[8] = {0, 1, 2, 3, 4, 5, 6, 7 };
-    const geogram::index_t celltype_geo2msh[5] = {4, 5, 6, 7};
+    const geo::index_t id_offset_msh = 1;
+    const geo::index_t msh2geo_hex[8] = {1, 3, 7, 5, 0, 2, 6, 4 };
+    const geo::index_t msh2geo_def[8] = {0, 1, 2, 3, 4, 5, 6, 7 };
+    const geo::index_t celltype_geo2msh[5] = {4, 5, 6, 7};
 
-    geogram::Mesh M(slice.vertices.dimension());
+    geo::Mesh M(slice.vertices.dimension());
     M.copy(slice, true);
 
     M.vertices.remove_isolated();
 
-    geogram::Attribute<int> region;
-    geogram::Attribute<int> bdr_region;
+    geo::Attribute<int> region;
+    geo::Attribute<int> bdr_region;
     if (M.cells.attributes().is_defined("region"))
     {
         region.bind(M.cells.attributes(), "region");
@@ -71,7 +71,7 @@ void moist::slice_io::msh::save(const std::filesystem::path file, const geogram:
     /* Vertices */
     out << "$Nodes" << std::endl ;
     out << M.vertices.nb() << std::endl ;
-    for(geogram::index_t v = 0; v < M.vertices.nb(); v++)
+    for(geo::index_t v = 0; v < M.vertices.nb(); v++)
     {
         out << v + id_offset_msh << " "
             << M.vertices.point_ptr(v)[0] << " "
@@ -81,38 +81,38 @@ void moist::slice_io::msh::save(const std::filesystem::path file, const geogram:
     out << "$EndNodes" << std::endl ;
 
     /* Elements */
-    geogram::index_t nb_tet = 0;
-    geogram::index_t nb_hex = 0;
-    geogram::index_t nb_pyr = 0;
-    geogram::index_t nb_pri = 0;
-    for(geogram::index_t c = 0; c != M.cells.nb(); ++c)
+    geo::index_t nb_tet = 0;
+    geo::index_t nb_hex = 0;
+    geo::index_t nb_pyr = 0;
+    geo::index_t nb_pri = 0;
+    for(geo::index_t c = 0; c != M.cells.nb(); ++c)
     {
-        if(M.cells.type(c) == GEO::MESH_TET)
+        if(M.cells.type(c) == geo::MESH_TET)
         {
             ++nb_tet;
         }
-        else if(M.cells.type(c) == GEO::MESH_HEX)
+        else if(M.cells.type(c) == geo::MESH_HEX)
         {
             ++nb_hex;
         }
-        else if(M.cells.type(c) == GEO::MESH_PYRAMID)
+        else if(M.cells.type(c) == geo::MESH_PYRAMID)
         {
             ++nb_pyr;
         }
-        else if(M.cells.type(c) == GEO::MESH_PRISM)
+        else if(M.cells.type(c) == geo::MESH_PRISM)
         {
             ++nb_pri;
         }
     }
-    geogram::index_t nb_elt = nb_tet + nb_hex + nb_pyr + nb_pri;
-    if (ioflags.has_element(geogram::MeshElementsFlags::MESH_FACETS)) nb_elt += M.facets.nb();
+    geo::index_t nb_elt = nb_tet + nb_hex + nb_pyr + nb_pri;
+    if (ioflags.has_element(geo::MeshElementsFlags::MESH_FACETS)) nb_elt += M.facets.nb();
 
     out << "$Elements" << std::endl ;
     out << nb_elt << std::endl ;
-    geogram::index_t elt_id = 0; /* starts at 1, common for faces and cells */
-    if (ioflags.has_element(geogram::MeshElementsFlags::MESH_FACETS))
+    geo::index_t elt_id = 0; /* starts at 1, common for faces and cells */
+    if (ioflags.has_element(geo::MeshElementsFlags::MESH_FACETS))
     {
-        for (geogram::index_t f = 0; f < M.facets.nb(); ++f)
+        for (geo::index_t f = 0; f < M.facets.nb(); ++f)
         {
             int attr_value = 0;
             if (bdr_region.is_bound())
@@ -134,23 +134,23 @@ void moist::slice_io::msh::save(const std::filesystem::path file, const geogram:
             elt_id += 1;
             out << elt_id << " " << type << " " << "2" << " "
                 << attr_value << " " << attr_value << " ";
-            for (geogram::index_t li = 0; li < M.facets.nb_vertices(f); ++li)
+            for (geo::index_t li = 0; li < M.facets.nb_vertices(f); ++li)
             {
                 out << M.facets.vertex(f, li) + id_offset_msh << " ";
             }
             out << std::endl;
         }
     }
-    for (geogram::index_t c = 0; c < M.cells.nb(); ++c)
+    for (geo::index_t c = 0; c < M.cells.nb(); ++c)
     {
-        if (M.cells.type(c) == GEO::MESH_CONNECTOR)
+        if (M.cells.type(c) == geo::MESH_CONNECTOR)
         {
             continue;
         }
         int attr_value = 0;
         if (region.is_bound()) attr_value = region[c];
-        const geogram::index_t* msh2geo =
-            (M.cells.type(c) == GEO::MESH_HEX) ?
+        const geo::index_t* msh2geo =
+            (M.cells.type(c) == geo::MESH_HEX) ?
             msh2geo_hex : msh2geo_def;
         elt_id += 1;
 
@@ -160,7 +160,7 @@ void moist::slice_io::msh::save(const std::filesystem::path file, const geogram:
             */
         out << elt_id << " " << celltype_geo2msh[M.cells.type(c)]
             << " " << "1" << " " << attr_value << " ";
-        for (geogram::index_t li = 0; li < M.cells.nb_vertices(c); ++li)
+        for (geo::index_t li = 0; li < M.cells.nb_vertices(c); ++li)
         {
             out << M.cells.vertex(c, msh2geo[li]) + id_offset_msh
                 << " ";

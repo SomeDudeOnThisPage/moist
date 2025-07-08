@@ -1,12 +1,18 @@
 #ifndef MOIST_INTERFACE_INSERTER_INTERFACE_INSERTER_HPP_
 #define MOIST_INTERFACE_INSERTER_INTERFACE_INSERTER_HPP_
 
-#include <geogram/api/defs.h>
+#include <geogram/mesh/mesh.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/core_interface.hpp"
+#include "moist/core/metrics.hpp"
+
+#include "slice.hpp"
 
 namespace moist
 {
+    bool insert_constraints(moist::MeshSlice& a, moist::MeshSlice& b, moist::Interface& interface, moist::metrics::Metrics_ptr metrics);
+
     struct CrossedEdge
     {
         g_index e_v0;
@@ -30,6 +36,7 @@ namespace moist
     } CreatedTetrahedon;
 }
 
+
 namespace std
 {
     template <>
@@ -37,7 +44,7 @@ namespace std
     {
         std::size_t operator()(const moist::CrossedEdge& edge) const
         {
-            return std::hash<geogram::index_t>()(std::min(edge.e_v0, edge.e_v1)) ^ (std::hash<geogram::index_t>()(std::max(edge.e_v0, edge.e_v1)) << 1);
+            return std::hash<geo::index_t>()(std::min(edge.e_v0, edge.e_v1)) ^ (std::hash<geo::index_t>()(std::max(edge.e_v0, edge.e_v1)) << 1);
         }
     };
 }

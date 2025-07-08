@@ -36,7 +36,7 @@ moist::SurfaceGenerator::SurfaceGenerator(const Tiff &tiff, const uint32_t offse
     }
 }
 
-void moist::SurfaceGenerator::Generate(geogram::Mesh &mesh, const float isovalue)
+void moist::SurfaceGenerator::Generate(GEO::Mesh &mesh, const float isovalue)
 {
     if (mesh.vertices.dimension() != 3)
     {
@@ -50,7 +50,7 @@ void moist::SurfaceGenerator::Generate(geogram::Mesh &mesh, const float isovalue
 
     _mc.calculate_isosurface(_surface, isovalue);
 
-    geogram::vector<double> vertices(_surface.get_num_vertices() * 3);
+    GEO::vector<double> vertices(_surface.get_num_vertices() * 3);
     const float c_offset_x = (_center) ? static_cast<float>(_width)  / 2.0f : 0.0f;
     const float c_offset_y = (_center) ? static_cast<float>(_height) / 2.0f : 0.0f;
     const float c_offset_z = (_center) ? static_cast<float>(_depth)  / 2.0f : 0.0f;
@@ -64,7 +64,7 @@ void moist::SurfaceGenerator::Generate(geogram::Mesh &mesh, const float isovalue
         vertices[3 * v + 2] = vertex[2] - c_offset_z + ((_axis == moist::Axis::Z) ? _offset : 0);
     }
 
-    geogram::vector<geogram::index_t> triangles(_surface.get_num_triangles() * 3);
+    GEO::vector<GEO::index_t> triangles(_surface.get_num_triangles() * 3);
     for(g_index t = 0; t < _surface.get_num_triangles(); t++)
     {
         const auto triangle = _surface.getTriangle(t);
@@ -73,5 +73,5 @@ void moist::SurfaceGenerator::Generate(geogram::Mesh &mesh, const float isovalue
         triangles[3 * t + 2] = triangle[2];
     }
 
-    mesh.facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
+    mesh.facets.assign_triangle_mesh((GEO::coord_index_t) 3, vertices, triangles, true);
 }

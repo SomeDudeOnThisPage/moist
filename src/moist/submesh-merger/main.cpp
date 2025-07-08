@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    moist::utils::geo::initialize();
+    moist::utils::geogram::initialize();
 
     // TODO: Insert Steiner Points of Slices into each other...
     //geogram::Mesh slice;

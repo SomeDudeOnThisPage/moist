@@ -13,7 +13,7 @@ namespace moist::slice_io
 {
     namespace msh
     {
-        void save(const std::filesystem::path file, const geogram::Mesh& slice, const geogram::MeshIOFlags ioflags);
+        void save(const std::filesystem::path file, const GEO::Mesh& slice, const GEO::MeshIOFlags ioflags);
     }
 }
 

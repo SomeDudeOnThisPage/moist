@@ -23,17 +23,17 @@ namespace moist
          * @param aabb
          * @param cells
          */
-        void GetGridCells(const geogram::Box2d &aabb, std::vector<g_index>& cells);
+        void GetGridCells(const GEO::Box2d &aabb, std::vector<g_index>& cells);
 
-        void Insert(const g_index c, const geogram::Mesh& mesh);
-        void Erase(const g_index c, const geogram::Mesh& mesh);
+        void Insert(const g_index c, const GEO::Mesh& mesh);
+        void Erase(const g_index c, const GEO::Mesh& mesh);
 
         std::vector<g_index>& GetGridCell(const g_index& index);
     private:
         vec2 _grid_size;
         vec2 _cell_size;
 
-        std::vector<std::vector<g_index>> _cells;
+        std::vector<std::unordered_set<g_index>> _cells;
     };
 }
 

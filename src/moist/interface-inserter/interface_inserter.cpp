@@ -1,44 +1,13 @@
-#include <filesystem>
-#include <algorithm>
-#include <regex>
-#include <unordered_set>
-#include <map>
-
-#include <CLI/CLI.hpp>
-#include <geogram/mesh/mesh.h>
-#include <geogram/mesh/mesh_io.h>
-#include <geogram/mesh/mesh_geometry.h>
-#include <geogram/mesh/mesh_repair.h>
-#include <geogram/mesh/mesh_AABB.h>
-#include <geogram/numerics/predicates.h>
-
-#include <iostream>
-
-#include "moist/core/defines.hpp"
-#include "moist/core/timer.hpp"
-#include "moist/core/core_interface.hpp"
-#include "moist/core/utils.hpp"
-#include "moist/core/attributes.inl"
-#include "moist/core/predicates.inl"
-#include "moist/core/metrics.hpp"
-#include "moist/core/mesh_quality.inl"
-
 #include "interface_inserter.hpp"
-#include "slice.hpp"
 
-struct Arguments
-{
-    std::filesystem::path input_a;
-    std::filesystem::path input_b;
+#include <unordered_map>
+#include <unordered_set>
 
-    std::filesystem::path interface;
-    std::filesystem::path output_a;
-    std::filesystem::path output_b;
+#include <geogram/mesh/mesh_repair.h>
 
-    double plane;
-    double envelope_size;
-    moist::Axis axis;
-};
+#include "moist/core/mesh_quality.inl"
+#include "moist/core/timer.hpp"
+#include "moist/core/utils.hpp"
 
 static geo::index_t find_vertex_by_point(const vec3& p, const geo::Mesh& mesh)
 {
@@ -157,103 +126,72 @@ static void merge_edge_meshes(const geo::Mesh& a, const geo::Mesh& b, geo::Mesh&
     }
 }
 
-int main(int argc, char* argv[])
+void moist::insert_constraints(moist::MeshSlice& a, moist::MeshSlice& b, moist::Interface& interface, moist::metrics::Metrics_ptr metrics)
 {
-    Arguments arguments{};
-    cli::App app{argv[0]};
+    moist::Timer timer("InterfaceInserter::InsertInterfaceConstraints", metrics);
 
-    app.add_option("-a, --mesh-a", arguments.input_a, "Mesh A (.msh) file")
-        ->required()
-        ->check(cli::ExistingFile);
-    app.add_option("-b, --mesh-b", arguments.input_b, "Mesh A (.msh) file")
-        ->required()
-        ->check(cli::ExistingFile);
-    app.add_option("-i, --interface", arguments.interface, "Interface mesh (.geogram) file")
-        ->required()
-        ->check(cli::ExistingFile);
-    app.add_option("--output-a", arguments.output_a, "Output Triangulation A (.msh) file")
-        ->required();
-    app.add_option("--output-b", arguments.output_b, "Output Triangulation B (.msh) file")
-        ->required();
-
-    CLI11_PARSE(app, argc, app.ensure_utf8(argv));
-
-    auto metrics = moist::metrics::Metrics("InterfaceInserter");
-    moist::Timer timer("InterfaceInserter::Main", metrics);
-
-    moist::utils::geogram::initialize();
-
-    auto interface = moist::Interface(arguments.interface);
-
-    // log general run information
-    *metrics << moist::metrics::Metric {"interface::extent", interface.Plane()->extent}
-             << moist::metrics::Metric {"interface::epsilon", interface.Plane()->epsilon}
-             << moist::metrics::Metric {"mesh::A", arguments.input_a}
-             << moist::metrics::Metric {"mesh::B", arguments.input_b}
-             ;
-
+    // Quality metrics for meshes at different points in time during the algorithm.
     moist::metrics::MeshQuality quality_before_a{"A::before"};
     moist::metrics::MeshQuality quality_after_a{"A::after"};
     moist::metrics::MeshQuality quality_interface_before_a{"A::interface::before"};
     moist::metrics::MeshQuality quality_interface_after_a{"A::interface::after"};
+
     moist::metrics::MeshQuality quality_before_b{"B::before"};
     moist::metrics::MeshQuality quality_after_b{"B::after"};
     moist::metrics::MeshQuality quality_interface_before_b{"B::interface::before"};
     moist::metrics::MeshQuality quality_interface_after_b{"B::interface::after"};
 
-    moist::MeshSlice slice_a, slice_b;
-    moist::utils::geogram::load(arguments.input_a, slice_a, 3, false);
-    moist::utils::geogram::load(arguments.input_b, slice_b, 3, false);
 
-    moist::insert_constraints(slice_a, slice_b, interface, metrics);
+    moist::mesh_quality::compute(quality_before_a, a);
+    moist::mesh_quality::compute(quality_before_b, b);
+    moist::mesh_quality::compute(quality_interface_before_a, a, interface);
+    moist::mesh_quality::compute(quality_interface_before_b, b, interface);
 
-    // First insertion...
-    /*{
-        // log mesh a metrics...
-        *metrics << moist::metrics::Metric {"mesh::A::before::nb_vertices", slice_a.vertices.nb()};
-        moist::Timer _scope_timer("A::MeshSlice::InsertInterface", metrics);
-        //auto sps = slice_a.InsertInterface(interface, metrics);
-        //steiner_points.insert(sps.begin(), sps.end());
-        slice_a.InsertEdges(*interface.Triangulation(), *interface.Plane());
-    }
+    geo::Mesh nde_a, nde_b, nde_ab;
+    a.InsertEdges(*interface.Triangulation(), *interface.Plane());
+    b.InsertEdges(*interface.Triangulation(), *interface.Plane());
 
+    geo::mesh_repair(a);
+    geo::mesh_repair(b);
+
+    a.GetFixedGeometry(nde_a);
+    b.GetFixedGeometry(nde_b);
+
+    size_t iterations = 0;
+    if (nde_a.vertices.nb() > 0 || nde_b.vertices.nb() > 0)
     {
-        *metrics << moist::metrics::Metric {"mesh::B::before::nb_vertices", slice_a.vertices.nb()};
-        moist::Timer _scope_timer("B::MeshSlice::InsertInterface", metrics);
-        //auto sps = slice_b.InsertInterface(interface, metrics);
-        //steiner_points.insert(sps.begin(), sps.end());
-        slice_b.InsertEdges(*interface.Triangulation(), *interface.Plane());
+        do
+        {
+            iterations++;
+            OOC_DEBUG("inserting " << (nde_a.edges.nb() + nde_b.edges.nb()) << " non-decimatable edges into both meshes (iteration #" << iterations << ")");
+
+            merge_edge_meshes(nde_a, nde_b, nde_ab);
+        #ifndef NDEBUG
+            moist::utils::geogram::save("merged_steiner_edges.obj", nde_ab);
+        #endif // NDEBUG
+
+            a.InsertEdges(nde_ab, *interface.Plane());
+            b.InsertEdges(nde_ab, *interface.Plane());
+
+            geo::mesh_repair(a);
+            geo::mesh_repair(b);
+
+            nde_a.clear(false, false);
+            nde_b.clear(false, false);
+            nde_ab.clear(false, false);
+
+            a.GetFixedGeometry(nde_a);
+            b.GetFixedGeometry(nde_b);
+        }
+        while (nde_a.vertices.nb() > 0 || nde_b.vertices.nb() > 0);
     }
 
-    geo::mesh_repair(slice_a);
-    geo::mesh_repair(slice_b);
+    moist::mesh_quality::compute(quality_after_a, a);
+    moist::mesh_quality::compute(quality_after_b, b);
+    moist::mesh_quality::compute(quality_interface_after_a, a, interface);
+    moist::mesh_quality::compute(quality_interface_after_b, b, interface);
 
-    geo::Mesh steiner_a;
-    geo::Mesh steiner_b;
-    slice_a.GetFixedGeometry(steiner_a);
-    slice_b.GetFixedGeometry(steiner_b);
-
-    geo::Mesh edge_constraints;
-    merge_edge_meshes(steiner_a, steiner_b, edge_constraints);
-    moist::utils::geogram::save("merged_steiner_edges.obj", edge_constraints);
-
-    slice_a.InsertEdges(edge_constraints, *interface.Plane());
-    slice_b.InsertEdges(edge_constraints, *interface.Plane());
-
-    *metrics << moist::metrics::Metric {"A::after::nb_vertices", slice_a.vertices.nb()}
-             << moist::metrics::Metric {"B::before::nb_vertices", slice_b.vertices.nb()};
-
-    slice_a.FlushTetrahedra(false);
-    slice_b.FlushTetrahedra(false);
-
-    moist::mesh_quality::compute(quality_after_a, slice_a);
-    moist::mesh_quality::compute(quality_after_b, slice_b);
-    moist::mesh_quality::compute(quality_interface_after_a, slice_a, interface);
-    moist::mesh_quality::compute(quality_interface_after_b, slice_b, interface);
-
-    *metrics << moist::metrics::Metric {"A::steiner::nb_vertices", slice_a.vertices.nb()}
-             << moist::metrics::Metric {"B::steiner::nb_vertices", slice_b.vertices.nb()};
-
+    *metrics << moist::metrics::Metric {"nde_insertion_iterations", iterations};
     *metrics << quality_before_a
              << quality_interface_before_a
              << quality_after_a
@@ -263,13 +201,4 @@ int main(int argc, char* argv[])
              << quality_after_b
              << quality_interface_after_b
              ;
-*/
-
-    moist::utils::geogram::save(arguments.output_a.replace_extension(".mesh"), slice_a);
-    moist::utils::geogram::save(arguments.output_b.replace_extension(".mesh"), slice_b);
-
-    moist::utils::geogram::save(arguments.interface.replace_extension(".geogram"), *interface.Triangulation());
-
-    metrics->AppendCSV("test.csv");
-    return 0;
 }

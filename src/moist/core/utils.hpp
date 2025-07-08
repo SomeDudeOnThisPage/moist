@@ -15,11 +15,13 @@
 #include <geogram/mesh/mesh_io.h>
 #endif // GEOGRAM_API
 
+#include "moist/core/defines.hpp"
+
 namespace moist::utils {
 #ifdef GEOGRAM_API
-    namespace geo
+    namespace geogram
     {
-        inline geogram::vec3 parse_vector(std::string str)
+        inline geo::vec3 parse_vector(std::string str)
         {
             double x, y, z;
             char none;
@@ -27,39 +29,39 @@ namespace moist::utils {
             std::istringstream stream(str);
             stream >> none >> x >> none >> y >> none >> z >> none;
 
-            return geogram::vec3(x, y, z);
+            return geo::vec3(x, y, z);
         }
 
         inline void initialize()
         {
-            geogram::initialize(geogram::GEOGRAM_INSTALL_NONE);
-            geogram::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
-            geogram::CmdLine::set_arg("sys:compression_level", "0");
+            geo::initialize(geo::GEOGRAM_INSTALL_NONE);
+            geo::CmdLine::import_arg_group("sys"); // needs to be called in order to be able to export .geogram meshes...
+            geo::CmdLine::set_arg("sys:compression_level", "0");
             // geogram::Logger::instance()->set_quiet(false);
         }
 
-        inline void load(const std::filesystem::path& file, geogram::Mesh& mesh, const geogram::index_t dimension = 0, const bool attributes = true)
+        inline void load(const std::filesystem::path& file, geo::Mesh& mesh, const geo::index_t dimension = 0, const bool attributes = true)
         {
-            geogram::MeshIOFlags flags;
+            geo::MeshIOFlags flags;
             flags.set_dimension(dimension != 0 ? dimension : mesh.vertices.dimension());
-            flags.set_attribute(attributes ? geogram::MESH_ALL_ATTRIBUTES : geogram::MESH_NO_ATTRIBUTES);
-            flags.set_elements(geogram::MeshElementsFlags(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS));
+            flags.set_attribute(attributes ? geo::MESH_ALL_ATTRIBUTES : geo::MESH_NO_ATTRIBUTES);
+            flags.set_elements(geo::MeshElementsFlags(geo::MeshElementsFlags::MESH_ALL_ELEMENTS));
             flags.set_verbose(true);
 
-            if (!geogram::mesh_load(file.string(), mesh, flags))
+            if (!geo::mesh_load(file.string(), mesh, flags))
             {
                 OOC_ERROR("Failed to load mesh '" << file << "'");
             }
         }
 
-        inline void save(const std::filesystem::path& file, const geogram::Mesh& mesh, bool attributes = true)
+        inline void save(const std::filesystem::path& file, const geo::Mesh& mesh, bool attributes = true)
         {
-            GEO::MeshIOFlags flags;
+            geo::MeshIOFlags flags;
             flags.set_dimension(mesh.vertices.dimension());
-            flags.set_attribute(attributes ? geogram::MESH_ALL_ATTRIBUTES : geogram::MESH_NO_ATTRIBUTES);
-            flags.set_elements(geogram::MeshElementsFlags::MESH_ALL_ELEMENTS);
+            flags.set_attribute(attributes ? geo::MESH_ALL_ATTRIBUTES : geo::MESH_NO_ATTRIBUTES);
+            flags.set_elements(geo::MeshElementsFlags::MESH_ALL_ELEMENTS);
             flags.set_verbose(true);
-            geogram::mesh_save(mesh, file.string(), flags);
+            geo::mesh_save(mesh, file.string(), flags);
         }
     }
 #endif // GEOGRAM_API

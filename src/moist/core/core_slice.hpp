@@ -10,7 +10,7 @@
 
 namespace moist
 {
-    class MeshSlice : public geogram::Mesh
+    class MeshSlice : public GEO::Mesh
     {
     public:
         /**
@@ -21,7 +21,7 @@ namespace moist
          * @param dimension The dimension of the mesh (default `3`).
          * @param single_precision If true, use `float`; otherwise, use `double` (default `false`).
          */
-        MeshSlice(geogram::index_t dimension = 3, bool single_precision = false);
+        MeshSlice(GEO::index_t dimension = 3, bool single_precision = false);
     };
 }
 

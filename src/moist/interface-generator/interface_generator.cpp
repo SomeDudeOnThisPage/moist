@@ -15,10 +15,10 @@
 #include "moist/core/mesh_quality.inl"
 #include "moist/core/utils.hpp"
 
-moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedInterfacePlane plane) : _constraints(geogram::Mesh(2, false))
+moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedPlane plane) : _constraints(geo::Mesh(2, false))
 {
-    this->_triangulation = std::make_shared<geogram::Mesh>(3);
-    this->_plane = std::make_shared<AxisAlignedInterfacePlane>(plane);
+    this->_triangulation = std::make_shared<geo::Mesh>(3);
+    this->_plane = std::make_shared<AxisAlignedPlane>(plane);
     this->_unique_vertices = 0;
     this->WriteMetadata();
 }
@@ -30,7 +30,7 @@ static double round16(double value)
     return (std::abs(value) < threshold) ? 0.0 : value;
 }
 
-void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
+void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
 {
     std::map<g_index, g_index> mesh_to_interface;
     std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map; // if we have more than 255 incident edges we have a waaaay bigger problem anyway...
@@ -67,6 +67,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
         }
     }
 
+#ifndef NDEBUG
     for (const g_index v0 : this->_constraints.vertices)
     {
         const auto p0 =_constraints.vertices.point_ptr(v0);
@@ -86,12 +87,39 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
 
         }
     }
+#endif // NDEBUG
 
-    for (const g_index f : mesh.facets)
+    for (const geo::index_t c : mesh.cells)
+    {
+        if (!predicates::cell_full_facet_on_plane(c, mesh, *_plane))
+        {
+            continue;
+        }
+
+        for (geo::index_t le = 0; le < mesh.cells.nb_edges(c); le++)
+        {
+            geo::index_t v1 = mesh.cells.edge_vertex(c, le, 0);
+            geo::index_t v2 = mesh.cells.edge_vertex(c, le, 1);
+
+            if (!moist::predicates::edge_on_plane(mesh.vertices.point(v1), mesh.vertices.point(v2), *_plane))
+            {
+                continue;
+            }
+
+            if (v1 > v2)
+            {
+                std::swap(v1, v2);
+            }
+
+            edge_count_map[{v1, v2}]++;
+        }
+    }
+
+    /*for (const g_index f : mesh.facets)
     {
         if (predicates::facet_on_plane(f, mesh, *this->_plane))
         {
-            const geogram::index_t nb_local_vertices = mesh.facets.nb_vertices(f);
+            const geo::index_t nb_local_vertices = mesh.facets.nb_vertices(f);
             for (l_index v = 0; v < nb_local_vertices; v++)
             {
                 g_index v1 = mesh.facets.vertex(f, v);
@@ -107,7 +135,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
                 }
             }
         }
-    }
+    }*/
 
     //if (this->_constraints.edges.nb() != 0)
     //{
@@ -138,6 +166,11 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
                     const vec2 cp0 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.first]));
                     const vec2 cp1 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.second]));
 
+                    if (p0 == cp0 || p0 == cp1 || p1 == cp0 || p1 == cp1)
+                    {
+                        continue;
+                    }
+
                     const auto intersection = moist::predicates::xy::get_line_intersection(p0, p1, cp0, cp1, 1e16);
 
                     if (intersection != std::nullopt)
@@ -146,14 +179,14 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
                         const g_index v = this->_constraints.vertices.create_vertex(intersection.value());
 
                         // split the original edge...
-                        //this->_constraints.edges.create_edge(this->_constraints.edges.vertex(e, 0), v);
-                        //this->_constraints.edges.create_edge(v, this->_constraints.edges.vertex(e, 1));
+                        this->_constraints.edges.create_edge(this->_constraints.edges.vertex(e, 0), v);
+                        this->_constraints.edges.create_edge(v, this->_constraints.edges.vertex(e, 1));
 
                         // create the new edge as split edge
-                        //this->_constraints.edges.create_edge(mesh_to_interface[global.first], v);
-                        //this->_constraints.edges.create_edge(v, mesh_to_interface[global.second]);
+                        // this->_constraints.edges.create_edge(mesh_to_interface[global.first], v);
+                        // this->_constraints.edges.create_edge(v, mesh_to_interface[global.second]);
 
-                        //to_delete.insert(e);
+                        to_delete.insert(e);
                         intersected = true;
                     }
                 }
@@ -164,7 +197,7 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
                     this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
                 }
 
-                geogram::vector<g_index> deleted(this->_constraints.edges.nb());
+                geo::vector<g_index> deleted(this->_constraints.edges.nb());
                 for (const g_index d : to_delete)
                 {
                     deleted[d] = true;
@@ -179,6 +212,14 @@ void moist::InterfaceGenerator::AddConstraints(const geogram::Mesh &mesh)
     }
 }
 
+static bool vec2_eq_float_precision(const vec2& a, const vec2& b)
+{
+    constexpr float epsilon = 1e-6f;
+
+    return std::fabs(static_cast<float>(a.x) - static_cast<float>(b.x)) < epsilon &&
+           std::fabs(static_cast<float>(a.y) - static_cast<float>(b.y)) < epsilon;
+}
+
 void moist::InterfaceGenerator::Triangulate()
 {
     // Only the constraint-mesh is required, must pass 0 and nullptr here to set_vertices when using triangle.
@@ -186,16 +227,16 @@ void moist::InterfaceGenerator::Triangulate()
     //       input, a double vertex is found and "ignored", which leads to a segfault when geogram tries to read the data back into it's
     //       own data structure... somehow create own bbox for triangle?
     // TODO: this doesn't actually help fix things...
-    geogram::mesh_repair(this->_constraints, geogram::MeshRepairMode::MESH_REPAIR_COLOCATE);
+    geo::mesh_repair(this->_constraints, geo::MeshRepairMode::MESH_REPAIR_COLOCATE);
 
     g_index nb_edges = this->_constraints.edges.nb();
-    auto delaunay = geogram::Delaunay::create(2, "triangle");
+    auto delaunay = geo::Delaunay::create(2, "triangle");
     delaunay->set_constraints(&this->_constraints);
     delaunay->set_vertices(0, nullptr);
 
     OOC_DEBUG("Triangulated #" << delaunay->nb_vertices() << " interface vertices");
 
-    geogram::vector<double> vertices(delaunay->nb_vertices() * 3);
+    geo::vector<double> vertices(delaunay->nb_vertices() * 3);
     for(g_index v = 0; v < delaunay->nb_vertices(); v++)
     {
         vertices[3 * v] = delaunay->vertex_ptr(v)[0];
@@ -203,20 +244,20 @@ void moist::InterfaceGenerator::Triangulate()
         vertices[3 * v + 2] = 0.0;
     }
 
-    geogram::vector<geogram::index_t> triangles(delaunay->nb_cells() * 3);
+    geo::vector<geo::index_t> triangles(delaunay->nb_cells() * 3);
     for(g_index t = 0; t < delaunay->nb_cells(); t++)
     {
-        triangles[3 * t] = geogram::index_t(delaunay->cell_vertex(t, 0));
-        triangles[3 * t + 1] = geogram::index_t(delaunay->cell_vertex(t, 1));
-        triangles[3 * t + 2] = geogram::index_t(delaunay->cell_vertex(t, 2));
+        triangles[3 * t] = geo::index_t(delaunay->cell_vertex(t, 0));
+        triangles[3 * t + 1] = geo::index_t(delaunay->cell_vertex(t, 1));
+        triangles[3 * t + 2] = geo::index_t(delaunay->cell_vertex(t, 2));
     }
 
-    this->_triangulation->facets.assign_triangle_mesh((geogram::coord_index_t) 3, vertices, triangles, true);
+    this->_triangulation->facets.assign_triangle_mesh((geo::coord_index_t) 3, vertices, triangles, true);
     this->_triangulation->facets.compute_borders();
 
 #ifndef NDEBUG
     // assign attribute constraint edges to edges in triangulation
-    geogram::Attribute<double> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    geo::Attribute<double> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
     for (const g_index edge : this->_triangulation->edges)
     {
         e_constrained[edge] = 0.5;
@@ -236,14 +277,16 @@ void moist::InterfaceGenerator::Triangulate()
         {
             const vec2 ep0 = reinterpret_cast<const vec2&>(_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 0)));
             const vec2 ep1 = reinterpret_cast<const vec2&>(_triangulation->vertices.point(this->_triangulation->edges.vertex(edge, 1)));
-            if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
+
+            //if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
+            if ((vec2_eq_float_precision(ep0, cep0) && vec2_eq_float_precision(ep1, cep1)) || (vec2_eq_float_precision(ep0, cep1) && vec2_eq_float_precision(ep1, cep0)))
             {
                 e_constrained[edge] = 1.0;
             }
         }
     }
 
-    moist::utils::geo::save("interface.constraints.geogram", this->_constraints);
+    moist::utils::geogram::save("interface.constraints.geogram", this->_constraints);
 #endif // NDEBUG
     //geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
     //m_target_vertices[0] = this->_unique_vertices / 2.0;
@@ -285,7 +328,7 @@ void moist::InterfaceGenerator::Decimate()
         {
             const vec3 p0 = triangulation->vertices.point(triangulation->facets.vertex(f, le));
             const vec3 p1 = triangulation->vertices.point(triangulation->facets.vertex(f, (le + 1) % 3));
-            const double distance = geogram::distance(p0, p1);
+            const double distance = geo::distance(p0, p1);
             if (distance < shortest_edge_length)
             {
                 shortest_edge_length = distance;
@@ -305,7 +348,7 @@ void moist::InterfaceGenerator::Decimate()
     }
 
     // delete all resulting 0-volume triangles
-    geogram::vector<g_index> deleted_facets(triangulation->facets.nb());
+    geo::vector<g_index> deleted_facets(triangulation->facets.nb());
     for (g_index i = 0; i < triangulation->facets.nb(); i++)
     {
         const vec3 p0 = triangulation->vertices.point(triangulation->facets.vertex(i, 0));

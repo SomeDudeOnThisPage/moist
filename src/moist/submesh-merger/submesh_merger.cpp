@@ -11,7 +11,7 @@ moist::Merger::Merger(const std::filesystem::path& mesh, const std::filesystem::
     _v_swap_path = std::filesystem::path(_tmp_folder_path / "vertices");
     _e_swap_path = std::filesystem::path(_tmp_folder_path / "elements");
 
-    moist::utils::geo::load(slice, _slice, 3);
+    moist::utils::geogram::load(slice, _slice, 3);
 
     if (std::filesystem::exists(_tmp_folder_path))
     {
@@ -28,9 +28,9 @@ moist::Merger::~Merger()
 
 void moist::Merger::Merge()
 {
-    geogram::LineInput input(_mesh_path);
-    geogram::index_t nb_nodes = this->WriteNodes(input);
-    geogram::index_t nb_elements = this->WriteElements(input);
+    geo::LineInput input(_mesh_path);
+    geo::index_t nb_nodes = this->WriteNodes(input);
+    geo::index_t nb_elements = this->WriteElements(input);
 
     const auto tmp_msh_path = _tmp_folder_path / "merge";
     std::ofstream msh_tmp(tmp_msh_path);
@@ -41,10 +41,10 @@ void moist::Merger::Merge()
     msh_tmp << "$Nodes" << std::endl;
     msh_tmp << nb_nodes << std::endl;
 
-    geogram::LineInput v_in(_v_swap_path);
-    geogram::LineInput e_in(_e_swap_path);
+    geo::LineInput v_in(_v_swap_path);
+    geo::LineInput e_in(_e_swap_path);
 
-    geogram::index_t i = 1;
+    geo::index_t i = 1;
     while (v_in.get_line())
     {
         msh_tmp << i++ << " " << v_in.current_line();
@@ -85,9 +85,9 @@ void moist::Merger::CopyToOriginal(const std::filesystem::path &destination_over
     std::filesystem::copy_file(_tmp_folder_path / "merge", destination, std::filesystem::copy_options::overwrite_existing);
 }
 
-geogram::index_t moist::Merger::WriteNodes(geogram::LineInput& input)
+geo::index_t moist::Merger::WriteNodes(geo::LineInput& input)
 {
-    geogram::index_t nb_vertices;
+    geo::index_t nb_vertices;
     std::ofstream v_swapfile(_v_swap_path);
     v_swapfile.precision(16);
 
@@ -156,9 +156,9 @@ geogram::index_t moist::Merger::WriteNodes(geogram::LineInput& input)
     return nb_vertices;
 }
 
-geogram::index_t moist::Merger::WriteElements(geogram::LineInput& input)
+geo::index_t moist::Merger::WriteElements(geo::LineInput& input)
 {
-    geogram::index_t nb_elements = 0;
+    geo::index_t nb_elements = 0;
     std::ofstream e_swapfile(_e_swap_path);
     e_swapfile.precision(16);
 
@@ -176,7 +176,7 @@ geogram::index_t moist::Merger::WriteElements(geogram::LineInput& input)
                 input.get_line();
                 input.get_fields();
 
-                for (geogram::index_t i = 1; i < input.nb_fields(); i++)
+                for (geo::index_t i = 1; i < input.nb_fields(); i++)
                 {
                     e_swapfile << input.field(i) << " ";
                 }
@@ -185,7 +185,7 @@ geogram::index_t moist::Merger::WriteElements(geogram::LineInput& input)
         }
         else if (input.field_matches(0, "$EndElements"))
         {
-            const geogram::index_t offset = nb_elements;
+            const geo::index_t offset = nb_elements;
             for (const g_index c : _slice.cells)
             {
                 g_index vertices[4];

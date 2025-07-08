@@ -8,6 +8,7 @@
 
 #include "moist/core/defines.hpp"
 #include "moist/core/predicates.inl"
+#include "moist/core/attributes.inl"
 
 /**
  * @brief Geometric-Predicates.
@@ -37,7 +38,7 @@ namespace moist::geometry
         }
     };
 
-    PURE INLINE bool vertex_of_cell(const geogram::Mesh& mesh, const g_index cell, const g_index v)
+    PURE INLINE bool vertex_of_cell(const geo::Mesh& mesh, const g_index cell, const g_index v)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -53,7 +54,7 @@ namespace moist::geometry
         return false;
     }
 
-    PURE INLINE bool point_of_cell(const geogram::Mesh &mesh, const g_index cell, const vec3 &point)
+    PURE INLINE bool point_of_cell(const geo::Mesh &mesh, const g_index cell, const vec3 &point)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -69,7 +70,7 @@ namespace moist::geometry
         return false;
     }
 
-    PURE INLINE g_index non_coplanar_opposite(const g_index cell, const g_index a, const g_index b, const geogram::Mesh &mesh, const AxisAlignedInterfacePlane &plane)
+    PURE INLINE g_index non_coplanar_opposite(const g_index cell, const g_index a, const g_index b, const geo::Mesh &mesh, const AxisAlignedPlane &plane)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -86,7 +87,7 @@ namespace moist::geometry
         return NO_ELEMENT;
     }
 
-    PURE INLINE bool has_duplicate_vertex(const g_index cell, const geogram::Mesh &mesh)
+    PURE INLINE bool has_duplicate_vertex(const g_index cell, const geo::Mesh &mesh)
     {
         const vec3 a = mesh.vertices.point(mesh.cells.vertex(cell, 0));
         const vec3 b = mesh.vertices.point(mesh.cells.vertex(cell, 1));
@@ -101,7 +102,7 @@ namespace moist::geometry
                c == d;
     }
 
-    PURE INLINE std::array<g_index, 4> cell_vertices(const g_index cell, const geogram::Mesh &mesh)
+    PURE INLINE std::array<g_index, 4> cell_vertices(const g_index cell, const geo::Mesh &mesh)
     {
         return {
             mesh.cells.vertex(cell, 0),
@@ -111,7 +112,7 @@ namespace moist::geometry
         };
     }
 
-    PURE INLINE std::array<g_index, 3> other(const g_index cell, g_index opposite, const geogram::Mesh &mesh)
+    PURE INLINE std::array<g_index, 3> other(const g_index cell, g_index opposite, const geo::Mesh &mesh)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -132,7 +133,7 @@ namespace moist::geometry
         return std::array{NO_ELEMENT, NO_ELEMENT, NO_ELEMENT};
     }
 
-    PURE INLINE g_index other(const g_index cell, const g_index a, const g_index b, const g_index c, const geogram::Mesh &mesh)
+    PURE INLINE g_index other(const g_index cell, const g_index a, const g_index b, const g_index c, const geo::Mesh &mesh)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -149,7 +150,7 @@ namespace moist::geometry
         return NO_ELEMENT;
     }
 
-    PURE INLINE std::tuple<g_index, g_index, g_index> interface_vertices(const g_index cell, const geogram::Mesh &mesh, const AxisAlignedInterfacePlane &plane)
+    PURE INLINE std::tuple<g_index, g_index, g_index> interface_vertices(const g_index cell, const geo::Mesh &mesh, const AxisAlignedPlane &plane)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -169,7 +170,25 @@ namespace moist::geometry
         return std::make_tuple(NO_ELEMENT, NO_ELEMENT, NO_ELEMENT);
     }
 
-    PURE INLINE g_index non_interface_vertex(const g_index cell, const geogram::Mesh &mesh, const AxisAlignedInterfacePlane &plane)
+    PURE INLINE g_index non_interface_vertex(const g_index c, const geo::Mesh& mesh)
+    {
+        const auto v_interface = geo::Attribute<bool>(mesh.vertices.attributes(), moist::attributes::V_INTERFACE);
+
+        #ifdef OPTION_UNROLL_LOOPS
+            #pragma unroll 4
+        #endif
+        for (l_index lv = 0; lv < 4; lv++)
+        {
+            const g_index v = mesh.cells.vertex(c, lv);
+            LOCK_ATTRIBUTES;
+            if (!v_interface[v])
+            {
+                return v;
+            }
+        }
+    };
+
+    PURE INLINE g_index non_interface_vertex(const g_index cell, const geo::Mesh &mesh, const AxisAlignedPlane &plane)
     {
     #ifdef OPTION_UNROLL_LOOPS
         #pragma unroll 4
@@ -186,7 +205,38 @@ namespace moist::geometry
         return NO_ELEMENT;
     }
 
-    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geogram::Mesh& mesh, const AxisAlignedInterfacePlane& plane)
+    PURE INLINE std::vector<g_index> non_interface_vertices(const g_index c, const geo::Mesh &mesh)
+    {
+        std::vector<g_index> indices;
+
+        const auto v_interface = geo::Attribute<bool>(mesh.vertices.attributes(), moist::attributes::V_INTERFACE);
+        for (const g_index v : moist::geometry::cell_vertices(c, mesh))
+        {
+            if (!v_interface[v])
+            {
+                indices.push_back(v);
+            }
+        }
+
+        return indices;
+    }
+
+    PURE INLINE std::vector<g_index> other(const g_index c, const std::vector<g_index>& v_other, const geo::Mesh &mesh)
+    {
+        std::vector<g_index> indices;
+
+        for (const g_index v : moist::geometry::cell_vertices(c, mesh))
+        {
+            if (std::find(v_other.begin(), v_other.end(), v) == v_other.end())
+            {
+                indices.push_back(v);
+            }
+        }
+
+        return indices;
+    }
+
+    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geo::Mesh& mesh, const AxisAlignedPlane& plane)
     {
         std::unordered_set<Edge, EdgeHash> edges;
         edges.reserve(mesh.vertices.nb());
@@ -219,7 +269,7 @@ namespace moist::geometry
         return edges; // return by value not ideal should probably be passed as reference parameter
     }
 
-    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_interface_edges(const geogram::Mesh& mesh, const moist::AxisAlignedInterfacePlane& plane)
+    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_interface_edges(const geo::Mesh& mesh, const moist::AxisAlignedPlane& plane)
     {
         const auto nv = mesh.cells.nb();
         std::unordered_set<Edge, EdgeHash> edges;
@@ -247,7 +297,7 @@ namespace moist::geometry
         return edges;
     }
 
-    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geogram::Mesh& mesh)
+    PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geo::Mesh& mesh)
     {
         std::unordered_set<Edge, EdgeHash> edges;
         for (const g_index f : mesh.facets)

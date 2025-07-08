@@ -13,6 +13,12 @@
 // #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
+#ifndef NDEBUG
+  #define debug(...) do { __VA_ARGS__; } while (0)
+#else
+  #define debug(...) ((void)0)
+#endif
+
 namespace moist
 {
     /**
@@ -43,17 +49,32 @@ namespace moist
 }
 
 //! @internal
-#define OOC_ERROR(msg) \
-    std::cerr << "ERROR: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl; std::exit(EXIT_FAILURE)
+#ifdef GEOGRAM_API
+    #define OOC_ERROR(msg) \
+        geo::Logger::err("MOIST") << "[" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl; std::exit(EXIT_FAILURE)
 
-#define OOC_WARNING(msg) \
-    std::cerr << "WARNING: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+    #define OOC_WARNING(msg) \
+        geo::Logger::warn("MOIST") << "[" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
 
-#ifndef NDEBUG
-#define OOC_DEBUG(msg) \
-    std::cout << "DEBUG: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+    #ifndef NDEBUG
+    #define OOC_DEBUG(msg) \
+        geo::Logger::out("MOIST") << "[" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+    #else
+    #define OOC_DEBUG(msg)
+    #endif
 #else
-#define OOC_DEBUG(msg)
+    #define OOC_ERROR(msg) \
+        std::cout << "ERROR: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl; std::exit(EXIT_FAILURE)
+
+    #define OOC_WARNING(msg) \
+        std::cout << "WARNING: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+
+    #ifndef NDEBUG
+    #define OOC_DEBUG(msg) \
+        std::cout << "DEBUG: [" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+    #else
+    #define OOC_DEBUG(msg)
+    #endif
 #endif
 
 #ifdef CLI11_INLINE
@@ -69,15 +90,15 @@ namespace moist
 #define TIMER_START(x) geogram::Stopwatch __SCOPE_TIMER(x, false); std::string __SCOPE_TIMER_TASK_NAME = x;
 #define TIMER_END OOC_DEBUG(__SCOPE_TIMER_TASK_NAME << " took " << __SCOPE_TIMER.elapsed_time() << "s");
 
-namespace geogram = GEO;
+namespace geo = GEO;
 
 // custom index aliases to make differentiating between local and global vertices easier
-using g_index = geogram::index_t;
-using l_index = geogram::index_t;
+using g_index = geo::index_t;
+using l_index = geo::index_t;
 
 // in case we switch to real predicates, similar to, for instance, marco attenes stuff...
-using vec3 = geogram::vec3;
-using vec2 = geogram::vec2;
+using vec3 = geo::vec3;
+using vec2 = geo::vec2;
 
 // additional operators
 /*inline bool operator==(const vec3& a, const vec3& b)
@@ -87,7 +108,7 @@ using vec2 = geogram::vec2;
            std::fabs(a.z - b.z) < moist::__DOUBLE_EPSILON;
 }*/
 
-inline bool operator==(const geogram::vec3& a, const geogram::vec3& b)
+inline bool operator==(const geo::vec3& a, const geo::vec3& b)
 {
     return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
            std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON &&
@@ -95,7 +116,7 @@ inline bool operator==(const geogram::vec3& a, const geogram::vec3& b)
     // return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 
-inline bool operator==(const geogram::vec2& a, const geogram::vec2& b)
+inline bool operator==(const geo::vec2& a, const geo::vec2& b)
 {
     return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
            std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON;

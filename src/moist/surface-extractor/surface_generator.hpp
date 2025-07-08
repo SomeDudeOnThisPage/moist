@@ -17,7 +17,7 @@ namespace moist
         SurfaceGenerator(const Tiff& tiff, const uint32_t offset, const Axis axis = Axis::Z, const bool center = true, const bool invert = false);
         ~SurfaceGenerator() = default;
 
-        void Generate(geogram::Mesh& mesh, const float isovalue);
+        void Generate(GEO::Mesh& mesh, const float isovalue);
     private:
         MC33 _mc;
         surface _surface;

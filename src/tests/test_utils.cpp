@@ -9,7 +9,7 @@
 #include "moist/core/attributes.inl"
 
 // all of this code is shit, and only used for testing...
-size_t moist::test::contains_overlapping_constraints(geogram::Mesh& a, geogram::Mesh& b, moist::Interface& interface)
+size_t moist::test::contains_overlapping_constraints(GEO::Mesh& a, GEO::Mesh& b, moist::Interface& interface)
 {
     // check if a and b have any overlapping edges on interface
     const auto edges_a = moist::geometry::collect_interface_edges(a, *interface.Plane());
@@ -71,7 +71,7 @@ size_t moist::test::contains_overlapping_constraints(geogram::Mesh& a, geogram::
 }
 
 // this code is shit
-bool moist::test::contains_constraints(geogram::Mesh& mesh, geogram::Mesh& constraints, moist::Interface& interface, size_t steiner_points)
+bool moist::test::contains_constraints(GEO::Mesh& mesh, GEO::Mesh& constraints, moist::Interface& interface, size_t steiner_points)
 {
     constexpr std::string_view attribute = "__contains_constraints";
     constraints.facets.compute_borders();

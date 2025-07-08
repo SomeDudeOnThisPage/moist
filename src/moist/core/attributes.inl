@@ -1,12 +1,14 @@
-#ifndef __OOC_ATTRIBUTES_HPP
-#define __OOC_ATTRIBUTES_HPP
+#ifndef MOIST_CORE__ATTRIBUTES_HPP_
+#define MOIST_CORE__ATTRIBUTES_HPP_
 
 #include <mutex>
 
-#include <geogram/mesh/mesh.h>
+#include <geogram/basic/attributes.h>
+#include <geogram/basic/numeric.h>
 
 #include "moist/core/defines.hpp"
 
+#define VERTEX_FLAGS "v_flags"
 #define ATTRIBUTE_VERTEX_DESCRIPTOR_FLAGS "VertexDescriptorFlags"
 #define ATTRIBUTE_DISCARD "Discard"
 #define ATTRIBUTE_INTERFACE "Interface" // TODO: Make all this flags after testing, maybe keep "int" attributes for visualization in debug mode vorpaview
@@ -26,23 +28,29 @@
 #define ATTRIBUTE_META_PLANE_ENVELOPE "meta.envelope"
 #define ATTRIBUTE_META_PLANE_AXIS "meta.axis"
 
-#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-    #define LOCK_ATTRIBUTES std::lock_guard<std::mutex> lock(incremental_meshing::attributes::_MUTEX_VERTEX_DESCRIPTOR)
-#else
-    #define LOCK_ATTRIBUTES
-#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
-#include <geogram/basic/numeric.h>
 namespace moist::attributes
 {
-#ifdef OPTION_PARALLEL_LOCAL_OPERATIONS
-    inline std::mutex _MUTEX_VERTEX_DESCRIPTOR;
-#endif // OPTION_PARALLEL_LOCAL_OPERATIONS
+    constexpr std::string VertexFlags = "v_flags";
 
-    /// TODO: Doxygen...
+    inline std::mutex _MUTEX_VERTEX_DESCRIPTOR;
+    struct LockAttributes
+    {
+        LockAttributes() : lock(_MUTEX_VERTEX_DESCRIPTOR) {}
+    private:
+        std::lock_guard<std::mutex> lock;
+    };
+
+    #define LOCK_ATTRIBUTES std::lock_guard<std::mutex> ___lock(moist::attributes::_MUTEX_VERTEX_DESCRIPTOR)
+    constexpr std::string V_INTERFACE = "v_interface";
+
     enum class VertexDescriptorFlags : uint8_t
     {
-        DELETED = 1 << 1, // marks vertex as deleted
-        DISCARD = 1 << 2  // marks vertex as discardable
+        /** @brief Marks a vertex as deleted. */
+        DELETED     = 1 << 1,
+        /** @brief Marks a vertex as discardable for decimation. */
+        DISCARD     = 1 << 2,
+        /** @brief Marks a vertex as part of the interface plane. */
+        INTERFACE   = 1 << 3
     };
 
     // needs to be defined for the compiler not to complain
@@ -91,8 +99,7 @@ namespace moist::attributes
 
     inline void initialize()
     {
-        //geogram::geo_register_attribute_type<geogram::Numeric::uint8>("VertexDescriptorFlags");
-        //geogram::geo_register_attribute_type<int>("Discard");
+        geo::geo_register_attribute_type<geo::Numeric::uint8>("VertexDescriptorFlags");
     }
 }
-#endif // __OOC_ATTRIBUTES_HPP
+#endif // MOIST_CORE__ATTRIBUTES_HPP_

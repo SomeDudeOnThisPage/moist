@@ -23,6 +23,8 @@ if(OOC_WITH_TESTS)
         slice.cpp
         local_operations.hpp
         local_operations.cpp
+        interface_inserter.hpp
+        interface_inserter.cpp
     )
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE geogram)
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE OutOfCore_Meshing_Core)
@@ -30,7 +32,6 @@ if(OOC_WITH_TESTS)
         main.cpp
     )
     set(HEADERS
-        interface_inserter.hpp
     )
 else()
     file(GLOB_RECURSE SOURCES "*.cpp")

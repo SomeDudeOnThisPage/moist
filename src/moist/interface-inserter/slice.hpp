@@ -30,7 +30,7 @@ namespace moist
 
     struct Vec3EqualOperator
     {
-        bool operator()(const GEO::vecng<3, double>& a, const GEO::vecng<3, double>& b) const
+        bool operator()(const geo::vecng<3, double>& a, const geo::vecng<3, double>& b) const
         {
             return std::fabs(a.x - b.x) < moist::__DOUBLE_EPSILON &&
                 std::fabs(a.y - b.y) < moist::__DOUBLE_EPSILON &&
@@ -39,18 +39,11 @@ namespace moist
     };
     using SteinerPoints = std::unordered_set<vec3, Vec3HashOperator, Vec3EqualOperator>;
 
-    class MeshSlice : public geogram::Mesh
+    class MeshSlice : public geo::Mesh
     {
     public:
-        /**
-         * @brief Constructs a MeshSlice object.
-         *
-         * Initializes a new MeshSlice with the given dimension and precision settings.
-         *
-         * @param dimension The dimension of the mesh (default `3`).
-         * @param single_precision If true, use `float`; otherwise, use `double` (default `false`).
-         */
-        MeshSlice(geogram::index_t dimension = 3, bool single_precision = false);
+        MeshSlice(const geo::index_t dimension = 3, const bool single_precision = false);
+        void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
 
         /**
          * @brief Inserts a created Interface into this MeshSlice.
@@ -59,7 +52,7 @@ namespace moist
          */
         moist::SteinerPoints InsertInterface(moist::Interface& interface, moist::metrics::Metrics_ptr metrics = nullptr);
 
-        void InsertVertex(const geogram::vec3& point, const moist::AxisAlignedInterfacePlane& plane);
+        void InsertVertex(const geo::vec3& point, const moist::AxisAlignedPlane& plane);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
         void CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra);
@@ -67,20 +60,28 @@ namespace moist
         void DeleteTetrahedra(const std::initializer_list<g_index> tetrahedra);
         void FlushTetrahedra(bool delete_zero_volume = false);
 
-        void GetFixedGeometry(geogram::Mesh& mesh);
+        void GetFixedGeometry(geo::Mesh& mesh);
+
+        vec3& Point(const geo::index_t& v);
     private:
 
         std::vector<g_index> _created_cell_ids;
         std::vector<CreatedTetrahedon> _created_cells;
-        std::unordered_set<geogram::index_t> _deleted_cells;
+        std::unordered_set<geo::index_t> _deleted_cells;
         g_index _start_interface_cell;
         g_index _start_interface_vertex;
+
+        void InsertVertices(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
+        void InsertVertex2(const geo::vec3& p);
+
+        void IsDeleted(const geo::index_t c);
 
         // global operations
         void InsertInterfaceVertices(moist::Interface& interface);
         void InsertInterfaceEdges(moist::Interface& interface, SteinerPoints& steiner_points);
+        void InsertEdges2(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
 
-        g_index ReorderCells(const moist::AxisAlignedInterfacePlane& plane);
+        g_index ReorderCells(const moist::AxisAlignedPlane& plane);
         g_index CreateTetrahedra();
 
         bool CanMoveVertex(const g_index v, const vec3& p, const std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator>& cluster);

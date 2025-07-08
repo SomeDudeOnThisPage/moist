@@ -51,21 +51,21 @@ int main(int argc, char* argv[])
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
-    moist::utils::geo::initialize();
+    moist::utils::geogram::initialize();
 
-    auto generator = moist::InterfaceGenerator(moist::AxisAlignedInterfacePlane {
+    auto generator = moist::InterfaceGenerator(moist::AxisAlignedPlane {
         arguments.axis,
         arguments.plane,
         arguments.envelope_size
     });
 
-    geogram::Mesh mesh, mesh2;
-    moist::utils::geo::load(arguments.path_mesh_a, mesh);
-    geogram::mesh_repair(mesh);
+    geo::Mesh mesh, mesh2;
+    moist::utils::geogram::load(arguments.path_mesh_a, mesh);
+    geo::mesh_repair(mesh);
     generator.AddConstraints(mesh);
     mesh.clear(false, false);
-    moist::utils::geo::load(arguments.path_mesh_b, mesh);
-    geogram::mesh_repair(mesh);
+    moist::utils::geogram::load(arguments.path_mesh_b, mesh);
+    geo::mesh_repair(mesh);
     generator.AddConstraints(mesh);
     generator.Triangulate();
     //generator.Decimate();
@@ -77,8 +77,8 @@ int main(int argc, char* argv[])
     //     f_quality[f] = -std::numeric_limits<double>::max();
     // }
 
-    moist::utils::geo::save(arguments.path_mesh_out.replace_extension(".geogram"), *generator.Triangulation());
-    moist::utils::geo::save(arguments.path_mesh_out.replace_extension(".debug.msh"), *generator.Triangulation());
+    moist::utils::geogram::save(arguments.path_mesh_out.replace_extension(".geogram"), *generator.Triangulation());
+    moist::utils::geogram::save(arguments.path_mesh_out.replace_extension(".debug.msh"), *generator.Triangulation());
 
     return 0;
 }

@@ -28,14 +28,14 @@ namespace moist
 
         std::filesystem::path _mesh_path;
 
-        geogram::index_t _nb_vertices_mesh;
+        GEO::index_t _nb_vertices_mesh;
         std::unordered_map<g_index, g_index> _v_translated_indices;
         std::unordered_map<g_index, g_index> _v_inverse_prefix_offset;
 
-        geogram::Mesh _slice;
+        GEO::Mesh _slice;
 
-        geogram::index_t WriteNodes(geogram::LineInput& input);
-        geogram::index_t WriteElements(geogram::LineInput& input);
+        GEO::index_t WriteNodes(GEO::LineInput& input);
+        GEO::index_t WriteElements(GEO::LineInput& input);
     };
 }
 
