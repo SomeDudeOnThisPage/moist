@@ -150,6 +150,24 @@ namespace moist::geometry
         return NO_ELEMENT;
     }
 
+    PURE INLINE std::vector<geo::index_t> interface_vertices(const geo::index_t& cell, const geo::Mesh &mesh)
+    {
+        std::vector<geo::index_t> vertices;
+        const auto v_interface = geo::Attribute<bool>(mesh.vertices.attributes(), moist::attributes::V_INTERFACE);
+
+        #pragma unroll 4
+        for (l_index lv = 0; lv < 4; lv++)
+        {
+            const g_index v = mesh.cells.vertex(cell, lv);
+            if (v_interface[v])
+            {
+                vertices.push_back(v);
+            }
+        }
+
+        return vertices;
+    }
+
     PURE INLINE std::tuple<g_index, g_index, g_index> interface_vertices(const g_index cell, const geo::Mesh &mesh, const AxisAlignedPlane &plane)
     {
     #ifdef OPTION_UNROLL_LOOPS

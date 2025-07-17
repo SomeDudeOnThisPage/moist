@@ -63,6 +63,19 @@ namespace moist::utils {
             flags.set_verbose(true);
             geo::mesh_save(mesh, file.string(), flags);
         }
+
+        /**
+         * @brief Calculate epsilon based on mesh bbox diag and eps value (similar to tetwild), and add another boundary eps value (e-14)
+         *
+         * @param mesh
+         * @param eps
+         * @return double
+         */
+        inline double calulate_epsilon(const geo::Mesh& mesh, const double eps)
+        {
+            //return geo::bbox_diagonal(mesh) * eps + 2.0 * std::numeric_limits<double>::epsilon();
+            return 0.0;
+        }
     }
 #endif // GEOGRAM_API
 

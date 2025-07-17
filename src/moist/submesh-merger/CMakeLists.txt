@@ -9,7 +9,7 @@ project(
     LANGUAGES CXX
 )
 
-if(OOC_WITH_TESTS)
+if(MOIST_TESTS)
     add_library(MOIST_Merger_Units OBJECT
         submesh_merger.hpp
         submesh_merger.cpp
@@ -30,7 +30,7 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-if (OOC_WITH_TESTS)
+if (MOIST_TESTS)
     add_executable(OutOfCore_Meshing_MeshMerger ${SOURCES} ${HEADERS} $<TARGET_OBJECTS:MOIST_Merger_Units>)
 else()
     add_executable(OutOfCore_Meshing_MeshMerger ${SOURCES} ${HEADERS})

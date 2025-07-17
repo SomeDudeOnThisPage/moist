@@ -85,7 +85,7 @@ set(MC33_DATA_FORMAT f32)
 
 FetchContent_MakeAvailable(mc33)
 
-if (OOC_WITH_TESTS)
+if (MOIST_TESTS)
   FetchContent_Declare(
       gtest
       GIT_REPOSITORY https://github.com/google/googletest.git
@@ -103,13 +103,23 @@ FetchContent_Declare(
 
 #FetchContent_MakeAvailable(libtiff)
 
+#FetchContent_Declare(
+#  json
+#  GIT_REPOSITORY https://github.com/nlohmann/json.git
+#  GIT_TAG v3.12.0
+#)
+
+#FetchContent_MakeAvailable(json)
+
+set(CDT_USE_AS_COMPILED_LIBRARY ON CACHE BOOL "") # what a mess...
 FetchContent_Declare(
-  json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.12.0
+  cdt
+  GIT_REPOSITORY https://github.com/artem-ogre/CDT.git
+  GIT_TAG 1.4.4
+  SOURCE_SUBDIR CDT
 )
 
-FetchContent_MakeAvailable(json)
+FetchContent_MakeAvailable(cdt)
 
 # TODO: Maybe create a "forked" github repo, port tetrahedron to cmake and c++23, and include via fetchcontent...
 add_subdirectory(tetrahedron)

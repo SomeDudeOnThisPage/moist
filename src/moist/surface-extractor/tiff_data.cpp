@@ -25,7 +25,7 @@ moist::Tiff::Tiff(const std::string& pattern, const uint32_t first_file, const u
                 this->data.reserve(this->_width * this->_height * this->_depth);
             }
 
-            OOC_DEBUG("loading .tiff: w = " << _width << ", h = " << _height << ", sample_bits = " << _sample_bits);
+            OOC_DEBUG("loading " << filename << ": w = " << _width << ", h = " << _height << ", sample_bits = " << _sample_bits);
 
             _vector line_data;
             float max;

@@ -7,8 +7,6 @@
 #include "moist/core/defines.hpp"
 #include "moist/core/descriptor.hpp"
 
-#include <nlohmann/json.hpp>
-
 namespace moist::slice_io
 {
     namespace msh

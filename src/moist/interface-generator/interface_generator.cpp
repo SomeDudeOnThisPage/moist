@@ -15,7 +15,9 @@
 #include "moist/core/mesh_quality.inl"
 #include "moist/core/utils.hpp"
 
-moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedPlane plane) : _constraints(geo::Mesh(2, false))
+moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedPlane plane) :
+    _constraints(geo::Mesh(2, false)),
+    _cdt(CDT::Triangulation<double>(CDT::VertexInsertionOrder::Auto, CDT::IntersectingConstraintEdges::TryResolve, 1e-14))
 {
     this->_triangulation = std::make_shared<geo::Mesh>(3);
     this->_plane = std::make_shared<AxisAlignedPlane>(plane);
@@ -35,13 +37,11 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
     std::map<g_index, g_index> mesh_to_interface;
     std::map<std::pair<g_index, g_index>, uint8_t> edge_count_map; // if we have more than 255 incident edges we have a waaaay bigger problem anyway...
 
+    g_index i = _interface_vertices.size();
     for (const g_index v : mesh.vertices)
     {
         // geogram uses precision values up to 16 decimal places...
         vec3 point = mesh.vertices.point(v);
-        //point.x = round16(point.x);
-        //point.y = round16(point.y);
-        //point.z = round16(point.z);
 
         if (predicates::point_on_plane(point, *this->_plane))
         {
@@ -59,35 +59,18 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
 
             if (!is_duplicate)
             {
-                g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
-                this->_unique_vertices++;
-                mesh_to_interface[v] = interface_vertex_id;
+                _interface_vertices.push_back(CDT::V2d<double>(point.x, point.y));
+                g_index interface_vertex_id = i;
                 _inserted_points[interface_vertex_id] = vec3(point.x, point.y, this->_plane->extent);
+                mesh_to_interface[v] = interface_vertex_id;
+                i++;
+                //g_index interface_vertex_id = this->_constraints.vertices.create_vertex(point.data());
+                //this->_unique_vertices++;
+                //mesh_to_interface[v] = interface_vertex_id;
+                //_inserted_points[interface_vertex_id] = vec3(point.x, point.y, this->_plane->extent);
             }
         }
     }
-
-#ifndef NDEBUG
-    for (const g_index v0 : this->_constraints.vertices)
-    {
-        const auto p0 =_constraints.vertices.point_ptr(v0);
-        for (const g_index v1 : this->_constraints.vertices)
-        {
-            if (v0 == v1)
-            {
-                continue;
-            }
-
-            const auto p1 =_constraints.vertices.point_ptr(v1);
-            if (p0[0] == p1[0] && p0[1] == p1[1])
-            {
-                OOC_DEBUG("equal points " << v0 << ", " << v1 << " at " << p0[0] << ", " << p0[1]);
-                break;
-            }
-
-        }
-    }
-#endif // NDEBUG
 
     for (const geo::index_t c : mesh.cells)
     {
@@ -115,33 +98,6 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
         }
     }
 
-    /*for (const g_index f : mesh.facets)
-    {
-        if (predicates::facet_on_plane(f, mesh, *this->_plane))
-        {
-            const geo::index_t nb_local_vertices = mesh.facets.nb_vertices(f);
-            for (l_index v = 0; v < nb_local_vertices; v++)
-            {
-                g_index v1 = mesh.facets.vertex(f, v);
-                g_index v2 = mesh.facets.vertex(f, (v + 1) % nb_local_vertices);
-
-                if (v1 > v2)
-                {
-                    std::swap(v1, v2);
-                }
-
-                {
-                    edge_count_map[{v1, v2}]++;
-                }
-            }
-        }
-    }*/
-
-    //if (this->_constraints.edges.nb() != 0)
-    //{
-    //    return;
-    //}
-
     for (const auto& entry : edge_count_map)
     {
         std::unordered_set<g_index> to_delete;
@@ -152,57 +108,56 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
             auto global = entry.first;
             if (mesh_to_interface.contains(global.first) && mesh_to_interface.contains(global.second))
             {
-                bool intersected = false;
-                for (const g_index e : this->_constraints.edges)
-                {
-                    if (to_delete.contains(e))
-                    {
-                        continue;
-                    }
+                // "New" Ogre CDT can handle intersections in constrained edges more robustly than triangle, so we can just dump every edge here
+                _interface_edges.push_back(CDT::Edge(mesh_to_interface[global.first], mesh_to_interface[global.second]));
 
-                    const vec2 p0 = vec2(this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(e, 0)));
-                    const vec2 p1 = vec2(this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(e, 1)));
-
-                    const vec2 cp0 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.first]));
-                    const vec2 cp1 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.second]));
-
-                    if (p0 == cp0 || p0 == cp1 || p1 == cp0 || p1 == cp1)
-                    {
-                        continue;
-                    }
-
-                    const auto intersection = moist::predicates::xy::get_line_intersection(p0, p1, cp0, cp1, 1e16);
-
-                    if (intersection != std::nullopt)
-                    {
-                        // create vertex and re-create edges around it
-                        const g_index v = this->_constraints.vertices.create_vertex(intersection.value());
-
-                        // split the original edge...
-                        this->_constraints.edges.create_edge(this->_constraints.edges.vertex(e, 0), v);
-                        this->_constraints.edges.create_edge(v, this->_constraints.edges.vertex(e, 1));
-
-                        // create the new edge as split edge
-                        // this->_constraints.edges.create_edge(mesh_to_interface[global.first], v);
-                        // this->_constraints.edges.create_edge(v, mesh_to_interface[global.second]);
-
-                        to_delete.insert(e);
-                        intersected = true;
-                    }
-                }
+                // bool intersected = false;
+                // for (const g_index e : this->_constraints.edges)
+                // {
+                //     if (to_delete.contains(e))
+                //     {
+                //         continue;
+                //     }
+                //     const vec2 p0 = vec2(this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(e, 0)));
+                //     const vec2 p1 = vec2(this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(e, 1)));
+                //     const vec2 cp0 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.first]));
+                //     const vec2 cp1 = vec2(this->_constraints.vertices.point_ptr(mesh_to_interface[global.second]));
+                //     if (p0 == cp0 || p0 == cp1 || p1 == cp0 || p1 == cp1)
+                //     {
+                //         continue;
+                //     }
+                //     const auto intersection = moist::predicates::xy::get_line_intersection(p0, p1, cp0, cp1, 1e16);
+                //     if (intersection != std::nullopt)
+                //     {
+                //         if (p0 == intersection.value() || p1 == intersection.value() || cp0 == intersection.value() || cp1 == intersection.value())
+                //         {
+                //             continue;
+                //         }
+                //         // create vertex and re-create edges around it
+                //         const g_index v = this->_constraints.vertices.create_vertex(intersection.value());
+                //         // split the original edge...
+                //         this->_constraints.edges.create_edge(this->_constraints.edges.vertex(e, 0), v);
+                //         this->_constraints.edges.create_edge(v, this->_constraints.edges.vertex(e, 1));
+                //         // create the new edge as split edge
+                //         this->_constraints.edges.create_edge(mesh_to_interface[global.first], v);
+                //         this->_constraints.edges.create_edge(v, mesh_to_interface[global.second]);
+                //         //to_delete.insert(e);
+                //         intersected = true;
+                //     }
+                // }
 
                 // if no intersecting edge has been found, just create the edge in the constraints...
-                if (!intersected)
-                {
-                    this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
-                }
+                // if (!intersected)
+                // {
+                // this->_constraints.edges.create_edge(mesh_to_interface[global.first], mesh_to_interface[global.second]);
+                // }
 
-                geo::vector<g_index> deleted(this->_constraints.edges.nb());
-                for (const g_index d : to_delete)
-                {
-                    deleted[d] = true;
-                }
-                this->_constraints.edges.delete_elements(deleted, false);
+                // geo::vector<g_index> deleted(this->_constraints.edges.nb());
+                // for (const g_index d : to_delete)
+                // {
+                //     deleted[d] = true;
+                // }
+                // this->_constraints.edges.delete_elements(deleted, false);
             }
             else
             {
@@ -222,55 +177,77 @@ static bool vec2_eq_float_precision(const vec2& a, const vec2& b)
 
 void moist::InterfaceGenerator::Triangulate()
 {
+
+    _cdt.insertVertices(_interface_vertices);
+    _cdt.insertEdges(_interface_edges);
+    _cdt.eraseSuperTriangle();
+    geo::vector<double> vertices(_cdt.vertices.size() * 3);
+    geo::vector<geo::index_t> triangles(_cdt.triangles.size() * 3);
+
+    for (int v = 0; v < _cdt.vertices.size(); v++)
+    {
+        vertices[3 * v] = _cdt.vertices[v].x;
+        vertices[3 * v + 1] = _cdt.vertices[v].y;
+        vertices[3 * v + 2] = 0.0;
+    }
+
+    for (int f = 0; f < _cdt.triangles.size(); f++)
+    {
+        triangles[3 * f] = geo::index_t(_cdt.triangles[f].vertices[0]);
+        triangles[3 * f + 1] = geo::index_t(_cdt.triangles[f].vertices[1]);
+        triangles[3 * f + 2] = geo::index_t(_cdt.triangles[f].vertices[2]);
+    }
+
     // Only the constraint-mesh is required, must pass 0 and nullptr here to set_vertices when using triangle.
     // TODO: REALLY annoying thing about triangle... it seems to create a bbox ("master-triangles") where a vertex of the bbox corresponds with a vertex of the
     //       input, a double vertex is found and "ignored", which leads to a segfault when geogram tries to read the data back into it's
     //       own data structure... somehow create own bbox for triangle?
     // TODO: this doesn't actually help fix things...
-    geo::mesh_repair(this->_constraints, geo::MeshRepairMode::MESH_REPAIR_COLOCATE);
+    // geo::mesh_repair(this->_constraints, geo::MeshRepairMode::MESH_REPAIR_COLOCATE);
 
-    g_index nb_edges = this->_constraints.edges.nb();
-    auto delaunay = geo::Delaunay::create(2, "triangle");
-    delaunay->set_constraints(&this->_constraints);
-    delaunay->set_vertices(0, nullptr);
+    // g_index nb_edges = this->_constraints.edges.nb();
+    // auto delaunay = geo::Delaunay::create(2, "triangle");
+    // delaunay->set_constraints(&this->_constraints);
+    // delaunay->set_vertices(0, nullptr);
 
-    OOC_DEBUG("Triangulated #" << delaunay->nb_vertices() << " interface vertices");
+    // OOC_DEBUG("Triangulated #" << delaunay->nb_vertices() << " interface vertices");
 
-    geo::vector<double> vertices(delaunay->nb_vertices() * 3);
-    for(g_index v = 0; v < delaunay->nb_vertices(); v++)
-    {
-        vertices[3 * v] = delaunay->vertex_ptr(v)[0];
-        vertices[3 * v + 1] = delaunay->vertex_ptr(v)[1];
-        vertices[3 * v + 2] = 0.0;
-    }
+    // geo::vector<double> vertices(delaunay->nb_vertices() * 3);
+    // for(g_index v = 0; v < delaunay->nb_vertices(); v++)
+    // {
+    //     vertices[3 * v] = delaunay->vertex_ptr(v)[0];
+    //     vertices[3 * v + 1] = delaunay->vertex_ptr(v)[1];
+    //     vertices[3 * v + 2] = 0.0;
+    // }
 
-    geo::vector<geo::index_t> triangles(delaunay->nb_cells() * 3);
-    for(g_index t = 0; t < delaunay->nb_cells(); t++)
-    {
-        triangles[3 * t] = geo::index_t(delaunay->cell_vertex(t, 0));
-        triangles[3 * t + 1] = geo::index_t(delaunay->cell_vertex(t, 1));
-        triangles[3 * t + 2] = geo::index_t(delaunay->cell_vertex(t, 2));
-    }
+    // geo::vector<geo::index_t> triangles(delaunay->nb_cells() * 3);
+    // for(g_index t = 0; t < delaunay->nb_cells(); t++)
+    // {
+    //     triangles[3 * t] = geo::index_t(delaunay->cell_vertex(t, 0));
+    //     triangles[3 * t + 1] = geo::index_t(delaunay->cell_vertex(t, 1));
+    //     triangles[3 * t + 2] = geo::index_t(delaunay->cell_vertex(t, 2));
+    // }
 
     this->_triangulation->facets.assign_triangle_mesh((geo::coord_index_t) 3, vertices, triangles, true);
     this->_triangulation->facets.compute_borders();
 
 #ifndef NDEBUG
     // assign attribute constraint edges to edges in triangulation
-    geo::Attribute<double> e_constrained(this->_triangulation->edges.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    geo::Attribute<bool> v_constrained(this->_triangulation->vertices.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
     for (const g_index edge : this->_triangulation->edges)
     {
-        e_constrained[edge] = 0.5;
+        v_constrained[_triangulation->edges.vertex(edge, 0)] = false;
+        v_constrained[_triangulation->edges.vertex(edge, 1)] = false;
     }
 
     OOC_DEBUG("total of " << this->_triangulation->edges.nb() << " edges...");
-    for (const g_index constraint_edge : this->_constraints.edges)
+    for (int e = 0; e < _interface_edges.size(); e++)
     {
         // TODO: This also only works with z-growing...
-        const auto cep0p = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 0));
-        const auto cep1p = this->_constraints.vertices.point_ptr(this->_constraints.edges.vertex(constraint_edge, 1));
-        const vec2 cep0 = vec2(cep0p[0], cep0p[1]);
-        const vec2 cep1 = vec2(cep1p[0], cep1p[1]);
+        const CDT::Edge constraint_edge = _interface_edges[e];
+
+        const vec2 cep0 = vec2(_interface_vertices[constraint_edge.v1()].x, _interface_vertices[constraint_edge.v1()].y);
+        const vec2 cep1 = vec2(_interface_vertices[constraint_edge.v2()].x, _interface_vertices[constraint_edge.v2()].y);
 
         // find edge in interface mesh, and mark it
         for (const g_index edge : this->_triangulation->edges)
@@ -281,7 +258,8 @@ void moist::InterfaceGenerator::Triangulate()
             //if (ep0 == cep0 && ep1 == cep1 || ep0 == cep1 && ep1 == cep0)
             if ((vec2_eq_float_precision(ep0, cep0) && vec2_eq_float_precision(ep1, cep1)) || (vec2_eq_float_precision(ep0, cep1) && vec2_eq_float_precision(ep1, cep0)))
             {
-                e_constrained[edge] = 1.0;
+                v_constrained[_triangulation->edges.vertex(edge, 0)] = true;
+                v_constrained[_triangulation->edges.vertex(edge, 1)] = true;
             }
         }
     }
@@ -290,6 +268,8 @@ void moist::InterfaceGenerator::Triangulate()
 #endif // NDEBUG
     //geogram::Attribute<int> m_target_vertices(this->_triangulation->cells.attributes(), ATTRIBUTE_INTERFACE_TARGET_VERTICES);
     //m_target_vertices[0] = this->_unique_vertices / 2.0;
+
+    // this->Decimate();
 }
 
 static vec3 middle(const vec3 v0, const vec3 v1)
@@ -301,11 +281,32 @@ static vec3 middle(const vec3 v0, const vec3 v1)
     );
 }
 
+static std::pair<geo::index_t, geo::index_t> find_shortest_edge(const geo::index_t& f, const geo::Mesh& mesh)
+{
+    double shortest = std::numeric_limits<double>::max();
+    std::pair<geo::index_t, geo::index_t> e_shortest;
+    for (geo::index_t le = 0; le < 3; le++)
+    {
+        const geo::index_t v0 = mesh.facets.vertex(f, le);
+        const geo::index_t v1 = mesh.facets.vertex(f, (le + 1) % 3);
+
+        const double d = geo::distance(mesh.vertices.point(v0), mesh.vertices.point(v1));
+        if (d <= shortest)
+        {
+            shortest = d;
+            e_shortest = std::make_pair(v0, v1);
+        }
+    }
+
+    return e_shortest;
+}
+
 void moist::InterfaceGenerator::Decimate()
 {
-    const size_t n = (this->_triangulation->facets.nb() - this->_constraints.edges.nb()) / 2;
+    size_t n = (this->_triangulation->facets.nb() - this->_constraints.edges.nb()) / 2;
+    OOC_DEBUG("decimating " << n << " worst unconstrained facets");
 
-    // enumerate the n worst triangles
+     // enumerate the n worst triangles
     std::vector<g_index> triangles(this->_triangulation->facets.nb());
     for (const g_index facet : this->_triangulation->facets)
     {
@@ -318,8 +319,47 @@ void moist::InterfaceGenerator::Decimate()
         return moist::mesh_quality::tri::aspect_ratio(a, *triangulation) > moist::mesh_quality::tri::aspect_ratio(b, *triangulation);
     });
 
+    geo::Attribute<bool> v_constrained(this->_triangulation->vertices.attributes(), ATTRIBUTE_CONSTRAINT_EDGE);
+    for (const geo::index_t f : triangles)
+    {
+        if (n == 0)
+        {
+            break;
+        }
+
+        const auto e = find_shortest_edge(f, *triangulation);
+
+        // Check if the edge is decimatable
+        if (v_constrained[e.first] && v_constrained[e.second])
+        {
+            continue;
+        }
+
+        if (v_constrained[e.first])
+        {
+            triangulation->vertices.point(e.second) = triangulation->vertices.point(e.first);
+            v_constrained[e.second] = true;
+        }
+        else if (v_constrained[e.second])
+        {
+            triangulation->vertices.point(e.first) = triangulation->vertices.point(e.second);
+            v_constrained[e.first] = true;
+        }
+        else
+        {
+            // idk just merge in middle
+            const vec3 mid = middle(triangulation->vertices.point(e.first), triangulation->vertices.point(e.second));
+            triangulation->vertices.point(e.first) = mid;
+            triangulation->vertices.point(e.second) = mid;
+            v_constrained[e.first] = true;
+            v_constrained[e.second] = true;
+        }
+
+        n--;
+    }
+
     // decimate shortest edge of n triangles
-    for (size_t i = 0; i < n; i++)
+    /*for (size_t i = 0; i < n; i++)
     {
         const g_index f = triangles[i];
         l_index shortest_edge = -1;
@@ -345,7 +385,7 @@ void moist::InterfaceGenerator::Decimate()
         triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3)).x = mid.x;
         triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3)).y = mid.y;
         triangulation->vertices.point(triangulation->facets.vertex(f, (shortest_edge + 1) % 3)).z = mid.z;
-    }
+    }*/
 
     // delete all resulting 0-volume triangles
     geo::vector<g_index> deleted_facets(triangulation->facets.nb());

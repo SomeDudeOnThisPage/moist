@@ -96,7 +96,7 @@ int main(int argc, char* argv[])
     moist::utils::geogram::initialize();
 
     const moist::Tiff tiff_data(arguments.input, arguments.first, arguments.amount);
-    moist::SurfaceGenerator generator(tiff_data, arguments.first + arguments.dir_offset, arguments.axis, arguments.f_center, arguments.f_invert);
+    moist::SurfaceGenerator generator(tiff_data, int(arguments.first) + arguments.dir_offset, arguments.axis, arguments.f_center, arguments.f_invert);
 
     geo::Mesh mesh(3);
     {

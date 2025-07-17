@@ -15,7 +15,7 @@ void moist::metrics::internal::metrics_t::AppendCSV(const std::filesystem::path 
     std::ofstream out(csv, std::ios::app);
     if (!out.is_open())
     {
-        throw std::runtime_error("Failed to open CSV file for dumping metrics...");
+        throw std::runtime_error("Failed to open CSV file " + csv.string() + " for dumping metrics...");
     }
 
     out.precision(10); // let's keep it reasonable...

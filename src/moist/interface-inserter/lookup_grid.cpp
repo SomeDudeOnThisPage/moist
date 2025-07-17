@@ -1,46 +1,84 @@
 #include "lookup_grid.hpp"
 
-moist::LookupGrid::LookupGrid(const vec2 grid_size, const vec2 cell_size) : _grid_size(grid_size), _cell_size(cell_size)
+#include <geogram/mesh/mesh_AABB.h>
+
+#include "moist/core/predicates.inl"
+#include "moist/core/geometry.inl"
+
+moist::LookupGrid::LookupGrid(const geo::Mesh& mesh) : _mesh(mesh)
 {
+
 }
 
-static void get_interface_aabb()
+void moist::LookupGrid::Initialize(const double resolution)
 {
+    _grid.clear();
+    _resolution = resolution;
+    _min_bounds = vec2(std::numeric_limits<double>::max(), std::numeric_limits<double>::max());
+    _max_bounds = vec2(std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest());
 
-}
-
-void moist::LookupGrid::GetGridCells(const GEO::Box2d &aabb, std::vector<g_index> &cells)
-{
-    vec2 min = {aabb.xy_min[0], aabb.xy_min[1]};
-    vec2 max = {aabb.xy_max[0], aabb.xy_max[1]};
-
-    uint32_t start_x = std::max(static_cast<uint32_t>(0), static_cast<uint32_t>(std::floor(min.x / _cell_size.x)));
-    uint32_t end_x = std::min(static_cast<uint32_t>(_grid_size.x) - 1, static_cast<uint32_t>(std::floor(max.x / _cell_size.x)));
-
-    uint32_t start_y = std::max(static_cast<uint32_t>(0), static_cast<uint32_t>(std::floor(min.y / _cell_size.y)));
-    uint32_t end_y = std::min(static_cast<uint32_t>(_grid_size.y) - 1, static_cast<uint32_t>(std::floor(max.y / _cell_size.y)));
-
-    // Collect overlapping cells...
-    for (size_t y = start_y; y <= end_y; y++)
+    for (geo::index_t v = 0; v < _mesh.vertices.nb(); v++)
     {
-        for (size_t x = start_x; x <= end_x; x++)
+        const double* p = _mesh.vertices.point_ptr(v);
+        _min_bounds.x = std::min(_min_bounds.x, p[0]);
+        _min_bounds.y = std::min(_min_bounds.y, p[1]);
+        _max_bounds.x = std::max(_max_bounds.x, p[0]);
+        _max_bounds.y = std::max(_max_bounds.y, p[1]);
+    }
+
+    _cell_size = (_max_bounds - _min_bounds) / _resolution;
+
+    auto v_interface = geo::Attribute<bool>(_mesh.vertices.attributes(), "v_interface");
+    for (geo::index_t c = 0; c < _mesh.cells.nb(); c++)
+    {
+        if (!moist::predicates::is_interface_cell(c, _mesh))
         {
-            g_index index = y * static_cast<uint32_t>(_grid_size.x) + x;
-            cells.push_back(index);
+            continue;
         }
+
+        // Construct AABB for each cell on the interface...
+        this->InsertCell(c);
     }
 }
 
-void moist::LookupGrid::Insert(const g_index c, const GEO::Mesh &mesh)
+std::vector<moist::LookupGrid::GridCell> moist::LookupGrid::GetCells(const geo::Box2d& aabb) const
 {
-    mesh.cells.points(c);
+    std::vector<GridCell> result;
+
+    auto to_cell = [&](const vec2& p)
+    {
+        int ix = std::clamp(int((p.x - _min_bounds.x) / _cell_size.x), 0, int(_resolution) - 1);
+        int iy = std::clamp(int((p.y - _min_bounds.y) / _cell_size.y), 0, int(_resolution) - 1);
+        return std::make_pair(ix, iy);
+    };
+
+    const GridCell min_cell {
+        std::clamp(int((aabb.xy_min[0] - _min_bounds.x) / _cell_size.x), 0, int(_resolution) - 1),
+        std::clamp(int((aabb.xy_min[1] - _min_bounds.y) / _cell_size.y), 0, int(_resolution) - 1)
+    };
+    const GridCell max_cell {
+        std::clamp(int((aabb.xy_max[0] - _min_bounds.x) / _cell_size.x), 0, int(_resolution) - 1),
+        std::clamp(int((aabb.xy_max[1] - _min_bounds.y) / _cell_size.y), 0, int(_resolution) - 1)
+    };
+
+    for (int i = min_cell.first; i <= max_cell.first; i++)
+    {
+        for (int j = min_cell.second; j <= max_cell.second; j++)
+        {
+            result.emplace_back(i, j);
+        }
+    }
+
+    return result;
 }
 
-void moist::LookupGrid::Erase(const g_index c, const GEO::Mesh &mesh)
+void moist::LookupGrid::InsertCell(const geo::index_t c)
 {
-}
+    auto aabb = create_interface_cell_bbox2d(c, _mesh, geo::Attribute<bool>(_mesh.vertices.attributes(), "v_interface"));
+    auto covered_cells = this->GetCells(aabb);
 
-std::vector<g_index> &moist::LookupGrid::GetGridCell(const g_index &index)
-{
-    //return _cells.at(index);
+    for (const auto& cell : covered_cells)
+    {
+        _grid[cell].insert(c);
+    }
 }

@@ -6,7 +6,8 @@ project(OutOfCore_Meshing
 
 # Options
 # option(OOC_WITH_TETWILD "Bundle fTetWild" ON)
-option(OOC_WITH_TESTS   "Build Tests" ON)
+option(MOIST_TESTS                        "Build Tests" ON)
+option(CMAKE_OPTION_USE_LOOKUP_GRID       "Use LookupGrid optimizations" ON)
 
 set(CUDA_DIR "/usr/local/cuda-12.8/bin/")
 set(CUDA_INCLUDE_DIR "/usr/local/cuda-12.8/include")
@@ -28,6 +29,6 @@ add_subdirectory(src/moist/interface-generator)
 add_subdirectory(src/moist/interface-inserter)
 add_subdirectory(src/moist/submesh-merger)
 
-if(OOC_WITH_TESTS)
+if(MOIST_TESTS)
     add_subdirectory(src/tests)
 endif()

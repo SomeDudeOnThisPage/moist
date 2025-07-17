@@ -9,6 +9,7 @@
 #include <map>
 
 #ifndef NDEBUG
+#define OPTION_LOOKUP_GRID
 // #define OPTION_PARALLEL_LOCAL_OPERATIONS // dev
 // #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG

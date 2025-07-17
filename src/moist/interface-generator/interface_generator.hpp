@@ -7,6 +7,8 @@
 
 #include <geogram/mesh/mesh.h>
 
+#include <CDT.hpp>
+
 #include "moist/core/defines.hpp"
 #include "moist/core/core_interface.hpp"
 
@@ -49,6 +51,9 @@ namespace moist
 
         GEO::Mesh _constraints;
         size_t _unique_vertices;
+        CDT::Triangulation<double> _cdt;
+        std::vector<CDT::V2d<double>> _interface_vertices;
+        CDT::EdgeVec _interface_edges;
     };
 }
 

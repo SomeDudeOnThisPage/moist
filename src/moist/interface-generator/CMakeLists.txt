@@ -22,6 +22,7 @@ file(GLOB_RECURSE HEADERS "*.hpp" "../core-interface.hpp" "*.inl")
 
 add_executable(OutOfCore_Meshing_InterfaceGenerator ${SOURCES} ${HEADERS})
 target_link_libraries(OutOfCore_Meshing_InterfaceGenerator PRIVATE geogram)
+target_link_libraries(OutOfCore_Meshing_InterfaceGenerator PRIVATE CDT)
 target_link_libraries(OutOfCore_Meshing_InterfaceGenerator PRIVATE CLI11::CLI11)
 
 target_link_libraries(OutOfCore_Meshing_InterfaceGenerator PRIVATE OutOfCore_Meshing_Core)

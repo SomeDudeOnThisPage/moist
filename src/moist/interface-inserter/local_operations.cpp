@@ -152,7 +152,7 @@ void moist::operation::edge_split_1to3(MeshSlice &mesh, const g_index cell, cons
 
 static bool are_colinear(const vec3& a, const vec3& b, const vec3& c)
 {
-    return geo::length(geo::cross(b - a, c - a)) < 0.0001;
+    return geo::length(geo::cross(b - a, c - a)) < 1e-10;
 }
 
 void moist::operation::vertex_insert_1to2(MeshSlice &mesh, const g_index& c, const g_index& v, const moist::AxisAlignedPlane &plane)

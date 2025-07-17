@@ -11,6 +11,8 @@ add_executable(MOIST_Tests
     test_utils.hpp
     test_utils.cpp
 
+    fixtures/core_group.def.hpp
+
     $<TARGET_OBJECTS:MOIST_InterfaceInserter_Units>
     $<TARGET_OBJECTS:MOIST_Merger_Units>
 )

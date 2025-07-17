@@ -13,15 +13,23 @@ moist::SurfaceGenerator::SurfaceGenerator(const Tiff &tiff, const uint32_t offse
     // create a "skirt" of 0-values around the entire mesh to close it off
     // _grid.set_grid_dimensions(tiff.width() + 2, tiff.height() + 2, tiff.depth() + 2);
 
-    //const size_t sx = tiff.width();
-    //const size_t sy = tiff.height();
+    const size_t sx = tiff.width();
+    const size_t sy = tiff.height();
     const size_t sz = tiff.depth();
-
-    const size_t sx = 100;
-    const size_t sy = 100;
 
     _grid.set_grid_dimensions(sx + 2, sy + 2, sz + 2);
     _mc.set_grid3d(_grid);
+
+    for (size_t x = 0; x < sx + 2; x++)
+    {
+        for (size_t y = 0; y < sy + 2; y++)
+        {
+            for (size_t z = 0; z < sz + 2; z++)
+            {
+                _grid.set_grid_value(x, y, z, 0.0);
+            }
+        }
+    }
 
     for (size_t x = 1; x < sx + 1; x++)
     {
