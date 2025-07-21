@@ -206,6 +206,7 @@ static double r24(double value)
                     }
                 }
 
+                // TODO: Make this better without v_opposite!
                 const auto [v0, v1, v2] = moist::geometry::exact::other(c, v_opposite, this->_em);
                 this->_em.Add(moist::ExactMesh::ExactCell(v_opposite, v0, v1, v));
                 this->_em.Add(moist::ExactMesh::ExactCell(v_opposite, v1, v2, v));

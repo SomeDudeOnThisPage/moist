@@ -293,8 +293,8 @@ void moist::operation::vertex_insert_1to3(MeshSlice& mesh, const g_index& c, con
 
 void moist::operation::exact::InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh)
 {
-    typedef std::pair<std::size_t, std::size_t> Edge;
-    static const std::array<Edge, 6> edges =
+    // Basically how geogram indexes its' edges...
+    static const std::array<std::pair<std::size_t, std::size_t>, 6> edges =
     {{
         {0, 1}, {0, 2}, {0, 3},
         {1, 2}, {1, 3},

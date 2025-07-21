@@ -17,22 +17,20 @@ namespace moist
 {
     constexpr std::size_t NO_VERTEX = std::size_t(-1U);
 
-    typedef CGAL::Exact_predicates_exact_constructions_kernel K;
-    typedef K::Segment_3 Segment;
-    typedef K::Line_3 Line;
-    typedef K::Tetrahedron_3 e_tet; // This stores the points, not indices... we need an indexed data structure here... so just use 4 indices as tet data struct
-    typedef K::Point_3 e_vec3;
+    typedef CGAL::Exact_predicates_exact_constructions_kernel ExactKernel;
+    typedef ExactKernel::Segment_3 Segment;
+    typedef ExactKernel::Line_3 Line;
 
     class ExactMesh
     {
     public:
         struct ExactPoint
         {
-            moist::e_vec3 _p;
+            moist::ExactKernel::Point_3 _p;
             geo::index_t _v; // Only non-interface vertices must have this set, to retranslate the new geometry back into the main mesh later... All others must be geo::NO_VERTEX
             bool _deleted;
-            ExactPoint(const geo::vec3 p) : _p(e_vec3(p.x, p.y, p.z)), _v(geo::NO_VERTEX), _deleted(false) {}
-            ExactPoint(const geo::vec3 p, geo::index_t v) : _p(e_vec3(p.x, p.y, p.z)), _v(v), _deleted(false) {}
+            ExactPoint(const geo::vec3 p) : _p(ExactKernel::Point_3(p.x, p.y, p.z)), _v(geo::NO_VERTEX), _deleted(false) {}
+            ExactPoint(const geo::vec3 p, geo::index_t v) : _p(ExactKernel::Point_3(p.x, p.y, p.z)), _v(v), _deleted(false) {}
 
             const double x() const { return CGAL::to_double(_p.x()); }
             const double y() const { return CGAL::to_double(_p.y()); }
