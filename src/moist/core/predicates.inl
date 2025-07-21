@@ -231,10 +231,10 @@ namespace moist::predicates
         s[1] = moist::predicates::orient3d(p0, p, p2, p3);
         s[2] = moist::predicates::orient3d(p0, p1, p, p3);
         s[3] = moist::predicates::orient3d(p0, p1, p2, p);
-        //s[0] = geogram::PCK::orient_3d(p, p1, p2, p3);
-        //s[1] = geogram::PCK::orient_3d(p0, p, p2, p3);
-        //s[2] = geogram::PCK::orient_3d(p0, p1, p, p3);
-        //s[3] = geogram::PCK::orient_3d(p0, p1, p2, p);
+        // s[0] = geo::PCK::orient_3d(p, p1, p2, p3);
+        // s[1] = geo::PCK::orient_3d(p0, p, p2, p3);
+        // s[2] = geo::PCK::orient_3d(p0, p1, p, p3);
+        // s[3] = geo::PCK::orient_3d(p0, p1, p2, p);
         const bool inside_or_on_boundary = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
             (s[0] <= 0 && s[1] <= 0 && s[2] <= 0 && s[3] <= 0)

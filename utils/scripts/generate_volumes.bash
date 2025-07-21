@@ -31,7 +31,7 @@ if [[ -z "$input" || ! -d "$output" ]]; then
   exit 1
 fi
 
-
+# probably quiet output of fTetWild
 for file in "$input"/*; do
   if [[ -f "$file" ]]; then
     filename=$(basename "$file")

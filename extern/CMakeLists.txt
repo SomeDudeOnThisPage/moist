@@ -121,6 +121,33 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(cdt)
 
+# Idea: Use cgals exact predicates??
+#FetchContent_Declare(
+#  boost
+#  GIT_REPOSITORY https://github.com/boostorg/boost.git
+#  GIT_TAG        boost-1.84.0
+#)
+#
+#set(BOOST_ENABLE_CMAKE ON CACHE BOOL "")
+#FetchContent_MakeAvailable(boost)
+
+find_package(Boost REQUIRED)
+#find_package(GMP REQUIRED)
+#find_package(MPFR REQUIRED)
+find_package(CGAL REQUIRED)
+
+#FetchContent_Declare(
+#  CGAL
+#  GIT_REPOSITORY https://github.com/CGAL/cgal.git
+#  GIT_TAG        v5.6.1
+#)
+
+set(CGAL_HEADER_ONLY ON)
+set(CGAL_USE_GMP ON)
+set(CGAL_USE_MPFR ON)
+
+#FetchContent_MakeAvailable(CGAL)
+
 # TODO: Maybe create a "forked" github repo, port tetrahedron to cmake and c++23, and include via fetchcontent...
 add_subdirectory(tetrahedron)
 add_subdirectory(triangle)

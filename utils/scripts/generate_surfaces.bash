@@ -75,6 +75,7 @@ for (( i=0; i < slices; i++ )); do
 
   echo "Generating slice $(( i_first )): $current_first -> $((i_first + range))"
 
+  # probably add quiet flag to mute output in console...
   # Just assume the program is run in the project source directory....
   ./build/bin/moist-extract \
     --input "$input" \

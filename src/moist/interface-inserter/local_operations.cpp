@@ -256,47 +256,6 @@ void moist::operation::InsertVertexOnCellBoundaryEdge(const g_index& c, const g_
     }
 
     mesh.DeleteTetrahedra(c);
-    /*if (v_other.size() == 3)
-    {
-        // Case: Cell has a facet on interface plane. We need to find (estimate) the coplanar points to p(v) in order to split the edge connecting them.
-        const vec3 p0 = mesh.vertices.point(v_other.at(0));
-        const vec3 p1 = mesh.vertices.point(v_other.at(1));
-        const vec3 p2 = mesh.vertices.point(v_other.at(2));
-        const vec3 p3 = mesh.vertices.point(v_non_interface.at(0));
-        if (are_colinear(p0, p1, p))
-        {
-            mesh.CreateTetrahedra({
-                {v_non_interface.at(0), v_other.at(0), v_other.at(2), v},
-                {v_non_interface.at(0), v_other.at(1), v_other.at(2), v}
-            });
-        }
-        else if (are_colinear(p1, p2, p))
-        {
-            mesh.CreateTetrahedra({
-                {v_non_interface.at(0), v_other.at(0), v_other.at(1), v},
-                {v_non_interface.at(0), v_other.at(0), v_other.at(2), v}
-            });
-        }
-        else if (are_colinear(p0, p2, p))
-        {
-            mesh.CreateTetrahedra({
-                {v_non_interface.at(0), v_other.at(1), v_other.at(0), v},
-                {v_non_interface.at(0), v_other.at(1), v_other.at(2), v}
-            });
-        }
-    }
-    else if (v_other.size() == 2)
-    {
-        // Case: Cell has only one edge on interface plane. Splitting is simple.
-        mesh.CreateTetrahedra({
-            {v_non_interface.at(0), v_non_interface.at(1), v_other.at(0), v},
-            {v_non_interface.at(0), v_non_interface.at(1), v_other.at(1), v}
-        });
-    }
-    else
-    {
-        OOC_WARNING("invalid 1 -> 2 split configuration");
-    }*/
 }
 
 void moist::operation::vertex_insert_1to3(MeshSlice& mesh, const g_index& c, const g_index& v, const moist::AxisAlignedPlane &plane)
@@ -330,4 +289,50 @@ void moist::operation::vertex_insert_1to3(MeshSlice& mesh, const g_index& c, con
         {v_opposite, v2, v0, v}
     });
     mesh.DeleteTetrahedra(c);
+}
+
+void moist::operation::exact::InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh)
+{
+    typedef std::pair<std::size_t, std::size_t> Edge;
+    static const std::array<Edge, 6> edges =
+    {{
+        {0, 1}, {0, 2}, {0, 3},
+        {1, 2}, {1, 3},
+        {2, 3}
+    }};
+
+    const auto& point = mesh.Point(v);
+    const auto& cell = mesh.Cell(c);
+
+    for (const auto& [i, j] : edges)
+    {
+        const std::size_t& v0 = cell._points[i];
+        const std::size_t& v1 = cell._points[j];
+        const auto& p0 = mesh.Point(v0);
+        const auto& p1 = mesh.Point(v1);
+
+        if (CGAL::collinear(p0._p, p1._p, point._p))
+        {
+            if (CGAL::collinear_are_ordered_along_line(p0._p, point._p, p1._p))
+            {
+                std::array<int, 2> v_other;
+                int idx = 0;
+                for (int k = 0; k < 4; k++)
+                {
+                    if (k != i && k != j)
+                    {
+                        v_other[idx++] = k;
+                    }
+                }
+
+                const std::size_t& v2 = cell._points[v_other[0]];
+                const std::size_t& v3 = cell._points[v_other[1]];
+
+                mesh.Add(moist::ExactMesh::ExactCell(v, v0, v2, v3));
+                mesh.Add(moist::ExactMesh::ExactCell(v, v1, v2, v3));
+                mesh.DeleteCell(c);
+                break;
+            }
+        }
+    }
 }

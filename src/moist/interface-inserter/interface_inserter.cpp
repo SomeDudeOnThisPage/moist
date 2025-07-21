@@ -163,11 +163,14 @@ void moist::insert_constraints(moist::MeshSlice& a, moist::MeshSlice& b, moist::
         do
         {
             iterations++;
-            OOC_DEBUG("inserting " << (nde_a.edges.nb() + nde_b.edges.nb()) << " non-decimatable edges into both meshes (iteration #" << iterations << ")");
 
             merge_edge_meshes(nde_a, nde_b, nde_ab);
+            geo::mesh_repair(nde_ab);
+            OOC_DEBUG("inserting " << (nde_ab.edges.nb()) << " non-decimatable edges into both meshes (iteration #" << iterations << ")");
+            OOC_DEBUG("nde_a: " << nde_a.edges.nb() << ", " << "nde_b: " << nde_b.edges.nb());
+
         #ifndef NDEBUG
-            moist::utils::geogram::save("merged_steiner_edges.obj", nde_ab);
+            moist::utils::geogram::save("merged_steiner_edges_" + to_string(iterations) + ".obj", nde_ab);
         #endif // NDEBUG
 
             a.InsertEdges(nde_ab, *interface.Plane());

@@ -47,6 +47,12 @@ namespace moist
 
         void InsertVertexOnCellBoundaryFacet(const g_index& c, const g_index& v, MeshSlice &mesh);
         void InsertVertexOnCellBoundaryEdge(const g_index& c, const g_index& v, MeshSlice &mesh);
+
+        namespace exact
+        {
+            void InsertVertexOnCellBoundaryFacet(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh);
+            void InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh);
+        }
     }
 }
 

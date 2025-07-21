@@ -72,6 +72,9 @@ TEST_P(InterfaceInserterTestFixture, GenerateStatistics)
     moist::utils::geogram::save("test-a.msh", slice_a);
     moist::utils::geogram::save("test-b.msh", slice_b);
 #endif // NDEBUG
+
+    *metrics << moist::metrics::Metric { "overlaps", moist::test::contains_overlapping_constraints(slice_a, slice_b, interface) };
+
 }
 
 INSTANTIATE_TEST_SUITE_P(

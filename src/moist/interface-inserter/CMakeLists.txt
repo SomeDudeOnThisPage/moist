@@ -17,6 +17,14 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+find_library(GMPXX_LIB gmpxx REQUIRED)
+find_library(GMP_LIB gmp REQUIRED)
+find_library(MPFR_LIB mpfr REQUIRED)
+# honestly im grasping at straws here WHY IS THIS SH NOT WORKING
+message(STATUS "GMPXX_LIB = ${GMPXX_LIB}")
+message(STATUS "GMP_LIB = ${GMP_LIB}")
+message(STATUS "MPFR_LIB = ${MPFR_LIB}")
+
 if(MOIST_TESTS)
     add_library(MOIST_InterfaceInserter_Units OBJECT
         slice.hpp
@@ -25,11 +33,19 @@ if(MOIST_TESTS)
         local_operations.cpp
         lookup_grid.hpp
         lookup_grid.cpp
+        exact_mesh.hpp
+        exact_mesh.cpp
         interface_inserter.hpp
         interface_inserter.cpp
+        new_predicates.inl
+        geometry_exact.inl
     )
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE geogram)
+    target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE CLI11::CLI11)
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE OutOfCore_Meshing_Core)
+    target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE ${GMP_LIB} ${GMPXX_LIB} ${MPFR_LIB})
+    target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE CGAL::CGAL)
+
     set(SOURCES
         main.cpp
     )
@@ -46,9 +62,12 @@ else()
     add_executable(OutOfCore_Meshing_InterfaceInserter ${SOURCES} ${HEADERS})
 endif()
 
+
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE geogram)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE CLI11::CLI11)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE OutOfCore_Meshing_Core)
+target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE ${GMPXX_LIB} ${GMP_LIB} ${MPFR_LIB})
+target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE CGAL::CGAL)
 target_include_directories(OutOfCore_Meshing_InterfaceInserter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(CMAKE_OPTION_UNROLL_LOOPS)

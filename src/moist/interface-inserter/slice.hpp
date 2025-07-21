@@ -14,6 +14,7 @@
 #ifdef OPTION_LOOKUP_GRID
     #include "lookup_grid.hpp"
 #endif
+#include "exact_mesh.hpp"
 
 namespace moist
 {
@@ -70,13 +71,6 @@ namespace moist
         MeshSlice(const geo::index_t dimension = 3, const bool single_precision = false);
         void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
 
-        /**
-         * @brief Inserts a created Interface into this MeshSlice.
-         *
-         * @param interface The (initialized) interface reference.
-         */
-        moist::SteinerPoints InsertInterface(moist::Interface& interface, moist::metrics::Metrics_ptr metrics = nullptr);
-
         void InsertVertex(const geo::vec3& point, const moist::AxisAlignedPlane& plane);
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
@@ -91,7 +85,10 @@ namespace moist
     private:
 #ifdef OPTION_LOOKUP_GRID
         moist::LookupGrid _grid;
+        moist::LookupGridExact _e_grid;
 #endif
+        moist::ExactMesh _em;
+
         std::vector<g_index> _created_cell_ids;
         std::vector<CreatedTetrahedon> _created_cells;
         std::unordered_set<geo::index_t> _deleted_cells;
@@ -100,12 +97,12 @@ namespace moist
 
         void InsertVertices(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
         void InsertVertex2(const geo::vec3& p);
+        void InsertVertexExact(const moist::ExactMesh::ExactPoint& p);
 
         void IsDeleted(const geo::index_t c);
 
         // global operations
         void InsertInterfaceVertices(moist::Interface& interface);
-        void InsertInterfaceEdges(moist::Interface& interface, SteinerPoints& steiner_points);
         void InsertEdges2(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
 
         g_index ReorderCells(const moist::AxisAlignedPlane& plane);

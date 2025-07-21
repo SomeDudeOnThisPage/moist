@@ -318,19 +318,30 @@ namespace moist::geometry
     PURE INLINE std::unordered_set<Edge, EdgeHash> collect_edges(const geo::Mesh& mesh)
     {
         std::unordered_set<Edge, EdgeHash> edges;
-        for (const g_index f : mesh.facets)
+        if (mesh.facets.nb() > 0)
         {
-        #ifdef OPTION_UNROLL_LOOPS
-            #pragma unroll 3
-        #endif
-            for (size_t i = 0; i < 3; i++)
+            for (const g_index f : mesh.facets)
             {
-                edges.emplace(
-                    mesh.facets.vertex(f, i),
-                    mesh.facets.vertex(f, (i + 1) % 3)
-                );
+            #ifdef OPTION_UNROLL_LOOPS
+                #pragma unroll 3
+            #endif
+                for (size_t i = 0; i < 3; i++)
+                {
+                    edges.emplace(
+                        mesh.facets.vertex(f, i),
+                        mesh.facets.vertex(f, (i + 1) % 3)
+                    );
+                }
             }
         }
+        else if (mesh.edges.nb() > 0)
+        {
+            for (const geo::index_t e : mesh.edges)
+            {
+                edges.emplace(mesh.edges.vertex(e, 0), mesh.edges.vertex(e, 1));
+            }
+        }
+
         return edges; // return by value not ideal should probably be passed as reference parameter
     }
 }
