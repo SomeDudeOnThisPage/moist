@@ -4,6 +4,7 @@
 #include <variant>
 #include <vector>
 #include <cstdint>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <iostream>
@@ -18,7 +19,7 @@ namespace moist
         std::vector<uint8_t>,
         std::vector<uint16_t>,
         std::vector<uint32_t>,
-        std::vector<uint64_t>,
+        std::vector<uint64_t>
     >;
 
     class Tiff

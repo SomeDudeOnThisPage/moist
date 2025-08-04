@@ -21,106 +21,124 @@
 #include "lookup_grid.hpp"
 #include "new_predicates.inl"
 #include "geometry_exact.inl"
-
-#ifndef NDEBUG
-    #define OPTION_LOOKUP_GRID
-#endif // OPTION_LOOKUP_GRID
+#include "exact_types.hpp"
 
 /* public */ moist::MeshSlice::MeshSlice(const geo::index_t dimension, const bool single_precision) : geo::Mesh(dimension, single_precision)
-#ifdef OPTION_LOOKUP_GRID
+#ifndef MOIST_OPTION_EXACT_PREDICATES
     , _grid(*this)
-#endif // OPTION_LOOKUP_GRID
+#endif // MOIST_OPTION_EXACT_PREDICATES
 {
 }
 
+/* public */ void moist::MeshSlice::CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra)
+{
+    for (const auto tet : tetrahedra)
+    {
+        _created_cells.push_back(tet);
+    }
+}
+
+/* public */ void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tetrahedra)
+{
+    auto c_deleted = geo::Attribute<bool>(this->cells.attributes(), "c_deleted");
+    for (const auto c : tetrahedra)
+    {
+        c_deleted[c] = true;
+        _deleted_cells.insert(c);
+    }
+}
+
+/* public */ geo::index_t moist::MeshSlice::CreateTetrahedra()
+{
+    geo::index_t first = geo::NO_CELL;
+    for (const auto tet : this->_created_cells)
+    {
+        const auto t = this->cells.create_tet(tet.v0, tet.v1, tet.v2, tet.v3);
+        if (first == geo::NO_CELL)
+        {
+            first = t;
+        }
+
+        _created_cell_ids.push_back(t);
+    }
+
+    this->_created_cells.clear();
+    return first;
+}
+
+/* public */ void moist::MeshSlice::FlushTetrahedra(bool delete_zero_volume)
+{
+    geo::vector<geo::index_t> flushed_elements(this->cells.nb());
+    if (delete_zero_volume)
+    {
+        for (const auto c : this->cells)
+        {
+            if (geo::mesh_cell_volume(*this, c) == 0.0)
+            {
+                flushed_elements[c] = true;
+            }
+        }
+    }
+
+    for (const auto c : _deleted_cells)
+    {
+        flushed_elements[c] = true;
+    }
+
+    this->cells.delete_elements(flushed_elements, false);
+    _deleted_cells.clear();
+}
+
+/* private */ geo::index_t moist::MeshSlice::ReorderInterfaceCells(const moist::AxisAlignedPlane& plane)
+{
+    //std::mutex m;
+    //geo::parallel_for(0, this->cells.nb(), [&](const geo::index_t c)
+    //{
+        for (const geo::index_t c : this->cells)
+        {
+            if (!moist::predicates::cell_on_plane(c, *this, plane))
+            {
+                continue;
+            }
+
+            // std::lock_guard<std::mutex> lock(m);
+            this->CreateTetrahedra({
+                this->cells.vertex(c, 0),
+                this->cells.vertex(c, 1),
+                this->cells.vertex(c, 2),
+                this->cells.vertex(c, 3)
+            });
+
+            this->DeleteTetrahedra(c);
+        }
+    //});
+
+    this->FlushTetrahedra();
+    const auto start = this->CreateTetrahedra();
+    OOC_DEBUG("reordered " << this->cells.nb() - start << " interface cells");
+    return start;
+}
+
+#ifndef MOIST_OPTION_EXACT_PREDICATES
 /* public */ void moist::MeshSlice::InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane)
 {
-    // Clamp vertices that are within eps of the plane, and set the v_interface attribute for later use.
+    // Set the v_interface attribute for later use.
     auto v_interface = geo::Attribute<bool>(this->vertices.attributes(), "v_interface");
     geo::Attribute<bool> v_fixed(this->vertices.attributes(), "v_fixed");
 
-    //geo::parallel_for(0, this->vertices.nb(), [&](const geo::index_t v)
-    //{
     for (const geo::index_t v : this->vertices)
     {
         v_fixed[v] = false;
         if (!moist::predicates::point_on_plane(this->vertices.point(v), plane))
         {
-            { /* LOCK_ATTRIBUTES; */ v_interface[v] = false; }
+            v_interface[v] = false;
             continue;
         }
 
-        { /* LOCK_ATTRIBUTES; */ v_interface[v] = true; }
-
-        switch (plane.axis)
-        {
-            case moist::Axis::X:
-                this->vertices.point(v).x = plane.extent;
-                break;
-            case moist::Axis::Y:
-                this->vertices.point(v).y = plane.extent;
-                break;
-            case moist::Axis::Z:
-                this->vertices.point(v).z = plane.extent;
-                break;
-            default:
-                throw std::runtime_error("unknown axis definition");
-        }
-    }
-    //});
-
-    // Reorder all cells, so the cells touching the plane are packed tight at the end of the cell array.
-    // Vertices don't really need this treatment, as most vertex accesses are indexed through cells anyway.
-    std::mutex m;
-    //geo::parallel_for(0, this->cells.nb(), [&](const geo::index_t c)
-    //{
-    for (const geo::index_t c : this->cells)
-    {
-        if (!moist::predicates::cell_on_plane(c, *this, plane))
-        {
-            continue;
-        }
-
-        // std::lock_guard<std::mutex> lock(m);
-        this->CreateTetrahedra({
-            this->cells.vertex(c, 0),
-            this->cells.vertex(c, 1),
-            this->cells.vertex(c, 2),
-            this->cells.vertex(c, 3)
-        });
-
-        this->DeleteTetrahedra(c);
-    }
-    //});
-
-    this->FlushTetrahedra();
-    this->_start_interface_cell = this->CreateTetrahedra();
-    std::unordered_map<geo::index_t, size_t> added_vertices;
-    for (geo::index_t c = this->_start_interface_cell; c < this->cells.nb(); c++)
-    {
-        size_t points[4];
-        for (geo::index_t lv = 0; lv < 4; lv++)
-        {
-            const geo::index_t v = this->cells.vertex(c, lv);
-            if (added_vertices.contains(v))
-            {
-                points[lv] = added_vertices[v];
-                continue;
-            }
-            else
-            {
-                const geo::vec3 p = this->vertices.point(v);
-                points[lv] = this->_em.Add(moist::ExactMesh::ExactPoint(p, v_interface[v] ? geo::NO_VERTEX : v));
-                added_vertices[v] = points[lv];
-            }
-        }
-
-        this->_em.Add(moist::ExactMesh::ExactCell(points[0], points[1], points[2], points[3]));
+        v_interface[v] = true;
     }
 
-#ifndef NDEBUG
-    this->_em.DebugMesh("exact_mesh.msh");
-#endif // NDEBUG
+    this->_start_interface_cell = this->ReorderInterfaceCells(plane);
 
     long long timer_iv, timer_ie;
     {
@@ -139,23 +157,16 @@
     OOC_DEBUG("Inserting Edges took " << timer_ie << "ms");
 }
 
-static double r24(double value)
-{
-    return std::round(value * 10000.0) / 10000.0;
-}
-
 /* private */ void moist::MeshSlice::InsertVertices(const geo::Mesh &edge_mesh, const moist::AxisAlignedPlane &plane)
 {
 #ifdef OPTION_LOOKUP_GRID
-    this->_grid.Initialize(10.0);
-    this->_e_grid.Initialize(this->_em, 10.0);
+    this->_grid.Initialize(25.0);
 #endif
 
     for (const g_index v : edge_mesh.vertices)
     {
         const auto& p = edge_mesh.vertices.point(v);
         this->InsertVertex2(p);
-        this->InsertVertexExact(moist::ExactMesh::ExactPoint(p));
     }
 
     this->FlushTetrahedra();
@@ -163,70 +174,10 @@ static double r24(double value)
 
 #ifndef NDEBUG
     moist::utils::geogram::save("after_insert.msh", *this);
-    this->_em.DebugMesh("exact_mesh_after_insertion.msh");
 #endif
 }
 
-/* public */ vec3& moist::MeshSlice::Point(const geo::index_t& v)
-{
-    return this->vertices.point(v);
-}
-
-/* private */ void moist::MeshSlice::InsertVertexExact(const moist::ExactMesh::ExactPoint& p)
-{
-    this->_created_cell_ids.clear();
-    const auto aabb = moist::create_point_box2d_exact(p);
-    const auto grid_cells = _e_grid.GetCells(aabb);
-
-    std::size_t v_1to2 = moist::NO_VERTEX;
-    for (const auto grid_cell : grid_cells)
-    {
-        if (!_e_grid._grid.contains(grid_cell)) continue;
-        for (const std::size_t& c : _e_grid._grid.at(grid_cell))
-        {
-            const auto& cell = this->_em.Cell(c);
-            if (cell._deleted)
-            {
-                continue;
-            }
-
-            const auto location = moist::new_predicates::point_in_tet_exact(this->_em, c, p, true);
-
-            if (location == moist::predicates::PointInTet::FACET)
-            {
-                const std::size_t v = this->_em.Add(p);
-                std::size_t v_opposite;
-                for (const std::size_t& cv : cell._points)
-                {
-                    const auto& cp = this->_em.Point(cv);
-                    if (cp._v != geo::NO_VERTEX)
-                    {
-                        v_opposite = cv;
-                        break;
-                    }
-                }
-
-                // TODO: Make this better without v_opposite!
-                const auto [v0, v1, v2] = moist::geometry::exact::other(c, v_opposite, this->_em);
-                this->_em.Add(moist::ExactMesh::ExactCell(v_opposite, v0, v1, v));
-                this->_em.Add(moist::ExactMesh::ExactCell(v_opposite, v1, v2, v));
-                this->_em.Add(moist::ExactMesh::ExactCell(v_opposite, v2, v0, v));
-                this->_em.DeleteCell(c);
-            }
-            else if (location == moist::predicates::PointInTet::EDGE)
-            {
-                if (v_1to2 == moist::NO_VERTEX)
-                {
-                    v_1to2 = this->_em.Add(p);
-                }
-
-                moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, this->_em);
-            }
-        }
-    }
-}
-
-/* private */ void moist::MeshSlice::InsertVertex2(const geo::vec3 &p)
+/* private */ void moist::MeshSlice::InsertVertex2(const geo::vec3& p)
 {
     std::mutex m_deleted_tets;
     std::mutex m_1to2;
@@ -311,28 +262,6 @@ static double r24(double value)
 #endif // OPTION_LOOKUP_GRID
 }
 
-void moist::MeshSlice::IsDeleted(const geo::index_t c)
-{
-}
-
-void moist::MeshSlice::CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra)
-{
-    for (const CreatedTetrahedon tet : tetrahedra)
-    {
-        _created_cells.push_back(tet);
-    }
-}
-
-void moist::MeshSlice::DeleteTetrahedra(const std::initializer_list<g_index> tetrahedra)
-{
-    auto c_deleted = geo::Attribute<bool>(this->cells.attributes(), "c_deleted");
-    for (const geo::index_t c : tetrahedra)
-    {
-        c_deleted[c] = true;
-        _deleted_cells.insert(c);
-    }
-}
-
 void moist::MeshSlice::GetFixedGeometry(geo::Mesh& mesh)
 {
     // If a cell contains a fixed vertex v, add all edges of this cell adjacent to v to fixed geometry.
@@ -384,83 +313,6 @@ void moist::MeshSlice::GetFixedGeometry(geo::Mesh& mesh)
 #endif // NDEBUG
 }
 
-void moist::MeshSlice::InsertVertex(const geo::vec3 &point, const moist::AxisAlignedPlane &plane)
-{
-    this->_created_cell_ids.clear();
-
-    std::mutex m_deleted_tets;
-    std::mutex m_1to2;
-
-    auto v_interface = geo::Attribute<bool>(this->vertices.attributes(), "v_interface");
-
-    //geo::parallel_for(this->_start_interface_cell, this->cells.nb(), [&](const g_index cell)
-    //{
-    for (geo::index_t c = _start_interface_cell; c < this->cells.nb(); c++)
-    {
-        g_index v_1to2 = geo::NO_VERTEX;
-
-        {
-            std::lock_guard<std::mutex> lock(m_deleted_tets);
-            if (this->_deleted_cells.contains(c))
-            {
-                continue;
-            }
-        }
-
-        const auto location = moist::predicates::point_in_tet(*this, c, point, true);
-        if (location == moist::predicates::PointInTet::FACET)
-        {
-            const g_index v = this->vertices.create_vertex(point);
-            /* LOCK_ATTRIBUTES; */ v_interface[v] = true;
-
-            moist::operation::vertex_insert_1to3(*this, c, v, plane);
-        }
-        else if (location == moist::predicates::PointInTet::EDGE)
-        {
-            // std::lock_guard<std::mutex> lock(m_1to2);
-            if (v_1to2 == geo::NO_VERTEX)
-            {
-                v_1to2 = this->vertices.create_vertex(point);
-                /* LOCK_ATTRIBUTES; */ v_interface[v_1to2] = true;
-            }
-
-            moist::operation::vertex_insert_1to2(*this, c, v_1to2, plane);
-        }
-    }
-    //});
-
-    this->CreateTetrahedra();
-}
-
-void moist::MeshSlice::InsertInterfaceVertices(moist::Interface& interface)
-{
-    const auto triangulation = interface.Triangulation();
-    const auto plane = interface.Plane();
-
-
-    for (const g_index v : triangulation->vertices)
-    {
-        this->InsertVertex2(triangulation->vertices.point(v));
-        // this->InsertVertex(triangulation->vertices.point(v), *interface.Plane());
-    }
-
-    this->FlushTetrahedra();
-    OOC_DEBUG("mesh after vertex insertion: " << this->vertices.nb() << " vertices, " << this->cells.nb() << " cells");
-
-#ifndef NDEBUG
-    moist::utils::geogram::save("after_insert.msh", *this);
-#endif
-}
-
-/**
- * @brief Checks if vertex v can be moved onto point to without tetrahedral inversions of incident cells.
- *
- * @param v
- * @param to
- * @param cluster
- * @return true
- * @return false
- */
 bool moist::MeshSlice::CanMoveVertex(const g_index v, const vec3& to, const std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator>& incident)
 {
     auto set_vertices = [&](const vec3 from, const vec3 to)
@@ -689,28 +541,6 @@ void moist::MeshSlice::DecimateCreatedTetrahedra(const vec3& p_e0, const vec3& p
     }
 }
 
-static void add_tet_to_debug_mesh(geo::Mesh& dbg, geo::Mesh& t, geo::index_t c)
-{
-    geo::vec3 points[4];
-    for (geo::index_t lv = 0; lv < 4; lv++)
-    {
-        points[lv] = t.vertices.point(t.cells.vertex(c, lv));
-    }
-
-    dbg.cells.create_tet(
-        dbg.vertices.create_vertex(points[0]),
-        dbg.vertices.create_vertex(points[1]),
-        dbg.vertices.create_vertex(points[2]),
-        dbg.vertices.create_vertex(points[3])
-    );
-}
-
-static void save_debug_mesh(geo::Mesh& dbg, std::string filename)
-{
-    geo::mesh_repair(dbg);
-    moist::utils::geogram::save(filename, dbg);
-}
-
 /* private */ void moist::MeshSlice::InsertEdges2(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane)
 {
 #ifdef OPTION_LOOKUP_GRID
@@ -731,10 +561,9 @@ static void save_debug_mesh(geo::Mesh& dbg, std::string filename)
     {
         this->_created_cell_ids.clear();
 
-        // 101.942001 52.286499 10.000000
-        // 100.991997 51.134602 10.000000
         const vec3 p0 = edge_mesh.vertices.point(edge.v0);
         const vec3 p1 = edge_mesh.vertices.point(edge.v1);
+
 #ifdef OPTION_LOOKUP_GRID
         const geo::Box2d aabb = moist::create_edge_box2d(reinterpret_cast<const vec2&>(p0), reinterpret_cast<const vec2&>(p1));
 #endif // OPTION_LOOKUP_GRID
@@ -971,70 +800,8 @@ static void save_debug_mesh(geo::Mesh& dbg, std::string filename)
         i++;
     }
 
+    _overlay.DebugMesh("exact_mesh_after_edge_insertion.msh");
     this->FlushTetrahedra(true);
-}
-
-g_index moist::MeshSlice::ReorderCells(const moist::AxisAlignedPlane &plane)
-{
-    return 0;
-}
-
-g_index moist::MeshSlice::CreateTetrahedra()
-{
-    g_index first = geo::NO_CELL;
-    bool messup = false;
-    for (const auto tet : this->_created_cells)
-    {
-        const auto t = this->cells.create_tet(tet.v0, tet.v1, tet.v2, tet.v3);
-        if (first == geo::NO_CELL)
-        {
-            first = t;
-        }
-
-        _created_cell_ids.push_back(t);
-
-    #ifndef NDEBUG
-        if (geo::mesh_cell_volume(*this, t) == 0.0)
-        {
-            const auto p0 = this->vertices.point(tet.v0);
-            const auto p1 = this->vertices.point(tet.v1);
-            const auto p2 = this->vertices.point(tet.v2);
-            const auto p3 = this->vertices.point(tet.v3);
-            OOC_WARNING("cell " << t << " has zero volume");
-            messup = true;
-        }
-     #endif // NDEBUG
-    }
-
-    this->_created_cells.clear();
-
-    if (messup) this->DebugMesh("messup.msh", this->_created_cell_ids);
-
-    return first;
-}
-
-void moist::MeshSlice::FlushTetrahedra(bool delete_zero_volume)
-{
-    geo::vector<g_index> flushed_elements(this->cells.nb());
-
-    if (delete_zero_volume)
-    {
-        for (const g_index c : this->cells)
-        {
-            if (geo::mesh_cell_volume(*this, c) == 0.0)
-            {
-                flushed_elements[c] = true;
-            }
-        }
-    }
-
-    for (const g_index c : _deleted_cells)
-    {
-        flushed_elements[c] = true;
-    }
-
-    this->cells.delete_elements(flushed_elements, false);
-    _deleted_cells.clear();
 }
 
 #ifndef NDEBUG
@@ -1061,4 +828,438 @@ void moist::MeshSlice::DebugMesh(std::string file, std::vector<g_index>& tetrahe
 
     moist::utils::geogram::save(file, dbg);
 }
-#endif
+#endif // NDEBUG
+
+#endif // MOIST_OPTION_EXACT_PREDICATES
+
+// /* private */ void moist::MeshSlice::InsertVertexExact(const moist::exact::Point& point)
+// {
+//     const auto& grid_cells = _overlay.Grid()->GetCells(moist::create_point_box2d_exact(point));
+//     std::size_t v_1to2 = moist::exact::NO_VERTEX;
+//
+//     for (const auto grid_cell : grid_cells)
+//     {
+//         if (!_overlay.Grid()->_grid.contains(grid_cell)) // cringe
+//         {
+//             continue;
+//         }
+//
+//         for (const std::size_t& c : _overlay.Grid()->GetMeshCells(grid_cell))
+//         {
+//             const auto& cell = this->_overlay.Cell(c);
+//             if (cell._deleted)
+//             {
+//                 continue;
+//             }
+//
+//             const auto location = moist::new_predicates::point_in_tet_exact(this->_overlay, c, p, true);
+//
+//             if (location == moist::predicates::PointInTet::FACET)
+//             {
+//                 const std::size_t v = this->_overlay.Add(p);
+//                 moist::operation::exact::InsertVertexOnCellBoundaryFacet(c, v, this->_overlay);
+//             }
+//             else if (location == moist::predicates::PointInTet::EDGE)
+//             {
+//                 if (v_1to2 == moist::exact::NO_VERTEX)
+//                 {
+//                     v_1to2 = this->_overlay.Add(p);
+//                 }
+//
+//                 moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, this->_overlay);
+//             }
+//         }
+//     }
+// }
+//
+// /* private */ void moist::MeshSlice::InsertEdgeExact(const moist::exact::EdgePoints& edge)
+// {
+//     _created_exact_cell_ids.clear();
+//
+//     /*if (moist::geometry::exact::edge_exists(edge, _overlay))
+//     {
+//         return;
+//     }*/
+//
+//     std::unordered_set<std::size_t> edge_vertices;
+//     std::vector<moist::exact::Cell> created_cells;
+//
+//     moist::ExactMesh dbg_crossed_cells;
+//     moist::ExactMesh dbg_created_cells;
+//     double x0 = edge.p0.x();
+//     double y0 = edge.p0.y();
+//     double x1 = edge.p1.x();
+//     double y1 = edge.p1.y();
+//
+// #ifdef OPTION_LOOKUP_GRID
+//     const auto grid_cells = _overlay.Grid()->GetCells(moist::create_edge_box2d_exact(edge));
+//     int i = 0;
+//     for (const auto grid_cell : grid_cells)
+//     {
+//         if (!_overlay.Grid()->_grid.contains(grid_cell))
+//         {
+//             continue;
+//         }
+//
+//         for (const std::size_t c : _overlay.Grid()->GetMeshCells(grid_cell))
+//         {
+//             const auto cell = _overlay.Cell(c);
+//             if (cell._deleted || moist::geometry::exact::is_degenerate(cell))
+//             {
+//                 continue;
+//             }
+//
+//             auto intersected_edges = moist::operation::exact::FindIntersectedEdges(edge, c, _overlay);
+//             for (auto& intersected_edge : intersected_edges)
+//             {
+//                 auto& point = intersected_edge.p;
+//                 const auto& existing = std::find_if(edge_vertices.begin(), edge_vertices.end(), [&](const std::size_t v)
+//                 {
+//                     return _overlay.Point(v) == point;
+//                 });
+//
+//                 if (existing == edge_vertices.end())
+//                 {
+//                     const auto& v = _overlay.Add(point);
+//                     edge_vertices.insert(v);
+//                     intersected_edge.vp = v;
+//                 }
+//                 else
+//                 {
+//                     intersected_edge.vp = *existing;
+//                 }
+//             }
+//
+//             if (intersected_edges.size() > 0)
+//             {
+//                 dbg_crossed_cells.Add(moist::exact::Cell(
+//                     dbg_crossed_cells.Add(moist::exact::Point(_overlay.Point(cell._points[0]))),
+//                     dbg_crossed_cells.Add(moist::exact::Point(_overlay.Point(cell._points[1]))),
+//                     dbg_crossed_cells.Add(moist::exact::Point(_overlay.Point(cell._points[2]))),
+//                     dbg_crossed_cells.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
+//                 ), true);
+//             }
+//
+//             switch (intersected_edges.size())
+//             {
+//                 case 0:
+//                     break;
+//                 case 1:
+//                     moist::operation::exact::SplitEdge1_2(c, intersected_edges.at(0), _overlay, created_cells);
+//                     break;
+//                 case 2:
+//                     moist::operation::exact::SplitEdge1_3(c, intersected_edges.at(0), intersected_edges.at(1), _overlay, created_cells);
+//                     break;
+//                 default:
+//                     OOC_WARNING("invalid amount of edge intersections: " << intersected_edges.size());
+//                     break;
+//             }
+//
+//             if (!created_cells.empty() && !intersected_edges.empty())
+//             {
+//                 moist::ExactMesh dbg_during_creation;
+//                 for (const auto& cell : created_cells)
+//                 {
+//                     if (cell._deleted) continue;
+//                     dbg_during_creation.Add(moist::exact::Cell(
+//                         dbg_during_creation.Add(moist::exact::Point(_overlay.Point(cell._points[0]))),
+//                         dbg_during_creation.Add(moist::exact::Point(_overlay.Point(cell._points[1]))),
+//                         dbg_during_creation.Add(moist::exact::Point(_overlay.Point(cell._points[2]))),
+//                         dbg_during_creation.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
+//                     ), true);
+//                 }
+//
+//                 //dbg_during_creation.DebugMesh("dbg_during_creation.msh");
+//             }
+//         }
+//     }
+//
+//     for (const auto cell : created_cells)
+//     {
+//         if (cell._deleted || moist::geometry::exact::is_degenerate(cell)) continue;
+//         dbg_created_cells.Add(moist::exact::Cell(
+//             dbg_created_cells.Add(moist::exact::Point(_overlay.Point(cell._points[0]))),
+//             dbg_created_cells.Add(moist::exact::Point(_overlay.Point(cell._points[1]))),
+//             dbg_created_cells.Add(moist::exact::Point(_overlay.Point(cell._points[2]))),
+//             dbg_created_cells.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
+//         ), true);
+//
+//         _created_exact_cell_ids.push_back(this->_overlay.Add(cell));
+//     }
+//
+//     if (!created_cells.empty())
+//     {
+//         int xyz = 0;
+//         dbg_created_cells.Add(moist::exact::Point(edge.p0));
+//         dbg_created_cells.Add(moist::exact::Point(edge.p1));
+//         dbg_crossed_cells.Add(moist::exact::Point(edge.p0));
+//         dbg_crossed_cells.Add(moist::exact::Point(edge.p1));
+//     }
+//     this->DecimateEdgesExact(edge, edge_vertices);
+//
+//
+//     moist::ExactMesh dbg_decimated_cells;
+//     if (!created_cells.empty())
+//     {
+//         for (const auto& c : _created_exact_cell_ids)
+//         {
+//             const auto cell = _overlay.Cell(c);
+//             if (cell._deleted) continue;
+//             dbg_decimated_cells.Add(moist::exact::Cell(
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[0]))),
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[1]))),
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[2]))),
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
+//             ), true);
+//         }
+//         // dbg_decimated_cells.DebugMesh("dbg_after_decimation.msh");
+//     }
+// #else
+//     #error "Inserting exact predicate edges without a lookup grid is not implemented..."
+// #endif // OPTION_LOOKUP_GRID
+// }
+
+// /* private */ void moist::MeshSlice::DecimateEdgesExact(const moist::exact::EdgePoints& edge, const std::unordered_set<std::size_t>& edge_vertices)
+// {
+//     if (edge_vertices.empty())
+//     {
+//         return;
+//     }
+//
+//     std::unordered_set<std::size_t> vertices;
+//     for (const auto& v : edge_vertices)
+//     {
+//         vertices.insert(v);
+//     }
+//
+//     std::size_t ev0 = moist::exact::NO_VERTEX;
+//     std::size_t ev1 = moist::exact::NO_VERTEX;
+//
+//     // Find edge vertices in cells, and add them to the cluster...
+//     for (const auto& c : _created_exact_cell_ids)
+//     {
+//         const auto cell = _overlay.Cell(c);
+//         if (cell._deleted || moist::geometry::exact::is_degenerate(cell)) { continue; }
+//
+//         for (const auto v : cell._points)
+//         {
+//             const auto point = _overlay.Point(v);
+//             const bool eq_p0 = moist::geometry::exact::points_are_equal(point._p, edge.p0._p);
+//             const bool eq_p1 = moist::geometry::exact::points_are_equal(point._p, edge.p1._p);
+//             if (eq_p0 || eq_p1)
+//             {
+//                 ev0 = eq_p0 ? v : ev0;
+//                 ev1 = eq_p1 ? v : ev1;
+//                 vertices.insert(v);
+//             }
+//         }
+//     }
+//
+//     if (ev0 == moist::exact::NO_VERTEX || ev1 == moist::exact::NO_VERTEX)
+//     {
+//         OOC_WARNING("could not find edge vertices");
+//         return;
+//     }
+//
+//     int i = 0;
+//     // For each vertex, attempt to move it (and any vertices clustered onto it) onto a neighbour it is attached to by an edge shared by one or multiple cells.
+//     for (const auto v : edge_vertices)
+//     {
+//         bool decimatable = false;
+//         std::unordered_set<std::size_t> neighbours;
+//         const auto vp = _overlay.Point(v);
+//         const double x = vp.x();
+//         const double y = vp.y();
+//
+//
+//         for (const auto& c : _created_exact_cell_ids)
+//         {
+//             auto cell = _overlay.Cell(c);
+//             bool found = false;
+//             for (const auto v : cell._points)
+//             {
+//                 if (_overlay.Point(v) == vp)
+//                 {
+//                     found = true;
+//                     break;
+//                 }
+//             }
+//
+//
+//             if (!found)
+//             {
+//                 continue;
+//             }
+//
+//             const auto volume = CGAL::volume(
+//                 _overlay.Point(cell._points[0])._p,
+//                 _overlay.Point(cell._points[1])._p,
+//                 _overlay.Point(cell._points[2])._p,
+//                 _overlay.Point(cell._points[3])._p
+//             );
+//
+//             for (const auto cv : cell._points)
+//             {
+//                 if (vertices.contains(cv) && cv != v)
+//                 {
+//                     neighbours.insert(cv);
+//                 }
+//             }
+//         }
+//
+//         if (neighbours.contains(ev0) || neighbours.contains(ev1))
+//         {
+//             // Can contain both (last decimation)...
+//             if (neighbours.contains(ev0) && this->CanMoveVertexExact(v, ev0))
+//             {
+//                 for (const std::size_t c : _created_exact_cell_ids)
+//                 {
+//                     auto& cell = _overlay.Cell(c);
+//                     for (std::size_t lv = 0; lv < 4; lv++)
+//                     {
+//                         if (cell._points[lv] == v)
+//                         {
+//                             cell._points[lv] = ev0;
+//                             // break;
+//                         }
+//                     }
+//                 }
+//
+//                 decimatable = true;
+//                 goto dbg;
+//             }
+//
+//             if (neighbours.contains(ev1) && this->CanMoveVertexExact(v, ev1))
+//             {
+//                 for (const std::size_t c : _created_exact_cell_ids)
+//                 {
+//                     auto& cell = _overlay.Cell(c);
+//                     for (std::size_t lv = 0; lv < 4; lv++)
+//                     {
+//                         if (cell._points[lv] == v)
+//                         {
+//                             cell._points[lv] = ev1;
+//                             // break;
+//                         }
+//                     }
+//                 }
+//
+//                 decimatable = true;
+//                 goto dbg;
+//             }
+//         }
+//
+//         for (const std::size_t neighbour : neighbours)
+//         {
+//             if (this->CanMoveVertexExact(v, neighbour))
+//             {
+//                 for (const auto c : _created_exact_cell_ids)
+//                 {
+//                     auto& cell = _overlay.Cell(c);
+//                     for (std::size_t lv = 0; lv < 4; lv++)
+//                     {
+//                         if (cell._points[lv] == v)
+//                         {
+//                             cell._points[lv] = neighbour;
+//                             // break;
+//                         }
+//                     }
+//                 }
+//
+//                 decimatable = true;
+//                 goto dbg;
+//             }
+//         }
+//
+//         if (!decimatable)
+//         {
+//             auto& p = _overlay.Point(v);
+//             p._fixed = true;
+//
+//             OOC_DEBUG(std::setprecision(18) << "inserting non decimatable point " << v << " at [" << p.x() << ", " << p.y() << ", " << p.z() << "]");
+//             bool same_e0 = p._p == edge.p0._p;
+//             bool same_e1 = p._p == edge.p1._p;
+//             OOC_DEBUG(std::setprecision(50) << p._p);
+//             OOC_DEBUG(std::setprecision(50) << edge.p0._p);
+//             OOC_DEBUG(std::setprecision(50) << edge.p1._p);
+//         }
+//
+// dbg:
+//         /*moist::ExactMesh dbg_decimated_cells;
+//         for (const auto& c : _created_exact_cell_ids)
+//         {
+//             const auto cell = _overlay.Cell(c);
+//             if (cell._deleted) continue;
+//             dbg_decimated_cells.Add(moist::exact::Cell(
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[0]))),
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[1]))),
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[2]))),
+//                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
+//             ), true);
+//         }
+//         dbg_decimated_cells.DebugMesh("dbg_during_decimation" + to_string(i) + ".msh");
+//         i++;*/
+//     }
+//
+//     for (const auto c : _created_exact_cell_ids)
+//     {
+//         std::unordered_set<std::size_t> elements;
+//         auto cell = _overlay.Cell(c);
+//         if (cell._deleted) { continue; }
+//
+//         for (const auto v : cell._points)
+//         {
+//             if (elements.contains(v))
+//             {
+//                 cell._deleted = true;
+//                 break;
+//             }
+//             elements.insert(v);
+//         }
+//
+//         const auto sign = CGAL::sign(CGAL::volume(
+//             _overlay.Point(cell._points[0])._p,
+//             _overlay.Point(cell._points[1])._p,
+//             _overlay.Point(cell._points[2])._p,
+//             _overlay.Point(cell._points[3])._p
+//         ));
+//
+//         if (sign == CGAL::Sign::ZERO)
+//         {
+//             cell._deleted = true;
+//         }
+//     }
+// }
+
+// bool moist::MeshSlice::CanMoveVertexExact(const std::size_t& v_from, const std::size_t& v_to)
+// {
+//     for (std::size_t c = 0; c < this->_created_exact_cell_ids.size(); c++)
+//     {
+//         const auto cell = _overlay.Cell(_created_exact_cell_ids[c]);
+//         if (cell._deleted || moist::geometry::exact::is_degenerate(cell))
+//         {
+//             continue;
+//         }
+//
+//         const auto before = CGAL::sign(CGAL::volume(
+//             _overlay.Point(cell._points[0])._p,
+//             _overlay.Point(cell._points[1])._p,
+//             _overlay.Point(cell._points[2])._p,
+//             _overlay.Point(cell._points[3])._p
+//         ));
+//
+//         const auto after = CGAL::sign(CGAL::volume(
+//             _overlay.Point(cell._points[0] == v_from ? v_to : cell._points[0])._p,
+//             _overlay.Point(cell._points[1] == v_from ? v_to : cell._points[1])._p,
+//             _overlay.Point(cell._points[2] == v_from ? v_to : cell._points[2])._p,
+//             _overlay.Point(cell._points[3] == v_from ? v_to : cell._points[3])._p
+//         ));
+//
+//         if (after != CGAL::Sign::ZERO && before != CGAL::Sign::ZERO && before != after)
+//         {
+//             return false;
+//         }
+//     }
+//
+//     return true;
+// }

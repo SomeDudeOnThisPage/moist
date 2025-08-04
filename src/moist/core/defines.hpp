@@ -2,22 +2,25 @@
 #define MOIST_CORE_CORE_HPP_
 
 #include <format>
-#include <string>
 #include <filesystem>
 #include <iostream>
 #include <limits>
 #include <map>
+#include <stdexcept>
+#include <string>
+#include <source_location>
 
 #ifndef NDEBUG
-#define OPTION_LOOKUP_GRID
+    #define OPTION_LOOKUP_GRID
+    #define MOIST_OPTION_EXACT_PREDICATES
 // #define OPTION_PARALLEL_LOCAL_OPERATIONS // dev
 // #define OPTION_DEBUG_TEST_INTERFACE
 #endif // NDEBUG
 
 #ifndef NDEBUG
-  #define debug(...) do { __VA_ARGS__; } while (0)
+  //#define debug(...) do { __VA_ARGS__; } while (0)
 #else
-  #define debug(...) ((void)0)
+  //#define debug(...) ((void)0)
 #endif
 
 namespace moist
@@ -47,6 +50,21 @@ namespace moist
     {
 
     };
+}
+
+namespace moist::assert
+{
+    inline void in_range(std::size_t index, std::size_t lower, std::size_t upper, const std::source_location& loc = std::source_location::current())
+    {
+        if (!(index >= lower && index < upper))
+        {
+            throw std::out_of_range
+            (
+                "index " + std::to_string(index) + " out of range [" + std::to_string(lower) + ", " + std::to_string(upper) + ") at "
+                + loc.file_name() + ":" + std::to_string(loc.line()) + " in function " + loc.function_name()
+            );
+        }
+    }
 }
 
 //! @internal

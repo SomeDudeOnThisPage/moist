@@ -17,7 +17,7 @@
 
 moist::InterfaceGenerator::InterfaceGenerator(const AxisAlignedPlane plane) :
     _constraints(geo::Mesh(2, false)),
-    _cdt(CDT::Triangulation<double>(CDT::VertexInsertionOrder::Auto, CDT::IntersectingConstraintEdges::TryResolve, 1e-14))
+    _cdt(CDT::Triangulation<double>(CDT::VertexInsertionOrder::Auto, CDT::IntersectingConstraintEdges::TryResolve, 1e-12))
 {
     this->_triangulation = std::make_shared<geo::Mesh>(3);
     this->_plane = std::make_shared<AxisAlignedPlane>(plane);
@@ -31,6 +31,10 @@ static double round16(double value)
     value = std::round(value * 1e16) / 1e16;
     return (std::abs(value) < threshold) ? 0.0 : value;
 }
+
+#ifndef NDEBUG
+static geo::Mesh edge_mesh(3);
+#endif // NDEBUG
 
 void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
 {
@@ -98,9 +102,9 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
         }
     }
 
+    std::unordered_set<g_index> to_delete;
     for (const auto& entry : edge_count_map)
     {
-        std::unordered_set<g_index> to_delete;
         // one adjacent interface facet -> edge must be a boundary edge.
         if (entry.second == 1)
         {
@@ -109,9 +113,99 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
             if (mesh_to_interface.contains(global.first) && mesh_to_interface.contains(global.second))
             {
                 // "New" Ogre CDT can handle intersections in constrained edges more robustly than triangle, so we can just dump every edge here
+                // Update: Nope it cannot ;(
                 _interface_edges.push_back(CDT::Edge(mesh_to_interface[global.first], mesh_to_interface[global.second]));
+                edge_mesh.edges.create_edge(
+                    edge_mesh.vertices.create_vertex(_inserted_points[mesh_to_interface[global.first]]),
+                    edge_mesh.vertices.create_vertex(_inserted_points[mesh_to_interface[global.second]])
+                );
 
-                // bool intersected = false;
+                // Check if our new edge intersects already with an interface edge... if so, create four new edges and one point
+                /*bool intersected = false;
+                std::size_t nb_edges = _interface_edges.size();
+                for (std::size_t e = 0; e < nb_edges; e++)
+                {
+                    if (to_delete.contains(e))
+                    {
+                        continue;
+                    }
+
+                    const auto edge = _interface_edges.at(e);
+
+                    // Points of the original edge which we want to insert
+                    const auto p0 = _interface_vertices.at(mesh_to_interface[global.first]);
+                    const auto p1 = _interface_vertices.at(mesh_to_interface[global.second]);
+
+                    const auto existing_p0 = _interface_vertices.at(edge.v1());
+                    const auto existing_p1 = _interface_vertices.at(edge.v2());
+
+                    // Edges cannot intersect in a single point if they share an endpoint (besides that one endpoint, which we don't care about)
+                    if (p0 == existing_p0 || p0 == existing_p1 || p1 == existing_p0 || p1 == existing_p1)
+                    {
+                        continue;
+                    }
+
+                    const auto geo_p0 = vec2(p0.x, p0.y);
+                    const auto geo_p1 = vec2(p1.x, p1.y);
+                    const auto geo_p2 = vec2(existing_p0.x, existing_p0.y);
+                    const auto geo_p3 = vec2(existing_p1.x, existing_p1.y);
+                    const auto intersection = moist::predicates::xy::get_line_intersection(geo_p0, geo_p1, geo_p2, geo_p3, 1e16);
+
+                    if (intersection != std::nullopt)
+                    {
+                        const auto point = intersection.value();
+                        if (geo_p0 == point || geo_p1 == point || geo_p2 == point || geo_p3 == point)
+                        {
+                            continue;
+                        }
+
+                        _interface_vertices.push_back(CDT::V2d<double>(point.x, point.y));
+                        g_index v = _interface_vertices.size() - 1;
+                        _inserted_points[v] = vec3(point.x, point.y, this->_plane->extent);
+
+                        // split the original edge...
+                        _interface_edges.push_back(CDT::Edge(edge.v1(), v));
+                        _interface_edges.push_back(CDT::Edge(v, edge.v2()));
+                        // create the new edge as split edge
+                        this->_constraints.edges.create_edge(mesh_to_interface[global.first], v);
+                        this->_constraints.edges.create_edge(v, mesh_to_interface[global.second]);
+                        to_delete.insert(e);
+                        intersected = true;
+
+                    #ifndef NDEBUG
+                        edge_mesh.edges.create_edge(
+                            edge_mesh.vertices.create_vertex(_inserted_points[mesh_to_interface[global.first]]),
+                            edge_mesh.vertices.create_vertex(_inserted_points[v])
+                        );
+
+                        edge_mesh.edges.create_edge(
+                            edge_mesh.vertices.create_vertex(_inserted_points[v]),
+                            edge_mesh.vertices.create_vertex(_inserted_points[mesh_to_interface[global.second]])
+                        );
+                        edge_mesh.edges.create_edge(
+                            edge_mesh.vertices.create_vertex(_inserted_points[edge.v1()]),
+                            edge_mesh.vertices.create_vertex(_inserted_points[v])
+                        );
+                        edge_mesh.edges.create_edge(
+                            edge_mesh.vertices.create_vertex(_inserted_points[v]),
+                            edge_mesh.vertices.create_vertex(_inserted_points[edge.v2()])
+                        );
+                    #endif // NDEBUG
+                    }
+                }
+
+                if (!intersected)
+                {
+                    _interface_edges.push_back(CDT::Edge(mesh_to_interface[global.first], mesh_to_interface[global.second]));
+                #ifndef NDEBUG
+                    edge_mesh.edges.create_edge(
+                        edge_mesh.vertices.create_vertex(_inserted_points[mesh_to_interface[global.first]]),
+                        edge_mesh.vertices.create_vertex(_inserted_points[mesh_to_interface[global.second]])
+                    );
+                #endif // NDEBUG
+                }
+
+
                 // for (const g_index e : this->_constraints.edges)
                 // {
                 //     if (to_delete.contains(e))
@@ -157,7 +251,7 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
                 // {
                 //     deleted[d] = true;
                 // }
-                // this->_constraints.edges.delete_elements(deleted, false);
+                // this->_constraints.edges.delete_elements(deleted, false);*/
             }
             else
             {
@@ -165,6 +259,34 @@ void moist::InterfaceGenerator::AddConstraints(const geo::Mesh &mesh)
             }
         }
     }
+
+    // CDT does not allow for copying / moving edges in a vector, so do some shenanigans where we delete from the back
+    /*std::vector<std::size_t> indices(to_delete.begin(), to_delete.end());
+    std::sort(indices.rbegin(), indices.rend());
+
+    CDT::EdgeVec new_edges;
+    new_edges.reserve(_interface_edges.size() - to_delete.size()); // upper bound
+
+    for (int idx : indices)
+    {
+        if (idx >= 0 && static_cast<size_t>(idx) < _interface_edges.size())
+        {
+            _interface_edges.erase(_interface_edges.begin() + idx);
+        }
+    }*/
+
+#ifndef NDEBUG
+    /*geo::vector<geo::index_t> to_delete_geo(edge_mesh.edges.nb());
+    for (geo::index_t e = 0; e < edge_mesh.edges.nb(); e++)
+    {
+        if (to_delete.contains(e))
+        {
+            to_delete_geo[e] = true;
+        }
+    }
+    edge_mesh.edges.delete_elements(to_delete_geo);*/
+    moist::utils::geogram::save("edge_mesh.obj", edge_mesh);
+#endif // NDEBUG
 }
 
 static bool vec2_eq_float_precision(const vec2& a, const vec2& b)
@@ -177,10 +299,9 @@ static bool vec2_eq_float_precision(const vec2& a, const vec2& b)
 
 void moist::InterfaceGenerator::Triangulate()
 {
-
     _cdt.insertVertices(_interface_vertices);
     _cdt.insertEdges(_interface_edges);
-    _cdt.eraseSuperTriangle();
+    _cdt.eraseOuterTriangles();
     geo::vector<double> vertices(_cdt.vertices.size() * 3);
     geo::vector<geo::index_t> triangles(_cdt.triangles.size() * 3);
 

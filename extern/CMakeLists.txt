@@ -135,14 +135,13 @@ find_package(Boost REQUIRED)
 #find_package(GMP REQUIRED)
 #find_package(MPFR REQUIRED)
 find_package(CGAL REQUIRED)
-
 #FetchContent_Declare(
 #  CGAL
 #  GIT_REPOSITORY https://github.com/CGAL/cgal.git
 #  GIT_TAG        v5.6.1
 #)
 
-set(CGAL_HEADER_ONLY ON)
+set(CGAL_HEADER_ONLY OFF)
 set(CGAL_USE_GMP ON)
 set(CGAL_USE_MPFR ON)
 

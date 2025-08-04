@@ -4,11 +4,19 @@
 #include "moist/core/attributes.inl"
 #include "moist/core/utils.hpp"
 
+#include "new_predicates.inl"
+#include "geometry_exact.inl"
+
 #ifndef NDEBUG
 #define VECE(a, b, c, d) ((a) == (b) || (a) == (c) || (a) == (d) || \
                           (b) == (c) || (b) == (d) || \
                           (c) == (d))
 #endif // NDEBUG
+
+static constexpr std::array<std::pair<std::size_t, std::size_t>, 6> TET_EDGE_DESCRIPTOR =
+{{
+    {0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}
+}};
 
 void moist::operation::edge_split_1to2(MeshSlice &mesh, const g_index cell, const CrossedEdge &edge, const AxisAlignedPlane &plane)
 {
@@ -291,48 +299,154 @@ void moist::operation::vertex_insert_1to3(MeshSlice& mesh, const g_index& c, con
     mesh.DeleteTetrahedra(c);
 }
 
-void moist::operation::exact::InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh)
+std::vector<moist::CrossedEdgeExact> moist::operation::exact::FindIntersectedEdges(const moist::exact::EdgePoints& edge, const std::size_t& c, const moist::ExactMesh& mesh)
 {
-    // Basically how geogram indexes its' edges...
-    static const std::array<std::pair<std::size_t, std::size_t>, 6> edges =
-    {{
-        {0, 1}, {0, 2}, {0, 3},
-        {1, 2}, {1, 3},
-        {2, 3}
-    }};
-
-    const auto& point = mesh.Point(v);
     const auto& cell = mesh.Cell(c);
+    auto edges = std::vector<moist::CrossedEdgeExact>();
 
-    for (const auto& [i, j] : edges)
+    for (const auto& [i, j] : TET_EDGE_DESCRIPTOR)
     {
-        const std::size_t& v0 = cell._points[i];
-        const std::size_t& v1 = cell._points[j];
+        const auto& v0 = cell._points[i];
+        const auto& v1 = cell._points[j];
         const auto& p0 = mesh.Point(v0);
         const auto& p1 = mesh.Point(v1);
 
-        if (CGAL::collinear(p0._p, p1._p, point._p))
+        if (p0._v != moist::exact::NO_VERTEX || p1._v != moist::exact::NO_VERTEX)
         {
-            if (CGAL::collinear_are_ordered_along_line(p0._p, point._p, p1._p))
+            continue;
+        }
+
+        const auto o_intersection = moist::geometry::exact::intersection(edge, {p0, p1});
+        if (!o_intersection.has_value())
+        {
+            continue;
+        }
+
+        bool cont = false;
+        for (const std::size_t v : cell._points)
+        {
+            if (moist::geometry::exact::points_are_equal(mesh.Point(v)._p, o_intersection.value()._p))
             {
+                cont = true;
+                break;
+            }
+        }
+
+        if (cont)
+        {
+            continue;
+        }
+
+        if (std::find_if(edges.begin(), edges.end(), [&](const moist::CrossedEdgeExact& edge) { return edge.p == o_intersection.value(); }) == edges.end())
+        {
+            edges.push_back({ v0, v1, o_intersection.value(), moist::exact::NO_VERTEX });
+        }
+    }
+
+    return edges;
+}
+
+void moist::operation::exact::InsertVertexOnCellBoundaryFacet(const std::size_t &c, const std::size_t &v, moist::ExactMesh &mesh)
+{
+    std::size_t v_opposite;
+    for (const std::size_t& cv : mesh.Cell(c)._points)
+    {
+        const auto& cp = mesh.Point(cv);
+        if (cp._v != geo::NO_VERTEX)
+        {
+            v_opposite = cv;
+            break;
+        }
+    }
+
+    const auto [v0, v1, v2] = moist::geometry::exact::other(c, v_opposite, mesh);
+    mesh.Add(moist::exact::Cell(v_opposite, v0, v1, v));
+    mesh.Add(moist::exact::Cell(v_opposite, v1, v2, v));
+    mesh.Add(moist::exact::Cell(v_opposite, v2, v0, v));
+    mesh.DeleteCell(c);
+}
+
+void moist::operation::exact::InsertVertexOnCellBoundaryEdge(const std::size_t &c, const std::size_t &v, moist::ExactMesh &mesh, const double eps)
+{
+    const auto& point = mesh.Point(v);
+    const auto& cell = mesh.Cell(c);
+
+    for (const auto& [i, j] : TET_EDGE_DESCRIPTOR)
+    {
+        const std::size_t v0 = cell._points[i];
+        const std::size_t v1 = cell._points[j];
+        const auto p0 = mesh.Point(v0);
+        const auto p1 = mesh.Point(v1);
+
+        bool collinear = (eps == 0.0) ? CGAL::collinear(p0._p, p1._p, point._p) : moist::new_predicates::approx_collinear(p0._p, p1._p, point._p, eps);
+        if (collinear)
+        {
+            //if (CGAL::collinear_are_ordered_along_line(p0._p, point._p, p1._p))
+            //{
                 std::array<int, 2> v_other;
-                int idx = 0;
+                int index = 0;
                 for (int k = 0; k < 4; k++)
                 {
                     if (k != i && k != j)
                     {
-                        v_other[idx++] = k;
+                        v_other[index++] = k;
                     }
                 }
 
-                const std::size_t& v2 = cell._points[v_other[0]];
-                const std::size_t& v3 = cell._points[v_other[1]];
+                const std::size_t v2 = cell._points[v_other[0]];
+                const std::size_t v3 = cell._points[v_other[1]];
 
-                mesh.Add(moist::ExactMesh::ExactCell(v, v0, v2, v3));
-                mesh.Add(moist::ExactMesh::ExactCell(v, v1, v2, v3));
+                mesh.Add(moist::exact::Cell(v, v0, v2, v3));
+                mesh.Add(moist::exact::Cell(v, v1, v2, v3));
                 mesh.DeleteCell(c);
                 break;
-            }
+            //}
         }
     }
+}
+
+void moist::operation::exact::SplitEdge1_2(const std::size_t &c, const moist::CrossedEdgeExact &edge, moist::ExactMesh &mesh, std::vector<moist::exact::Cell>& created_cells)
+{
+    std::vector<std::size_t> others; // should prolly be static but how does this impact possible parallelization
+    for (const auto& v : mesh.Cell(c)._points)
+    {
+        if (v != edge.v0 && v != edge.v1)
+        {
+            others.push_back(v);
+        }
+    }
+
+    created_cells.push_back(moist::exact::Cell(edge.vp, edge.v0, others[0], others[1]));
+    created_cells.push_back(moist::exact::Cell(edge.vp, edge.v1, others[0], others[1]));
+    mesh.DeleteCell(c);
+}
+
+void moist::operation::exact::SplitEdge1_3(const std::size_t &c, const moist::CrossedEdgeExact &edge0, const moist::CrossedEdgeExact &edge1, moist::ExactMesh &mesh, std::vector<moist::exact::Cell> &created_cells)
+{
+    std::vector<std::size_t> others; // should prolly be static but how does this impact possible parallelization
+    for (const auto& v : mesh.Cell(c)._points)
+    {
+        if (v != edge0.v0 && v != edge0.v1 && v != edge1.v0 && v != edge1.v1)
+        {
+            others.push_back(v);
+        }
+    }
+
+#ifndef NDEBUG
+    if (others.size() != 1)
+    {
+        const auto& pp = mesh.Cell(c)._points;
+        OOC_ERROR("invalid 1->3 split -- found " << others.size() << " uninvolved vertices");
+    }
+#endif // NDEBUG
+
+    const auto v_shared = (edge0.v0 == edge1.v0 || edge0.v0 == edge1.v1) ? edge0.v0 : edge0.v1;
+    const auto v_other_e1 = (edge1.v0 == v_shared) ? edge1.v1 : edge1.v0;
+    const auto v_other_e0 = (edge0.v0 == v_shared) ? edge0.v1 : edge0.v0;
+    const auto v_other = others.at(0);
+
+    created_cells.push_back(moist::exact::Cell {v_other, edge0.vp, edge1.vp, v_shared});
+    created_cells.push_back(moist::exact::Cell {v_other, edge0.vp, edge1.vp, v_other_e0});
+    created_cells.push_back(moist::exact::Cell {v_other, edge1.vp, v_other_e0, v_other_e1});
+    mesh.DeleteCell(c);
 }

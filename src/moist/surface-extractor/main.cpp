@@ -15,7 +15,7 @@
 
 #include "tiff_data.hpp"
 #include "surface_generator.hpp"
-#include "sizing-field/scalar_field.hpp"
+// #include "sizing-field/scalar_field.hpp"
 
 struct Arguments
 {
@@ -94,6 +94,7 @@ int main(int argc, char* argv[])
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
     moist::utils::geogram::initialize();
+    // geo::CmdLine::import_arg_group("algo");
 
     const moist::Tiff tiff_data(arguments.input, arguments.first, arguments.amount);
     moist::SurfaceGenerator generator(tiff_data, int(arguments.first) + arguments.dir_offset, arguments.axis, arguments.f_center, arguments.f_invert);
@@ -104,8 +105,6 @@ int main(int argc, char* argv[])
         generator.Generate(mesh, arguments.isovalue);
     }
 
-    geo::mesh_repair(mesh);
-
     const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first - 1));
     moist::utils::geogram::save(std::filesystem::path(path), mesh);
 
@@ -114,7 +113,7 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    moist::generate_scalar_field(tiff_data, moist::IsoValue(arguments.isovalue), metrics);
+    // moist::generate_scalar_field(tiff_data, moist::IsoValue(arguments.isovalue), metrics);
 
     // TODO: Generate Sizing Field Mesh...
     return 0;

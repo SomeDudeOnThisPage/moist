@@ -12,9 +12,6 @@
 #include "moist/core/defines.hpp"
 #include "moist/core/core_interface.hpp"
 
-// TODO: THIS IS WRONG!
-#define in_range(x, p, eps) (std::abs(x - p) <= eps) || (std::abs(x + p) <= eps)
-
 /**
  * @brief Numeric-Predicates.
  */
@@ -121,9 +118,9 @@ namespace moist::predicates
         switch (plane.axis)
         {
             case moist::Axis::X:
-                return in_range(point.x, plane.extent, plane.epsilon);
+                // return in_range(point.x, plane.extent, plane.epsilon);
             case moist::Axis::Y:
-                return in_range(point.y, plane.extent, plane.epsilon);
+                // return in_range(point.y, plane.extent, plane.epsilon);
             case moist::Axis::Z:
                 return std::abs(point.z - plane.extent) <= plane.epsilon;
         }
@@ -214,6 +211,7 @@ namespace moist::predicates
         NONE,
         VERTEX,
         EDGE,
+        EDGE_APPROXIMATED,
         FACET,
         INSIDE
     };

@@ -6,17 +6,18 @@ project(OutOfCore_Meshing
 
 # Options
 # option(OOC_WITH_TETWILD "Bundle fTetWild" ON)
-option(MOIST_TESTS                        "Build Tests" OFF)
+option(MOIST_TESTS                        "Build Tests" ON)
 option(CMAKE_OPTION_USE_LOOKUP_GRID       "Use LookupGrid optimizations" ON)
 
-set(CUDA_DIR "/usr/local/cuda-12.8/bin/")
-set(CUDA_INCLUDE_DIR "/usr/local/cuda-12.8/include")
+#set(CUDA_DIR "/usr/local/cuda-12.8/bin/")
+#set(CUDA_INCLUDE_DIR "/usr/local/cuda-12.8/include")
 
 include_directories(/usr/include/x86_64-linux-gnu)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 #set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(INSERT CMAKE_PREFIX_PATH 0 "$ENV{HOME}/local/cgal")
 
 add_subdirectory(extern)
 add_subdirectory(src/moist/core)

@@ -29,6 +29,7 @@ if(MOIST_TESTS)
     add_library(MOIST_InterfaceInserter_Units OBJECT
         slice.hpp
         slice.cpp
+        slice_exact.cpp
         local_operations.hpp
         local_operations.cpp
         lookup_grid.hpp
@@ -39,11 +40,12 @@ if(MOIST_TESTS)
         interface_inserter.cpp
         new_predicates.inl
         geometry_exact.inl
+        exact_types.hpp
     )
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE geogram)
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE CLI11::CLI11)
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE OutOfCore_Meshing_Core)
-    target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE ${GMP_LIB} ${GMPXX_LIB} ${MPFR_LIB})
+    #target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE ${GMP_LIB} ${GMPXX_LIB} ${MPFR_LIB})
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE CGAL::CGAL)
 
     set(SOURCES

@@ -50,11 +50,14 @@ namespace moist
 
         namespace exact
         {
+            std::vector<CrossedEdgeExact> FindIntersectedEdges(const moist::exact::EdgePoints& edge, const std::size_t& c, const moist::ExactMesh& mesh);
             void InsertVertexOnCellBoundaryFacet(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh);
-            void InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh);
+            void InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh, const double eps = 0.0);
+
+            void SplitEdge1_2(const std::size_t& c, const moist::CrossedEdgeExact& edge, moist::ExactMesh& mesh, std::vector<moist::exact::Cell>& created_cells);
+            void SplitEdge1_3(const std::size_t& c, const moist::CrossedEdgeExact& edge0, const moist::CrossedEdgeExact& edge1, moist::ExactMesh& mesh, std::vector<moist::exact::Cell>& created_cells);
         }
     }
 }
-
 
 #endif // MOIST_INTERFACE_INSERTER_LOCAL_OPERATIONS_HPP_

@@ -15,6 +15,7 @@
  */
 namespace moist::geometry
 {
+
     constexpr g_index NO_ELEMENT = -1;
     struct Edge
     {

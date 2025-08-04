@@ -14,6 +14,8 @@
 #ifdef OPTION_LOOKUP_GRID
     #include "lookup_grid.hpp"
 #endif
+
+#include "exact_types.hpp"
 #include "exact_mesh.hpp"
 
 namespace moist
@@ -55,6 +57,15 @@ namespace moist
         }
     };
 
+    struct CrossedEdgeExact
+    {
+        std::size_t v0;
+        std::size_t v1;
+
+        moist::exact::Point p;
+        std::size_t vp;
+    };
+
     typedef struct
     {
         g_index v0; // alias v_line
@@ -69,9 +80,21 @@ namespace moist
     {
     public:
         MeshSlice(const geo::index_t dimension = 3, const bool single_precision = false);
-        void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
 
-        void InsertVertex(const geo::vec3& point, const moist::AxisAlignedPlane& plane);
+    #ifdef MOIST_OPTION_EXACT_PREDICATES
+        void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
+        void GetFixedGeometry(moist::ExactMesh& mesh);
+    #else // ifndef MOIST_OPTION_EXACT_PREDICATES
+        void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
+        void GetFixedGeometry(geo::Mesh& mesh);
+        void DecimateCreatedTetrahedra(const vec3& e0, const vec3& e1, const std::unordered_set<g_index>& vertices, SteinerPoints& steiner_points);
+        bool CanMoveVertex(const g_index v, const vec3& p, const std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator>& cluster);
+
+        void InsertEdges2(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
+        geo::index_t moist::MeshSlice::ReorderInterfaceCells(const moist::AxisAlignedPlane& plane);
+        void InsertVertices(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
+        void InsertVertex2(const geo::vec3& p);
+    #endif // MOIST_OPTION_EXACT_PREDICATES
 
         void CreateTetrahedra(const CreatedTetrahedon tet) { this->CreateTetrahedra({tet}); }
         void CreateTetrahedra(const std::initializer_list<CreatedTetrahedon> tetrahedra);
@@ -79,38 +102,29 @@ namespace moist
         void DeleteTetrahedra(const std::initializer_list<g_index> tetrahedra);
         void FlushTetrahedra(bool delete_zero_volume = false);
 
-        void GetFixedGeometry(geo::Mesh& mesh);
-
-        vec3& Point(const geo::index_t& v);
     private:
-#ifdef OPTION_LOOKUP_GRID
+        geo::index_t CreateTetrahedra();
+        geo::index_t ReorderInterfaceCells(const moist::AxisAlignedPlane& plane);
+
+    #ifdef MOIST_OPTION_EXACT_PREDICATES
+        moist::ExactMesh _overlay;
+        std::vector<std::size_t> _created_exact_cell_ids;
+
+        void InsertVertices(const geo::Mesh& edge_mesh);
+        void InsertEdgesPrivate(const geo::Mesh& edge_mesh);
+        void InsertVertex(const moist::exact::Point& point);
+        void InsertEdge(const moist::exact::EdgePoints& edge);
+        void DecimateEdges(const moist::exact::EdgePoints& edge, const std::unordered_set<std::size_t>& vertices);
+        bool CanMoveVertex(const std::size_t& v_from, const std::size_t& v_to);
+        void ConstructExactOverlayMesh(const std::size_t start);
+    #else // ifndef MOIST_OPTION_EXACT_PREDICATES
         moist::LookupGrid _grid;
-        moist::LookupGridExact _e_grid;
-#endif
-        moist::ExactMesh _em;
+    #endif // MOIST_OPTION_EXACT_PREDICATES
 
         std::vector<g_index> _created_cell_ids;
         std::vector<CreatedTetrahedon> _created_cells;
         std::unordered_set<geo::index_t> _deleted_cells;
         g_index _start_interface_cell;
-        g_index _start_interface_vertex;
-
-        void InsertVertices(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
-        void InsertVertex2(const geo::vec3& p);
-        void InsertVertexExact(const moist::ExactMesh::ExactPoint& p);
-
-        void IsDeleted(const geo::index_t c);
-
-        // global operations
-        void InsertInterfaceVertices(moist::Interface& interface);
-        void InsertEdges2(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
-
-        g_index ReorderCells(const moist::AxisAlignedPlane& plane);
-        g_index CreateTetrahedra();
-
-        bool CanMoveVertex(const g_index v, const vec3& p, const std::unordered_map<vec3, std::unordered_set<g_index>, Vec3HashOperator, Vec3EqualOperator>& cluster);
-
-        void DecimateCreatedTetrahedra(const vec3& e0, const vec3& e1, const std::unordered_set<g_index>& vertices, SteinerPoints& steiner_points);
 
 #ifndef NDEBUG
         void DebugMesh(std::string file, std::vector<g_index>& tetrahedra, bool allow_deleted = false);
