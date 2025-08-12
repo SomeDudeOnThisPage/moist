@@ -211,7 +211,12 @@ namespace moist::predicates
         NONE,
         VERTEX,
         EDGE,
-        EDGE_APPROXIMATED,
+        EDGE01,
+        EDGE02,
+        EDGE03,
+        EDGE12,
+        EDGE13,
+        EDGE23,
         FACET,
         INSIDE
     };

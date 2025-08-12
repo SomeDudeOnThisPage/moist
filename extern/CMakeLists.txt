@@ -150,3 +150,4 @@ set(CGAL_USE_MPFR ON)
 # TODO: Maybe create a "forked" github repo, port tetrahedron to cmake and c++23, and include via fetchcontent...
 add_subdirectory(tetrahedron)
 add_subdirectory(triangle)
+add_subdirectory(tetgen)

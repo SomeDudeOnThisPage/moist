@@ -82,8 +82,16 @@ namespace moist
         MeshSlice(const geo::index_t dimension = 3, const bool single_precision = false);
 
     #ifdef MOIST_OPTION_EXACT_PREDICATES
+        /**
+         * @brief Inserts the interface adjacent 1-ring of tets into the exact-mesh of this slice.
+         *
+         * @param other_mesh
+         */
+        void InsertTetrahedra(moist::MeshSlice& other_mesh, const moist::AxisAlignedPlane& plane);
         void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
-        void GetFixedGeometry(moist::ExactMesh& mesh);
+        void GetFixedGeometry(moist::ExactMesh& mesh, const moist::AxisAlignedPlane& plane);
+        void CreateExactOverlay(const moist::AxisAlignedPlane& plane);
+        geo::index_t ReorderInterfaceCells(const moist::AxisAlignedPlane& plane);
     #else // ifndef MOIST_OPTION_EXACT_PREDICATES
         void InsertEdges(const geo::Mesh& edge_mesh, const moist::AxisAlignedPlane& plane);
         void GetFixedGeometry(geo::Mesh& mesh);
@@ -104,13 +112,12 @@ namespace moist
 
     private:
         geo::index_t CreateTetrahedra();
-        geo::index_t ReorderInterfaceCells(const moist::AxisAlignedPlane& plane);
 
     #ifdef MOIST_OPTION_EXACT_PREDICATES
         moist::ExactMesh _overlay;
         std::vector<std::size_t> _created_exact_cell_ids;
 
-        void InsertVertices(const geo::Mesh& edge_mesh);
+        void InsertVertices(const geo::Mesh& edge_mesh); // TODO: we only need vertices here... don't even need to generate interface anymore
         void InsertEdgesPrivate(const geo::Mesh& edge_mesh);
         void InsertVertex(const moist::exact::Point& point);
         void InsertEdge(const moist::exact::EdgePoints& edge);

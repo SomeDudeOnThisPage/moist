@@ -5,6 +5,7 @@
 
 #include <geogram/mesh/mesh.h>
 #include <geogram/basic/line_stream.h>
+#include <geogram/basic/command_line.h>
 
 #include "moist/core/defines.hpp"
 #include "moist/core/utils.hpp"
@@ -31,13 +32,15 @@ int main(int argc, char* argv[])
     app.add_option("-s, --slice", arguments.slice, "Slice (.msh) file.")
         ->required()
         ->check(cli::ExistingFile);
-    app.add_option("-i, --interface", arguments.interface, "Interface (.geogram) file.")
-        ->required()
-        ->check(cli::ExistingFile);
 
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
     moist::utils::geogram::initialize();
+
+    geo::CmdLine::import_arg_group("algo");
+    geo::CmdLine::import_arg_group("output");
+    geo::CmdLine::set_arg("output:precision", "16");
+    geo::CmdLine::set_arg("sys:use_doubles", true);
 
     // TODO: Insert Steiner Points of Slices into each other...
     //geogram::Mesh slice;

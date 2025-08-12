@@ -4,55 +4,20 @@
 #include <geogram/mesh/mesh.h>
 
 #include "moist/core/defines.hpp"
-#include "slice.hpp"
+#include "interface_inserter.hpp"
+#include "exact_types.hpp"
+#include "exact_mesh.hpp"
 
 namespace moist
 {
     namespace operation
     {
-        /**
-         * @brief Splits an edge of the given tetrahedron, resulting in two created tetrahedra.
-         *
-         * @param mesh Mesh reference.
-         * @param cell Cell to split. Will be marked as deleted.
-         * @param edge Edge information to perform the split.
-         * @param plane Reference plane to detect the non-interface vertex.
-         */
-        void edge_split_1to2(MeshSlice& mesh, const g_index cell, const CrossedEdge& edge, const AxisAlignedPlane& plane);
-
-        /**
-         * @brief Splits two edges of the given tetrahedron, resulting in three created tetrahedra.
-         *
-         * @param mesh Mesh reference.
-         * @param cell Cell to split. Will be marked as deleted.
-         * @param edge0 Edge information to perform the split along one edge.
-         * @param edge1 Edge information to perform the split along the other edge.
-         * @param plane Reference plane to detect the non-interface vertex.
-         */
-        void edge_split_1to3(MeshSlice& mesh, const g_index cell, const CrossedEdge& edge0, const CrossedEdge& edge1, const AxisAlignedPlane& plane);
-
-        /**
-         * @brief Inserts a vertex into a given cell on a facet which lies on the given plane, resulting in three created tetrahedra.
-         *
-         * @param mesh Mesh reference.
-         * @param cell Cell to split. Will be marked as deleted.
-         * @param point Point to insert.
-         * @param plane Reference plane to detect the non-interface vertex.
-         *
-         * @todo This should be refactored to be more "generalized", so that there needs to be no information about a plane, but rather just
-         *       a point and cell. If the point lies on a facet, split into 3, if it lies on an edge, split into 2, if neither split into 4.
-         */
-        void vertex_insert_1to3(MeshSlice &mesh, const g_index& c, const g_index& v, const moist::AxisAlignedPlane& plane);
-        void vertex_insert_1to2(MeshSlice &mesh, const g_index& c, const g_index& v, const moist::AxisAlignedPlane &plane);
-
-        void InsertVertexOnCellBoundaryFacet(const g_index& c, const g_index& v, MeshSlice &mesh);
-        void InsertVertexOnCellBoundaryEdge(const g_index& c, const g_index& v, MeshSlice &mesh);
-
         namespace exact
         {
-            std::vector<CrossedEdgeExact> FindIntersectedEdges(const moist::exact::EdgePoints& edge, const std::size_t& c, const moist::ExactMesh& mesh);
+            std::vector<moist::CrossedEdgeExact> FindIntersectedEdges(const moist::exact::EdgePoints& edge, const std::size_t& c, const moist::ExactMesh& mesh);
             void InsertVertexOnCellBoundaryFacet(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh);
-            void InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh, const double eps = 0.0);
+            bool InsertVertexOnCellBoundaryEdgeOld(const std::size_t& c, const std::size_t& v, moist::ExactMesh& mesh, const double eps = 0.0);
+            void InsertVertexOnCellBoundaryEdge(const std::size_t& c, const std::size_t& v, const moist::predicates::PointInTet& edge, moist::ExactMesh& mesh);
 
             void SplitEdge1_2(const std::size_t& c, const moist::CrossedEdgeExact& edge, moist::ExactMesh& mesh, std::vector<moist::exact::Cell>& created_cells);
             void SplitEdge1_3(const std::size_t& c, const moist::CrossedEdgeExact& edge0, const moist::CrossedEdgeExact& edge1, moist::ExactMesh& mesh, std::vector<moist::exact::Cell>& created_cells);

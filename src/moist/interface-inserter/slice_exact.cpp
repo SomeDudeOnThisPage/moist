@@ -16,6 +16,38 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
     return std::fabs(a - b) <= epsilon;
 }
 
+void moist::MeshSlice::InsertTetrahedra(moist::MeshSlice& other, const moist::AxisAlignedPlane& plane)
+{
+    const auto start = other.ReorderInterfaceCells(plane);
+    other.ConstructExactOverlayMesh(static_cast<std::size_t>(start));
+
+    // begin inserting all other tets into this exactmesh.
+    for (const auto cell : other._overlay.Cells())
+    {
+        if (cell._deleted)
+        {
+            continue;
+        }
+
+        // new idea... for each pair of intersecting tets, find the points they intersect in, and insert them in some order...
+        // remember that order, and insert into both, but make a copy, dont use the entire mesh.
+        // then, finally, delete the one existig tet, and insert all created tets into the mesh.
+        // that way we keep perfect element locality... and... enable parallelization 👀?
+
+        // in the first step, only handle tetrahedra which have a full facet on the interface
+        // we need to find the corresponding points in this mesh, which are from the cell of the other mesh
+        // this is in order to avoid problems with floating point inaccuracy -- after insertion, we only use these...
+        const auto vertices = moist::geometry::exact::interface_vertices(cell, other._overlay);
+        if (vertices.size() != 3)
+        {
+            continue;
+        }
+
+
+
+    }
+}
+
 /* private */ void moist::MeshSlice::ConstructExactOverlayMesh(const std::size_t start)
 {
     auto v_interface = geo::Attribute<bool>(this->vertices.attributes(), "v_interface");
@@ -46,7 +78,7 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
 
     this->_overlay.ResetGrid(15.0);
 #ifndef NDEBUG
-    this->_overlay.DebugMesh("exact_mesh.msh");
+    this->_overlay.DebugMesh("exact_mesh.mesh");
 #endif // NDEBUG
 }
 
@@ -110,54 +142,29 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
     }
 
 #ifndef NDEBUG
-    this->_overlay.DebugMesh("exact_mesh_after_insertion.msh");
+    this->_overlay.DebugMesh("exact_mesh_after_insertion.mesh");
 #endif // NDEBUG
 }
 
 /* private */ void moist::MeshSlice::InsertVertex(const moist::exact::Point& point)
 {
-    /*const auto& grid_cells = _overlay.Grid()->GetCells(moist::create_point_box2d_exact(point));
-    std::size_t v_1to2 = moist::exact::NO_VERTEX;
-
-    for (const auto grid_cell : grid_cells)
-    {
-        if (!_overlay.Grid()->_grid.contains(grid_cell)) // cringe
-        {
-            continue;
-        }
-
-        for (const std::size_t& c : _overlay.Grid()->GetMeshCells(grid_cell))
-        {
-            const auto& cell = this->_overlay.Cell(c);
-            if (cell._deleted)
-            {
-                continue;
-            }
-
-            const auto location = moist::new_predicates::point_in_tet_exact(this->_overlay, c, point, true);
-
-            if (location == moist::predicates::PointInTet::FACET)
-            {
-                const std::size_t v = this->_overlay.Add(point);
-                moist::operation::exact::InsertVertexOnCellBoundaryFacet(c, v, this->_overlay);
-            }
-            else if (location == moist::predicates::PointInTet::EDGE)
-            {
-                if (v_1to2 == moist::exact::NO_VERTEX)
-                {
-                    v_1to2 = this->_overlay.Add(point);
-                }
-
-                moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, this->_overlay);
-            }
-        }
-    }*/
-
     const auto& grid_cells = _overlay.Grid()->GetCells(moist::create_point_box2d_exact(point));
     std::size_t v_1to2 = moist::exact::NO_VERTEX;
 
     bool dbg_cell = false;
-    if (is_equal_test(point.x(), 91.0000) && is_equal_test(point.y(), 85.0007))
+    // 62.243751 10.2449047 10
+    if (is_equal_test(point.x(), 62.243751) && is_equal_test(point.y(), 10.2449047))
+    {
+        dbg_cell = true;
+    }
+
+    if (is_equal_test(point.x(), 62.9993) && is_equal_test(point.y(), 11))
+    {
+        dbg_cell = true;
+    }
+
+    // 62 10.0013
+    if (is_equal_test(point.x(), 62) && is_equal_test(point.y(), 10.0013))
     {
         dbg_cell = true;
     }
@@ -214,7 +221,7 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
                     dbg_cells.Add(moist::exact::Point(point)),
                     dbg_cells.Add(moist::exact::Point(point))
                 ), true);
-                dbg_cells.DebugMesh("dbg_cell_" + std::to_string(c) + ".msh");
+                //dbg_cells.DebugMesh("dbg_cell_" + std::to_string(c) + ".msh");
             }
 
             if (c == 317)
@@ -240,20 +247,47 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
                     v_1to2 = this->_overlay.Add(point);
                 }
 
-                moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, this->_overlay);
+                if (!moist::operation::exact::InsertVertexOnCellBoundaryEdgeOld(c, v_1to2, this->_overlay))
+                {
+                                moist::ExactMesh dbg_cells;
+            const auto cells = _overlay.Grid()->GetMeshCells(grid_cell);
+            for (const auto c : cells)
+            {
+                const auto cell = this->_overlay.Cell(c);
+                if (cell._deleted) continue;
+                dbg_cells.Add(moist::exact::Cell(
+                    dbg_cells.Add(moist::exact::Point(_overlay.Point(cell._points[0]))),
+                    dbg_cells.Add(moist::exact::Point(_overlay.Point(cell._points[1]))),
+                    dbg_cells.Add(moist::exact::Point(_overlay.Point(cell._points[2]))),
+                    dbg_cells.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
+                    ), true);
+                }
+
+                dbg_cells.Add(moist::exact::Cell(
+                    dbg_cells.Add(moist::exact::Point(point)),
+                    dbg_cells.Add(moist::exact::Point(point)),
+                    dbg_cells.Add(moist::exact::Point(point)),
+                    dbg_cells.Add(moist::exact::Point(point))
+                ), true);
+                dbg_cells.Add(moist::exact::Point(point));
+                dbg_cells.DebugMesh("dbg_cell_" + std::to_string(grid_cell.first) + "_" + std::to_string(grid_cell.second) + ".msh");
+                OOC_DEBUG("point is " << point._p);
+                }
             }
-            else if (location == moist::predicates::PointInTet::EDGE_APPROXIMATED)
+            /*else if (location == moist::predicates::PointInTet::EDGE_APPROXIMATED)
             {
                 if (v_1to2 == moist::exact::NO_VERTEX)
                 {
                     v_1to2 = this->_overlay.Add(point);
                 }
 
-                moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, this->_overlay, 1e-12);
-            }
+                moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, this->_overlay, 1e-14);
+            }*/
         }
     }
 }
+
+
 
 /* private */ void moist::MeshSlice::InsertEdgesPrivate(const geo::Mesh& edge_mesh)
 {
@@ -271,7 +305,7 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
         i++;
     }
 
-    this->_overlay.DebugMesh("exact_mesh_after_edge_insertion.msh");
+    this->_overlay.DebugMesh("exact_mesh_after_edge_insertion.mesh");
 }
 
 /* private */ void moist::MeshSlice::InsertEdge(const moist::exact::EdgePoints& edge)
@@ -397,8 +431,8 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
         ppx = _overlay.Point(first).x();
         ppy = _overlay.Point(first).y();
     }
-    dbg_crossed_cells.DebugMesh("crossed.msh");
-    dbg_created_cells.DebugMesh("created.msh");
+    //dbg_crossed_cells.DebugMesh("crossed.msh");
+    //dbg_created_cells.DebugMesh("created.msh");
     this->DecimateEdges(edge, edge_vertices);
 
     moist::ExactMesh dbg_decimated_cells;
@@ -416,11 +450,11 @@ inline bool is_equal_test(double a, double b, double epsilon = 1e-4) {
             ), true);
         }
 
-        dbg_decimated_cells.DebugMesh("dbg_after_decimation.msh");
+        //dbg_decimated_cells.DebugMesh("dbg_after_decimation.msh");
     }
 }
 
-static std::array<std::size_t, 2> find_edge_vertices(const std::vector<std::size_t> cells, const moist::exact::EdgePoints& edge, const moist::ExactMesh& mesh)
+static std::array<std::size_t, 2> find_edge_vertices(const std::vector<std::size_t> cells, const moist::exact::EdgePoints& edge, moist::ExactMesh& mesh)
 {
     std::array<std::size_t, 2> points
     {
@@ -448,17 +482,17 @@ static std::array<std::size_t, 2> find_edge_vertices(const std::vector<std::size
             const bool eq_p1 = moist::geometry::exact::points_are_equal(point._p, edge.p1._p);
             if (eq_p0)
             {
-                //nearest_e0 = -1.0;
+                nearest_e0 = -1.0;
                 points[0] = v;
             }
 
             if (eq_p1)
             {
-                //nearest_e1 = -1.0;
+                nearest_e1 = -1.0;
                 points[1] = v;
             }
 
-            /*const double d_e0 = std::sqrt(CGAL::to_double(CGAL::squared_distance(point._p, edge.p0._p)));
+            const double d_e0 = std::sqrt(CGAL::to_double(CGAL::squared_distance(point._p, edge.p0._p)));
             const double d_e1 = std::sqrt(CGAL::to_double(CGAL::squared_distance(point._p, edge.p1._p)));
 
             if (d_e0 < nearest_e0)
@@ -471,14 +505,26 @@ static std::array<std::size_t, 2> find_edge_vertices(const std::vector<std::size
             {
                 nearest_e1 = d_e1;
                 points[1] = v;
-            }*/
+            }
         }
     }
 
     if (points[0] == moist::exact::NO_VERTEX || points[1] == moist::exact::NO_VERTEX)
     // if (std::find(points.begin(), points.end(), moist::exact::NO_VERTEX))
     {
-        //OOC_ERROR("edge endpoints are missing in crossed cells - p0 = " << edge.p0._p << ", p1 = " << edge.p1._p);
+        OOC_ERROR("edge endpoints are missing in crossed cells - p0 = " << edge.p0._p << ", p1 = " << edge.p1._p);
+    }
+
+    if (nearest_e0 != -1.0)
+    {
+        OOC_DEBUG("edge endpoint was not found in mesh - filling onto " << points[0]);
+        mesh.Point(points[0])._fixed = true;
+    }
+
+    if (nearest_e1 != -1.0)
+    {
+        OOC_DEBUG("edge endpoint was not found in mesh - filling onto " << points[1]);
+        mesh.Point(points[1])._fixed = true;
     }
 
     return points;
@@ -613,7 +659,7 @@ dbg:
                 dbg_decimated_cells.Add(moist::exact::Point(_overlay.Point(cell._points[3])))
             ), true);
         }
-        dbg_decimated_cells.DebugMesh("dbg_during_decimation" + std::to_string(i) + ".msh");
+        //dbg_decimated_cells.DebugMesh("dbg_during_decimation" + std::to_string(i) + ".msh");
         i++;
     }
 
@@ -680,7 +726,7 @@ dbg:
     return true;
 }
 
-/* public */ void moist::MeshSlice::GetFixedGeometry(moist::ExactMesh& mesh)
+/* public */ void moist::MeshSlice::GetFixedGeometry(moist::ExactMesh& mesh, const moist::AxisAlignedPlane& plane)
 {
     std::unordered_map<std::size_t, std::size_t> vertices;
     for (const auto cell : _overlay.Cells())

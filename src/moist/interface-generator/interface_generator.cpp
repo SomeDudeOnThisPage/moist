@@ -301,7 +301,7 @@ void moist::InterfaceGenerator::Triangulate()
 {
     _cdt.insertVertices(_interface_vertices);
     _cdt.insertEdges(_interface_edges);
-    _cdt.eraseOuterTriangles();
+    _cdt.eraseSuperTriangle();
     geo::vector<double> vertices(_cdt.vertices.size() * 3);
     geo::vector<geo::index_t> triangles(_cdt.triangles.size() * 3);
 

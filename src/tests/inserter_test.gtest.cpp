@@ -16,7 +16,7 @@
 #include "moist/core/utils.hpp"
 
 #include "moist/interface-inserter/interface_inserter.hpp"
-#include "moist/interface-inserter/slice.hpp"
+//#include "moist/interface-inserter/slice.hpp"
 
 #include "test_utils.hpp"
 #include "fixtures/core_group.def.hpp"
@@ -46,7 +46,7 @@ protected:
     }
 };
 
-TEST_P(InterfaceInserterTestFixture, GenerateStatistics)
+/*TEST_P(InterfaceInserterTestFixture, GenerateStatistics)
 {
     const moist::testing::fixture::InterfaceInserterFiles _files = GetParam();
 
@@ -126,4 +126,4 @@ TEST(InserterTest, ContainsNoOverlappingEdgesCubeCylinder)
     moist::utils::geogram::save("test-b.msh", slice_b);
 
     EXPECT_EQ(moist::test::contains_overlapping_constraints(slice_a, slice_b, interface), 0);
-}
+}*/

@@ -30,6 +30,7 @@ namespace moist
         std::size_t Add(const moist::exact::Point p);
         std::size_t Add(const moist::exact::Cell cell, const bool initialization = false);
         std::size_t Add(const moist::exact::Edge e);
+        std::size_t Add(const moist::exact::Facet f);
 
         void DeletePoint(const std::size_t v);
         void DeleteCell(const std::size_t c);
@@ -41,10 +42,12 @@ namespace moist
 
         const std::vector<moist::exact::Point>& Points() const { return _points; }
         const std::vector<moist::exact::Cell>& Cells() const { return _cells; }
+        const std::vector<moist::exact::Facet>& Facets() const { return _facets; }
         const std::unordered_set<moist::exact::Edge>& Edges() const { return _edges; }
 
         const std::size_t NbPoints() const { return _points.size(); }
         const std::size_t NbCells() const { return _cells.size(); }
+        const std::size_t NbFacets() const { return _facets.size(); }
         const std::size_t NbEdges() const { return _edges.size(); }
 
         std::shared_ptr<moist::LookupGridExact> Grid() { return _grid; }
@@ -56,6 +59,7 @@ namespace moist
     private:
         std::vector<moist::exact::Point> _points;
         std::vector<moist::exact::Cell> _cells;
+        std::vector<moist::exact::Facet> _facets;
         std::unordered_set<moist::exact::Edge> _edges;
 
         std::size_t _pid = 0;
@@ -63,7 +67,36 @@ namespace moist
         std::size_t _eid = 0;
 
         std::shared_ptr<moist::LookupGridExact> _grid;
+        moist::LookupPointGrid _point_grid;
     };
+
+    /**
+     * @brief Creates a two dimensional bounding box of a cell, projected onto the xy-plane.
+     *
+     * @param c
+     * @param mesh
+     * @return geo::Box2d
+     */
+    inline geo::Box2d create_cell_bbox2d_exact(const std::size_t& c, const moist::ExactMesh& mesh)
+    {
+        geo::Box2d aabb;
+        aabb.xy_min[0] = std::numeric_limits<double>::max();
+        aabb.xy_min[1] = std::numeric_limits<double>::max();
+        aabb.xy_max[0] = std::numeric_limits<double>::lowest();
+        aabb.xy_max[1] = std::numeric_limits<double>::lowest();
+
+        const auto cell = mesh.Cell(c);
+        for (const std::size_t v : cell._points)
+        {
+            const auto point = mesh.Point(v);
+            aabb.xy_min[0] = std::min(aabb.xy_min[0], point.x());
+            aabb.xy_min[1] = std::min(aabb.xy_min[1], point.y());
+            aabb.xy_max[0] = std::max(aabb.xy_max[0], point.x());
+            aabb.xy_max[1] = std::max(aabb.xy_max[1], point.y());
+        }
+
+        return aabb;
+    }
 
     inline geo::Box2d create_interface_cell_bbox2d_exact(const std::size_t& c, const moist::ExactMesh& mesh)
     {
@@ -108,11 +141,11 @@ namespace moist
     {
         geo::Box2d box;
 
-        box.xy_min[0] = p.x();
-        box.xy_min[1] = p.y();
+        box.xy_min[0] = p.x() + 1e-12;
+        box.xy_min[1] = p.y() + 1e-12;
 
-        box.xy_max[0] = p.x();
-        box.xy_max[1] = p.y();
+        box.xy_max[0] = p.x() + 1e-12;
+        box.xy_max[1] = p.y() + 1e-12;
 
         return box;
     }

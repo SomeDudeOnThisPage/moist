@@ -8,7 +8,7 @@
 #include "moist/core/utils.hpp"
 #endif // NDEBUG
 
-moist::ExactMesh::ExactMesh() : _grid(std::make_shared<moist::LookupGridExact>())
+moist::ExactMesh::ExactMesh() : _grid(std::make_shared<moist::LookupGridExact>()), _point_grid(moist::LookupPointGrid(100.0))
 {
 }
 
@@ -48,8 +48,16 @@ void moist::ExactMesh::ResetMesh()
 
 std::size_t moist::ExactMesh::Add(const moist::exact::Point p)
 {
+    // check if the point already exists...
+    const auto existing = _point_grid.Get(p);
+    if (existing != std::nullopt)
+    {
+        return existing.value();
+    }
+
     std::size_t index = _pid;
     _points.push_back(p);
+    _point_grid.Add(p, _pid);
     _pid++;
     return index;
 }
@@ -75,6 +83,12 @@ std::size_t moist::ExactMesh::Add(const moist::exact::Edge e)
         _eid++;
     }
     return index; // kinda meaningless lol
+}
+
+std::size_t moist::ExactMesh::Add(const moist::exact::Facet f)
+{
+    _facets.push_back(f);
+    return _facets.size();
 }
 
 void moist::ExactMesh::DeletePoint(const std::size_t v)
@@ -136,6 +150,7 @@ void moist::ExactMesh::DebugMesh(const std::filesystem::path& file)
         mesh.vertices.create_vertex(geo::vec3(CGAL::to_double(p._p.x()), CGAL::to_double(p._p.y()), CGAL::to_double(p._p.z())));
     }
 
+    geo::vector<geo::index_t> to_delete(this->NbCells());
     for (const auto c : this->_cells)
     {
         if (c._deleted || moist::geometry::exact::is_degenerate(c))
@@ -143,13 +158,20 @@ void moist::ExactMesh::DebugMesh(const std::filesystem::path& file)
             continue;
         }
 
-        mesh.cells.create_tet(
+        const auto t = mesh.cells.create_tet(
             geo::index_t(c._points[0]),
             geo::index_t(c._points[1]),
             geo::index_t(c._points[2]),
             geo::index_t(c._points[3])
         );
+
+        if (geo::mesh_cell_volume(mesh, t) == 0.0)
+        {
+            OOC_WARNING("degenerate tet " << t);
+            to_delete[t] = true;
+        }
     }
+    mesh.cells.delete_elements(to_delete);
 
     for (const auto e : this->_edges)
     {
@@ -161,6 +183,15 @@ void moist::ExactMesh::DebugMesh(const std::filesystem::path& file)
         mesh.edges.create_edge(
             geo::index_t(e._points[0]),
             geo::index_t(e._points[1])
+        );
+    }
+
+    for (const auto f : this->_facets)
+    {
+        mesh.facets.create_triangle(
+            geo::index_t(f[0]),
+            geo::index_t(f[1]),
+            geo::index_t(f[2])
         );
     }
 

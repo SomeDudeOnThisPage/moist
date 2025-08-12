@@ -25,6 +25,7 @@ target_link_libraries(MOIST_Tests PRIVATE gtest_main)
 target_link_libraries(MOIST_Tests PRIVATE geogram)
 target_link_libraries(MOIST_Tests PRIVATE OutOfCore_Meshing_Core)
 target_link_libraries(MOIST_Tests PRIVATE ${GMP_LIB} ${GMPXX_LIB} ${MPFR_LIB})
+target_link_libraries(MOIST_Tests PRIVATE tetgen::tetgen)
 
 include(GoogleTest)
 gtest_discover_tests(MOIST_Tests)

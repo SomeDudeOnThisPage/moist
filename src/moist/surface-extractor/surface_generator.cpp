@@ -22,43 +22,31 @@ moist::SurfaceGenerator::SurfaceGenerator(const Tiff &tiff, const uint32_t offse
     const size_t sy = tiff.height();
     const size_t sz = tiff.depth();
 
-    _grid.set_grid_dimensions(sx/* + 2*/, sy/* + 2*/, sz/* + 2*/);
+    _grid.set_grid_dimensions(sx + 2, sy + 2, sz + 2);
     _mc.set_grid3d(_grid);
 
-    for (size_t x = 0; x < sx/* + 2*/; x++)
+    for (size_t x = 0; x < sx + 2; x++)
     {
-        for (size_t y = 0; y < sy/* + 2*/; y++)
+        for (size_t y = 0; y < sy + 2; y++)
         {
-            for (size_t z = 0; z < sz/* + 2*/; z++)
+            for (size_t z = 0; z < sz + 2; z++)
             {
                 _grid.set_grid_value(x, y, z, static_cast<double>(0.0));
             }
         }
     }
 
-    for (size_t x = 0; x < sx; x++)
+    for (size_t x = 1; x < sx + 1; x++)
     {
-        for (size_t y = 0; y < sy; y++)
+        for (size_t y = 1; y < sy + 1; y++)
         {
-            for (size_t z = 0; z < sz; z++)
+            for (size_t z = 1; z < sz + 1; z++)
             {
-                const double datapoint = tiff.data[(z) * tiff.width() * tiff.height() + (y) * tiff.width() + x];
+                const double datapoint = tiff.data[(z - 1) * tiff.width() * tiff.height() + (y - 1) * tiff.width() + x - 1];
                 _grid.set_grid_value(x, y, z, static_cast<double>((invert) ? 1.0 - datapoint : datapoint));
             }
         }
     }
-
-    // for (size_t x = 1; x < sx + 1; x++)
-    // {
-    //     for (size_t y = 1; y < sy + 1; y++)
-    //     {
-    //         for (size_t z = 1; z < sz + 1; z++)
-    //         {
-    //             const double datapoint = tiff.data[(z - 1) * tiff.width() * tiff.height() + (y - 1) * tiff.width() + x - 1];
-    //             _grid.set_grid_value(x, y, z, static_cast<double>((invert) ? 1.0 - datapoint : datapoint));
-    //         }
-    //     }
-    // }
 }
 
 #include <geogram/mesh/mesh_remesh.h>
@@ -188,7 +176,7 @@ static void remesh(geo::Mesh& M_in, geo::Mesh& M_out,
     }
 }
 
-#include <CGAL/Simple_cartesian.h>
+/*#include <CGAL/Simple_cartesian.h>
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <CGAL/Polygon_mesh_processing/smooth_shape.h>
@@ -256,7 +244,7 @@ void cgal_to_geo(const Mesh& cgal_mesh, geo::Mesh& geo_mesh)
             facet.push_back(vertex_map.at(vd));
         }
         geo_mesh.facets.create_triangle(facet[0], facet[1], facet[2]);
-    }*/
+    }
     //geo_mesh.facets.connect();
 
     std::map<vertex_descriptor, geo::index_t> vertex_to_index;
@@ -354,7 +342,7 @@ static bool is_hole_on_plane(halfedge_descriptor h, Mesh& mesh, double z_plane, 
   return true;
 }
 
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+/*#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Constrained_triangulation_face_base_2.h>
 #include <CGAL/Triangulation_face_base_with_info_2.h>
 #include <CGAL/Triangulation_vertex_base_2.h>
@@ -362,25 +350,7 @@ static bool is_hole_on_plane(halfedge_descriptor h, Mesh& mesh, double z_plane, 
 #include <CGAL/Constrained_Delaunay_triangulation_2.h>
 #include <CGAL/mark_domain_in_triangulation.h>
 
-typedef bool FaceInfo;
-
-template <typename K_>
-class My_face_base :
-  public CGAL::Triangulation_face_base_with_info_2<
-      bool, K_,
-      CGAL::Constrained_triangulation_face_base_2<K_,
-          CGAL::Triangulation_face_base_2<K_>>> {
-    typedef CGAL::Triangulation_face_base_with_info_2<
-        bool, K_,
-        CGAL::Constrained_triangulation_face_base_2<K_,
-            CGAL::Triangulation_face_base_2<K_>>> Base;
-
-public:
-    My_face_base() : Base() {}
-
-    bool is_in_domain() const { return this->info(); }
-    void set_in_domain(bool b) { this->info() = b; }
-};
+typedef int FaceInfo;
 
 typedef CGAL::Triangulation_vertex_base_2<K> Vb;
 typedef My_face_base<K> Fb;
@@ -437,7 +407,7 @@ static void fill_holes_on_z(Mesh& mesh, double z)
                     auto v2 = mesh.add_vertex(P2);
                     mesh.add_face(v0, v1, v2);
                 }
-            }*/
+            }
             for (auto fit = cdt.finite_faces_begin(); fit != cdt.finite_faces_end(); fit++)
             {
                 if (fit->info() == 1) {
@@ -467,16 +437,16 @@ static void fill_holes_on_z(Mesh& mesh, double z)
         }
     }
 
-}
+}*/
 
-static void fill_holes(geo::Mesh& mesh, geo::Mesh& output, double z0, double z1)
+/*static void fill_holes(geo::Mesh& mesh, geo::Mesh& output, double z0, double z1)
 {
     Mesh cgal_mesh;
     geo_to_cgal(mesh, cgal_mesh);
     fill_holes_on_z(cgal_mesh, static_cast<double>(z0));
     fill_holes_on_z(cgal_mesh, static_cast<double>(z1));
     cgal_to_geo(cgal_mesh, output);
-}
+}*/
 
 void moist::SurfaceGenerator::Generate(GEO::Mesh &mesh, const float isovalue)
 {
@@ -500,10 +470,20 @@ void moist::SurfaceGenerator::Generate(GEO::Mesh &mesh, const float isovalue)
     for(g_index v = 0; v < _surface.get_num_vertices(); v++)
     {
         const auto vertex = _surface.getVertex(v);
+        double z = vertex[2];
+        if (z <= 1.0)
+        {
+            z = z + (1.0 - isovalue);
+        }
+        else if (z >= _depth)
+        {
+            z = z - (1.0 - isovalue);
+        }
+
         // after all this time, why shouldn't I just move everything here? :)
         vertices[3 * v] = vertex[0] - c_offset_x + ((_axis == moist::Axis::X) ? _offset : 0);
         vertices[3 * v + 1] = vertex[1] - c_offset_y + ((_axis == moist::Axis::Y) ? _offset : 0);
-        vertices[3 * v + 2] = vertex[2] - c_offset_z + ((_axis == moist::Axis::Z) ? _offset : 0);
+        vertices[3 * v + 2] = z - c_offset_z + ((_axis == moist::Axis::Z) ? _offset : 0);
     }
 
     GEO::vector<GEO::index_t> triangles(_surface.get_num_triangles() * 3);
@@ -515,10 +495,10 @@ void moist::SurfaceGenerator::Generate(GEO::Mesh &mesh, const float isovalue)
         triangles[3 * t + 2] = triangle[2];
     }
 
-    geo::Mesh before(3);
-    before.facets.assign_triangle_mesh((GEO::coord_index_t) 3, vertices, triangles, true);
-    moist::utils::geogram::save("before_.off", before);
-    fill_holes(before, mesh, _offset, _offset + _depth);
+    //geo::Mesh before(3);
+    mesh.facets.assign_triangle_mesh((GEO::coord_index_t) 3, vertices, triangles, true);
+    //moist::utils::geogram::save("before_.off", before);
+    //fill_holes(before, mesh, _offset, _offset + _depth);
 
     //remesh_CGAL(before, mesh);
 }

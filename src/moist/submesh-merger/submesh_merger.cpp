@@ -83,6 +83,12 @@ void moist::Merger::CopyToOriginal(const std::filesystem::path &destination_over
 
     destination.replace_extension(".msh");
     std::filesystem::copy_file(_tmp_folder_path / "merge", destination, std::filesystem::copy_options::overwrite_existing);
+#ifndef NDEBUG
+    //load/save as .mesh to quickly validate with tetgen if it is a valid mesh
+    geo::Mesh dbg(3);
+    moist::utils::geogram::load(destination, dbg);
+    moist::utils::geogram::save("custom_merge.mesh", dbg);
+#endif // NDEBUG
 }
 
 geo::index_t moist::Merger::WriteNodes(geo::LineInput& input)

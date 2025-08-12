@@ -11,6 +11,7 @@
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Point_3.h>
 #include <CGAL/Segment_3.h>
+#include <CGAL/squared_distance_3.h>
 #include <cmath>
 
 #include <geogram/mesh/mesh.h>
@@ -23,36 +24,27 @@ namespace moist::new_predicates
 {
     typedef CGAL::Simple_cartesian<double> K_Approx;
     typedef K_Approx::Point_3 ApproxPoint;
+    typedef K_Approx::Vector_3 ApproxVector;
     typedef K_Approx::Segment_3 ApproxSegment;
 
-    static inline bool approx_collinear_helper(const ApproxPoint& a, const ApproxPoint& b, const ApproxPoint& c, double epsilon)
+    static inline bool approx_collinear_helper(const ApproxPoint& P, const ApproxPoint& A, const ApproxPoint& B, double epsilon)
     {
-        double area = std::abs((b.x() - a.x()) * (c.y() - a.y()) -
-                            (c.x() - a.x()) * (b.y() - a.y()));
-        return area <= epsilon;
-    }
-    static inline bool is_point_on_tetrahedron_edge(const ApproxPoint& p, const std::array<ApproxPoint, 4>& tetra, double epsilon)
-    {
-        std::array<std::pair<int, int>, 6> edges =
-        {{
-            {0, 1}, {0, 2}, {0, 3},
-            {1, 2}, {1, 3}, {2, 3}
-        }};
+        ApproxVector AB = B - A;
+        ApproxVector AP = P - A;
 
-        for (const auto& [i, j] : edges)
+        // Check collinearity via cross product
+        ApproxVector cross = CGAL::cross_product(AB, AP);
+        double cross_norm_sq = cross.squared_length();
+        double AB_norm_sq = AB.squared_length();
+        if (cross_norm_sq > epsilon * epsilon * AB_norm_sq)
         {
-            ApproxSegment edge(tetra[i], tetra[j]);
-
-            if (/*CGAL::collinear(tetra[i], tetra[j], p)*/ approx_collinear_helper(tetra[i], tetra[j], p, epsilon))
-            {
-                double d = std::abs(std::sqrt(CGAL::to_double(CGAL::squared_distance(p, edge))));
-                if (d <= epsilon)
-                {
-                    return true;
-                }
-            }
+            return false;
         }
-        return false;
+
+        double dot = AP * AB;
+        double t = dot / AB.squared_length();
+
+        return t >= -epsilon && t <= 1.0 + epsilon;
     }
 
     static inline ApproxPoint convert_point(const moist::exact::Point& point)
@@ -64,25 +56,29 @@ namespace moist::new_predicates
         );
     }
 
+    PURE INLINE double approx_volume(const moist::exact::Point& p0, const moist::exact::Point& p1, const moist::exact::Point& p2, const moist::exact::Point& p3)
+    {
+        const vec3 ap1 = vec3(p0.x(), p0.y(), p0.z());
+        const vec3 ap2 = vec3(p1.x(), p1.y(), p1.z());
+        const vec3 ap3 = vec3(p2.x(), p2.y(), p2.z());
+        const vec3 ap4 = vec3(p3.x(), p3.y(), p3.z());
+
+        return geo::dot(ap2 - ap1, geo::cross(ap3 - ap1, ap4 - ap1)) / 6.0;
+    }
+
     PURE INLINE bool approx_collinear(const moist::exact::Point& p0, const moist::exact::Point& p1, const moist::exact::Point& p2, const double eps)
     {
         static CGAL::Cartesian_converter<moist::exact::Kernel, K_Approx> converter;
         return approx_collinear_helper(converter(p0._p), converter(p1._p), converter(p2._p), eps);
     }
 
-    PURE INLINE moist::predicates::PointInTet point_in_tet_exact(const moist::ExactMesh& mesh, const std::size_t c, const moist::exact::Point& p, bool exclude_existing_points = false)
+    static inline bool is_equal_test(const ApproxPoint& a, const ApproxPoint& b, double epsilon = 1e-12)
     {
-        const auto p0 = mesh.Point(mesh.Cell(c)._points[0]);
-        const auto p1 = mesh.Point(mesh.Cell(c)._points[1]);
-        const auto p2 = mesh.Point(mesh.Cell(c)._points[2]);
-        const auto p3 = mesh.Point(mesh.Cell(c)._points[3]);
+        return std::fabs(a.x() - b.x()) <= epsilon && std::fabs(a.y() - b.y()) <= epsilon && std::fabs(a.z() - b.z()) <= epsilon;
+    }
 
-        const auto ap = vec3(p.x(), p.y(), p.z());
-        const auto ap0 = vec3(p0.x(), p0.y(), p0.z());
-        const auto ap1 = vec3(p1.x(), p1.y(), p1.z());
-        const auto ap2 = vec3(p2.x(), p2.y(), p2.z());
-        const auto ap3 = vec3(p3.x(), p3.y(), p3.z());
-
+    static inline bool is_point_on_tetrahedron_edge(const moist::exact::Point& point, const std::size_t& c, const moist::ExactMesh& mesh, double epsilon)
+    {
         const std::array<ApproxPoint, 4> approx_tet = {{
             convert_point(mesh.Point(mesh.Cell(c)._points[0])),
             convert_point(mesh.Point(mesh.Cell(c)._points[1])),
@@ -90,11 +86,85 @@ namespace moist::new_predicates
             convert_point(mesh.Point(mesh.Cell(c)._points[3]))
         }};
 
+        std::array<std::pair<int, int>, 6> edges =
+        {{
+            {0, 1}, {0, 2}, {0, 3},
+            {1, 2}, {1, 3}, {2, 3}
+        }};
+
+        for (const auto& [i, j] : edges)
+        {
+            if (mesh.Point(mesh.Cell(c)._points[i])._v != moist::exact::NO_VERTEX || mesh.Point(mesh.Cell(c)._points[j])._v != moist::exact::NO_VERTEX)
+            {
+                continue;
+            }
+
+            ApproxPoint ap = convert_point(point);
+            ApproxSegment edge(approx_tet[i], approx_tet[j]);
+
+            if (approx_collinear_helper(ap, approx_tet[i], approx_tet[j], epsilon))
+            {
+                //double d = std::abs(std::sqrt(CGAL::to_double(CGAL::squared_distance(ap, edge))));
+                //if (d <= epsilon)
+                //{
+                    if (!is_equal_test(ap, approx_tet[0]) && !is_equal_test(ap, approx_tet[1]) && !is_equal_test(ap, approx_tet[2]) && !is_equal_test(ap, approx_tet[3]))
+                    {
+                        return true;
+                    }
+                //}
+            }
+        }
+        return false;
+    }
+
+    PURE INLINE CGAL::Sign orient3d(const ApproxPoint& a, const ApproxPoint& b, const ApproxPoint& c, const ApproxPoint& d)
+    {
+        double abx = b.x() - a.x();
+        double aby = b.y() - a.y();
+        double abz = b.z() - a.z();
+
+        double acx = c.x() - a.x();
+        double acy = c.y() - a.y();
+        double acz = c.z() - a.z();
+
+        double adx = d.x() - a.x();
+        double ady = d.y() - a.y();
+        double adz = d.z() - a.z();
+
+        // scalar triple product?
+        const double volume = abx * (acy * adz - acz * ady)
+                    - aby * (acx * adz - acz * adx)
+                    + abz * (acx * ady - acy * adx);
+
+        if (std::abs(volume) < 1e-16)
+        {
+            return CGAL::Sign::ZERO;
+        }
+
+        return (volume > 0)
+            ? CGAL::Sign::POSITIVE
+            : CGAL::Sign::NEGATIVE;
+    }
+
+    PURE INLINE moist::predicates::PointInTet point_in_tet_exact(const moist::ExactMesh& mesh, const std::size_t c, const moist::exact::Point& exact_p, bool exclude_existing_points = false)
+    {
+        // TODO: calc orient3d with exact triple scalar, and apply epsilon only onto that!
+        const auto exact_p0 = mesh.Point(mesh.Cell(c)._points[0]);
+        const auto exact_p1 = mesh.Point(mesh.Cell(c)._points[1]);
+        const auto exact_p2 = mesh.Point(mesh.Cell(c)._points[2]);
+        const auto exact_p3 = mesh.Point(mesh.Cell(c)._points[3]);
+
+        /*const auto p = convert_point(exact_p._p);
+        const auto p0 = convert_point(exact_p0._p);
+        const auto p1 = convert_point(exact_p1._p);
+        const auto p2 = convert_point(exact_p2._p);
+        const auto p3 = convert_point(exact_p3._p);*/
+
         CGAL::Sign s[4];
-        s[0] = CGAL::orientation(p._p, p1._p, p2._p, p3._p);
-        s[1] = CGAL::orientation(p0._p, p._p, p2._p, p3._p);
-        s[2] = CGAL::orientation(p0._p, p1._p, p._p, p3._p);
-        s[3] = CGAL::orientation(p0._p, p1._p, p2._p, p._p);
+        s[0] = CGAL::orientation(exact_p._p, exact_p1._p, exact_p2._p, exact_p3._p);//orient3d(p, p1, p2, p3);
+        s[1] = CGAL::orientation(exact_p0._p, exact_p._p, exact_p2._p, exact_p3._p);//orient3d(p0, p, p2, p3);
+        s[2] = CGAL::orientation(exact_p0._p, exact_p1._p, exact_p._p, exact_p3._p);//orient3d(p0, p1, p, p3);
+        s[3] = CGAL::orientation(exact_p0._p, exact_p1._p, exact_p2._p, exact_p._p); //orient3d(p0, p1, p2, p);
 
         const bool inside_or_on_boundary = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||
@@ -122,18 +192,39 @@ namespace moist::new_predicates
             }
             else if (nz == 2)
             {
+                // shared edges of the faces evaluated by orient3d above
+                // e.g. the faces which determine s[0] and s[1] have p2 and p3 in common
+                if (s[0] == CGAL::ZERO && s[1] == CGAL::ZERO)
+                {
+                    return moist::predicates::PointInTet::EDGE23;
+                }
+                if (s[0] == CGAL::ZERO && s[2] == CGAL::ZERO)
+                {
+                    return moist::predicates::PointInTet::EDGE13;
+                }
+                if (s[0] == CGAL::ZERO && s[3] == CGAL::ZERO)
+                {
+                    return moist::predicates::PointInTet::EDGE12;
+                }
+                if (s[1] == CGAL::ZERO && s[2] == CGAL::ZERO)
+                {
+                    return moist::predicates::PointInTet::EDGE03;
+                }
+                if (s[1] == CGAL::ZERO && s[3] == CGAL::ZERO)
+                {
+                    return moist::predicates::PointInTet::EDGE02;
+                }
+                if (s[2] == CGAL::ZERO && s[3] == CGAL::ZERO)
+                {
+                    return moist::predicates::PointInTet::EDGE01;
+                }
+                OOC_WARNING("could not identify edge!");
                 return moist::predicates::PointInTet::EDGE;
             }
             else if (nz == 3)
             {
                 return moist::predicates::PointInTet::VERTEX;
             }
-        }
-
-        if (is_point_on_tetrahedron_edge(convert_point(p), approx_tet, 1e-14))
-        {
-            OOC_DEBUG("Approximating point " << convert_point(p) << " on edge");
-            return moist::predicates::PointInTet::EDGE_APPROXIMATED;
         }
 
         return moist::predicates::PointInTet::NONE;

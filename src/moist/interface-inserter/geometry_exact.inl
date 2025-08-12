@@ -2,6 +2,7 @@
 #define MOIST_CORE_GEOMETRY_EXACT_INL_
 
 #include <array>
+#include <algorithm>
 #include <unordered_set>
 #include <optional>
 
@@ -15,10 +16,42 @@
 
 namespace moist::geometry::exact
 {
-    static constexpr std::array<std::pair<std::size_t, std::size_t>, 6> TET_EDGE_DESCRIPTOR =
+    constexpr std::array<std::pair<std::size_t, std::size_t>, 6> TET_EDGE_DESCRIPTOR =
     {{
         {0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}
     }};
+
+    constexpr std::array<std::array<std::size_t, 3>, 4> TET_FACET_DESCRIPTOR =
+    {{
+        {0, 1, 2}, {0, 1, 3}, {0, 2, 3}, {1, 2, 3}
+    }};
+
+    PURE INLINE bool cell_has_interface_facet(const moist::exact::Cell& cell, const moist::ExactMesh& mesh)
+    {
+        std::size_t nv = 0;
+        for (const auto v : cell._points)
+        {
+            if (mesh.Point(v)._v == moist::exact::NO_VERTEX)
+            {
+                nv++;
+            }
+        }
+
+        return nv == 3;
+    }
+
+    PURE INLINE std::vector<std::size_t> interface_vertices(const moist::exact::Cell& cell, const moist::ExactMesh& mesh)
+    {
+        std::vector<std::size_t> vertices;
+        for (const auto v : cell._points)
+        {
+            if (mesh.Point(v)._v == moist::exact::NO_VERTEX)
+            {
+                vertices.push_back(v);
+            }
+        }
+        return vertices;
+    }
 
     PURE INLINE std::array<std::size_t, 3> other(const std::size_t& c, const std::size_t& v_opposite, const moist::ExactMesh& mesh)
     {
@@ -63,6 +96,41 @@ namespace moist::geometry::exact
         return CGAL::collinear_are_ordered_along_line(seg.source(), p, seg.target()) &&
             p != seg.source() &&
             p != seg.target();
+    }
+
+    PURE INLINE std::optional<std::vector<moist::exact::Triangle>> arrange()
+    {
+        std::vector<moist::exact::Triangle> polygon_points;
+        return std::nullopt;
+    }
+
+    PURE INLINE std::optional<std::vector<moist::exact::Point>> get_intersection(const moist::exact::Triangle& t0, const moist::exact::Triangle& t1)
+    {
+        std::vector<moist::exact::Point> polygon_points;
+
+        auto result = CGAL::intersection(t0._t, t1._t);
+        if (const std::vector<moist::exact::Kernel::Point_3>* polygon = std::get_if<std::vector<moist::exact::Kernel::Point_3>>(&*result))
+        {
+            polygon_points.reserve(polygon->size());
+            std::transform(polygon->begin(), polygon->end(), polygon_points.begin(), [](const moist::exact::Kernel::Point_3 point)
+            {
+                return moist::exact::Point(static_cast<moist::exact::Kernel::Point_3>(point));
+            });
+        }
+        else if (const moist::exact::Kernel::Triangle_3* triangle = std::get_if<moist::exact::Kernel::Triangle_3>(&*result))
+        {
+            polygon_points.reserve(3);
+            polygon_points[0] = moist::exact::Point(static_cast<moist::exact::Kernel::Point_3>(triangle->vertex(0)));
+            polygon_points[1] = moist::exact::Point(static_cast<moist::exact::Kernel::Point_3>(triangle->vertex(1)));
+            polygon_points[2] = moist::exact::Point(static_cast<moist::exact::Kernel::Point_3>(triangle->vertex(2)));
+        }
+        else
+        {
+            // We don't care about no intersection, intersection in a single point, or intersection on one edge.
+            return std::nullopt;
+        }
+
+        return polygon_points;
     }
 
     /**

@@ -27,9 +27,13 @@ message(STATUS "MPFR_LIB = ${MPFR_LIB}")
 
 if(MOIST_TESTS)
     add_library(MOIST_InterfaceInserter_Units OBJECT
-        slice.hpp
-        slice.cpp
-        slice_exact.cpp
+        arrangement.hpp
+        arrangement.cpp
+        #slice.hpp
+        #slice.cpp
+        merger.hpp
+        merger.cpp
+        #slice_exact.cpp
         local_operations.hpp
         local_operations.cpp
         lookup_grid.hpp
@@ -47,6 +51,7 @@ if(MOIST_TESTS)
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE OutOfCore_Meshing_Core)
     #target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE ${GMP_LIB} ${GMPXX_LIB} ${MPFR_LIB})
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE CGAL::CGAL)
+    target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE tetgen::tetgen)
 
     set(SOURCES
         main.cpp
@@ -70,6 +75,8 @@ target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE CLI11::CLI11)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE OutOfCore_Meshing_Core)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE ${GMPXX_LIB} ${GMP_LIB} ${MPFR_LIB})
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE CGAL::CGAL)
+target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE tetgen::tetgen)
+
 target_include_directories(OutOfCore_Meshing_InterfaceInserter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(CMAKE_OPTION_UNROLL_LOOPS)

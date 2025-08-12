@@ -7,20 +7,12 @@
 #include "moist/core/core_interface.hpp"
 #include "moist/core/metrics.hpp"
 
-#include "exact_types.hpp"
+#include "slice.hpp"
 
 namespace moist
 {
-    struct CrossedEdgeExact
-    {
-        std::size_t v0;
-        std::size_t v1;
-
-        moist::exact::Point p;
-        std::size_t vp;
-    };
-
-    void create_interface_mesh(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane);
+    void create_interface_mesh(geo::Mesh& a, geo::Mesh& b, moist::Interface& interface);
+    void insert_constraints(moist::MeshSlice& a, moist::MeshSlice& b, moist::Interface& interface, moist::metrics::Metrics_ptr metrics);
 }
 
 #endif // MOIST_INTERFACE_INSERTER_INTERFACE_INSERTER_HPP_

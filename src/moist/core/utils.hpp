@@ -54,12 +54,12 @@ namespace moist::utils {
             }
         }
 
-        inline void save(const std::filesystem::path& file, const geo::Mesh& mesh, bool attributes = true)
+        inline void save(const std::filesystem::path& file, const geo::Mesh& mesh, bool attributes = true, geo::MeshElementsFlags elements = geo::MeshElementsFlags::MESH_ALL_ELEMENTS)
         {
             geo::MeshIOFlags flags;
             flags.set_dimension(mesh.vertices.dimension());
             flags.set_attribute(attributes ? geo::MESH_ALL_ATTRIBUTES : geo::MESH_NO_ATTRIBUTES);
-            flags.set_elements(geo::MeshElementsFlags::MESH_ALL_ELEMENTS);
+            flags.set_elements(elements);
             flags.set_verbose(true);
             geo::mesh_save(mesh, file.string(), flags);
         }
