@@ -33,6 +33,8 @@ if(MOIST_TESTS)
         #slice.cpp
         merger.hpp
         merger.cpp
+        tetgen_utils.hpp
+        tetgen_utils.cpp
         #slice_exact.cpp
         local_operations.hpp
         local_operations.cpp
@@ -52,6 +54,8 @@ if(MOIST_TESTS)
     #target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE ${GMP_LIB} ${GMPXX_LIB} ${MPFR_LIB})
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE CGAL::CGAL)
     target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE tetgen::tetgen)
+    target_link_libraries(MOIST_InterfaceInserter_Units PRIVATE mmg3d)
+    target_include_directories(MOIST_InterfaceInserter_Units PRIVATE ${MMG3D_INCLUDE_DIR})
 
     set(SOURCES
         main.cpp
@@ -76,8 +80,10 @@ target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE OutOfCore_Mesh
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE ${GMPXX_LIB} ${GMP_LIB} ${MPFR_LIB})
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE CGAL::CGAL)
 target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE tetgen::tetgen)
+target_link_libraries(OutOfCore_Meshing_InterfaceInserter PRIVATE mmg3d)
 
 target_include_directories(OutOfCore_Meshing_InterfaceInserter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(OutOfCore_Meshing_InterfaceInserter PRIVATE ${MMG3D_INCLUDE_DIR})
 
 if(CMAKE_OPTION_UNROLL_LOOPS)
     message("Option: UNROLL_LOOPS")

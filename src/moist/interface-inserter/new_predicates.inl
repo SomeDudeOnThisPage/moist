@@ -94,7 +94,7 @@ namespace moist::new_predicates
 
         for (const auto& [i, j] : edges)
         {
-            if (mesh.Point(mesh.Cell(c)._points[i])._v != moist::exact::NO_VERTEX || mesh.Point(mesh.Cell(c)._points[j])._v != moist::exact::NO_VERTEX)
+            if (!mesh.Point(mesh.Cell(c)._points[i])._interface || !mesh.Point(mesh.Cell(c)._points[j])._interface)
             {
                 continue;
             }
@@ -136,7 +136,7 @@ namespace moist::new_predicates
                     - aby * (acx * adz - acz * adx)
                     + abz * (acx * ady - acy * adx);
 
-        if (std::abs(volume) < 1e-16)
+        if (std::abs(volume) < 1e-12)
         {
             return CGAL::Sign::ZERO;
         }
@@ -154,17 +154,21 @@ namespace moist::new_predicates
         const auto exact_p2 = mesh.Point(mesh.Cell(c)._points[2]);
         const auto exact_p3 = mesh.Point(mesh.Cell(c)._points[3]);
 
-        /*const auto p = convert_point(exact_p._p);
+        const auto p = convert_point(exact_p._p);
         const auto p0 = convert_point(exact_p0._p);
         const auto p1 = convert_point(exact_p1._p);
         const auto p2 = convert_point(exact_p2._p);
-        const auto p3 = convert_point(exact_p3._p);*/
+        const auto p3 = convert_point(exact_p3._p);
 
         CGAL::Sign s[4];
-        s[0] = CGAL::orientation(exact_p._p, exact_p1._p, exact_p2._p, exact_p3._p);//orient3d(p, p1, p2, p3);
-        s[1] = CGAL::orientation(exact_p0._p, exact_p._p, exact_p2._p, exact_p3._p);//orient3d(p0, p, p2, p3);
-        s[2] = CGAL::orientation(exact_p0._p, exact_p1._p, exact_p._p, exact_p3._p);//orient3d(p0, p1, p, p3);
-        s[3] = CGAL::orientation(exact_p0._p, exact_p1._p, exact_p2._p, exact_p._p); //orient3d(p0, p1, p2, p);
+        s[0] = CGAL::orientation(exact_p._p, exact_p1._p, exact_p2._p, exact_p3._p);
+        s[1] = CGAL::orientation(exact_p0._p, exact_p._p, exact_p2._p, exact_p3._p);
+        s[2] = CGAL::orientation(exact_p0._p, exact_p1._p, exact_p._p, exact_p3._p);
+        s[3] = CGAL::orientation(exact_p0._p, exact_p1._p, exact_p2._p, exact_p._p);
+        //s[0] = orient3d(p, p1, p2, p3);
+        //s[1] = orient3d(p0, p, p2, p3);
+        //s[2] = orient3d(p0, p1, p, p3);
+        //s[3] = orient3d(p0, p1, p2, p);
 
         const bool inside_or_on_boundary = (
             (s[0] >= 0 && s[1] >= 0 && s[2] >= 0 && s[3] >= 0) ||

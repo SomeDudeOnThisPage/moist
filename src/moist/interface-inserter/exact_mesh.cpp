@@ -8,7 +8,7 @@
 #include "moist/core/utils.hpp"
 #endif // NDEBUG
 
-moist::ExactMesh::ExactMesh() : _grid(std::make_shared<moist::LookupGridExact>()), _point_grid(moist::LookupPointGrid(100.0))
+moist::ExactMesh::ExactMesh() : _grid(std::make_shared<moist::LookupGridExact>()), _point_grid(moist::LookupPointGrid(10.0))
 {
 }
 
@@ -101,6 +101,26 @@ void moist::ExactMesh::DeleteCell(const std::size_t c)
     _cells.at(c)._deleted = true;
 }
 
+void moist::ExactMesh::FlushDeletedElements()
+{
+    std::size_t del = 0;
+    for (const auto cell : _cells)
+    {
+        if (cell._deleted)
+        {
+            del++;
+        }
+    }
+    OOC_DEBUG(del);
+
+    const std::size_t size_before = _cells.size();
+    _cells.erase(
+        std::remove_if(_cells.begin(), _cells.end(), [](const auto& cell) { return cell._deleted; }), _cells.end());
+    _cells.shrink_to_fit();
+    OOC_DEBUG("shrinking cells from " << size_before << " to " << _cells.size());
+    // this->ResetGrid(this->_grid->_resolution);
+}
+
 moist::exact::Point &moist::ExactMesh::Point(const std::size_t& index)
 {
     if (_points.size() < index)
@@ -144,10 +164,22 @@ const moist::exact::Cell& moist::ExactMesh::Cell(const std::size_t& index) const
 #ifndef NDEBUG
 void moist::ExactMesh::DebugMesh(const std::filesystem::path& file)
 {
+#ifndef NDEBUG
+    std::set<std::array<double, 3>> points;
+#endif // NDEBUG
+
     geo::Mesh mesh(3);
     for (const auto& p : this->_points)
     {
-        mesh.vertices.create_vertex(geo::vec3(CGAL::to_double(p._p.x()), CGAL::to_double(p._p.y()), CGAL::to_double(p._p.z())));
+        const auto point = geo::vec3(CGAL::to_double(p._p.x()), CGAL::to_double(p._p.y()), CGAL::to_double(p._p.z()));
+    #ifndef NDEBUG
+        if (points.contains({ point.x, point.y, point.z }))
+        {
+            OOC_WARNING("degenerate vertices in R");
+        }
+        points.insert({ point.x, point.y, point.z });
+    #endif // NDEBUG
+        mesh.vertices.create_vertex(point);
     }
 
     geo::vector<geo::index_t> to_delete(this->NbCells());
@@ -165,7 +197,7 @@ void moist::ExactMesh::DebugMesh(const std::filesystem::path& file)
             geo::index_t(c._points[3])
         );
 
-        if (geo::mesh_cell_volume(mesh, t) == 0.0)
+        if (std::fabs(geo::mesh_cell_volume(mesh, t)) == 0.0)
         {
             OOC_WARNING("degenerate tet " << t);
             to_delete[t] = true;
@@ -195,7 +227,22 @@ void moist::ExactMesh::DebugMesh(const std::filesystem::path& file)
         );
     }
 
-    //geo::mesh_repair(mesh, geo::MESH_REPAIR_COLOCATE);
+    // geo::mesh_repair(mesh, geo::MeshRepairMode::MESH_REPAIR_COLOCATE);
+    to_delete.clear();
+    to_delete.resize(mesh.cells.nb());
+    double smallest_vol = 10000.0;
+    for (const geo::index_t c : mesh.cells)
+    {
+        to_delete[c] = std::fabs(geo::mesh_cell_volume(mesh, c)) == 0.0 || moist::geometry::has_duplicate_vertex(c, mesh);
+        const auto vol = std::fabs(geo::mesh_cell_volume(mesh, c));
+        if (vol != 0.0 && vol < smallest_vol)
+        {
+            smallest_vol = vol;
+        }
+    }
+    mesh.cells.delete_elements(to_delete);
+    OOC_DEBUG("smallest volume: " << smallest_vol);
+
     moist::utils::geogram::save(file, mesh);
 }
 #endif // NDEBUG

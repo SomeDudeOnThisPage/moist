@@ -91,6 +91,9 @@ int main(int argc, char* argv[])
     const auto plane = moist::AxisAlignedPlane { moist::Axis::Z, arguments.extent, arguments.epsilon };
     moist::create_interface_mesh(slice_a, slice_b, plane);
 
+#ifndef NDEBUG
+    moist::ScopeTimer::Print();
+#endif // NDEBUG
     //metrics->AppendCSV("test.csv");
     return 0;
 }

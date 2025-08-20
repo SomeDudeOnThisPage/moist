@@ -26,12 +26,34 @@ namespace moist::geometry::exact
         {0, 1, 2}, {0, 1, 3}, {0, 2, 3}, {1, 2, 3}
     }};
 
+    PURE INLINE moist::exact::CellType get_cell_type(std::array<std::size_t, 4>& vertices, const moist::ExactMesh& mesh)
+    {
+        std::size_t nv = 0;
+        for (const auto v : vertices)
+        {
+            nv += (mesh.Point(v)._interface) ? 1 : 0;
+        }
+
+        switch(nv)
+        {
+        case 1:
+            return moist::exact::CellType::I;
+        case 2:
+            return moist::exact::CellType::II;
+        case 3:
+            return moist::exact::CellType::III;
+        default:
+            OOC_ERROR("invalid interface cell type");
+        }
+        return moist::exact::CellType::I; // stop compiler complain
+    };
+
     PURE INLINE bool cell_has_interface_facet(const moist::exact::Cell& cell, const moist::ExactMesh& mesh)
     {
         std::size_t nv = 0;
         for (const auto v : cell._points)
         {
-            if (mesh.Point(v)._v == moist::exact::NO_VERTEX)
+            if (mesh.Point(v)._interface)
             {
                 nv++;
             }
@@ -45,7 +67,7 @@ namespace moist::geometry::exact
         std::vector<std::size_t> vertices;
         for (const auto v : cell._points)
         {
-            if (mesh.Point(v)._v == moist::exact::NO_VERTEX)
+            if (mesh.Point(v)._interface)
             {
                 vertices.push_back(v);
             }

@@ -74,6 +74,8 @@ namespace moist::assert
 
     #define OOC_WARNING(msg) \
         geo::Logger::warn("MOIST") << "[" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
+    #define MOIST_INFO(msg) \
+        geo::Logger::out("MOIST") << "[" << __FILE__ << ":" << __LINE__ << "]: " << msg  << std::endl
 
     #ifndef NDEBUG
     #define OOC_DEBUG(msg) \

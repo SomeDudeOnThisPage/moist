@@ -1,271 +1,48 @@
 #include "merger.hpp"
 
+#include <tetgen.h>
+
 #include <geogram/mesh/mesh_repair.h>
 
 #include "moist/core/predicates.inl"
 #include "moist/core/utils.hpp"
+#include "moist/core/timer.hpp"
 
 #include "arrangement.hpp"
 #include "exact_types.hpp"
 #include "local_operations.hpp"
 #include "new_predicates.inl"
 #include "geometry_exact.inl"
-
-#include <tetgen.h>
+#include "tetgen_utils.hpp"
 
 static geo::Mesh dbg_triangles(3);
-static void geo_to_tetgen(const geo::Mesh& geo_mesh, tetgenio& in)
-{
-    in.initialize();
-    in.numberofpoints = (int) geo_mesh.vertices.nb();
-    in.pointlist = new double[in.numberofpoints * 3];
-
-    for (geo::index_t v = 0; v < geo_mesh.vertices.nb(); v++)
-    {
-        const double* p = geo_mesh.vertices.point_ptr(v);
-        in.pointlist[3 * v] = p[0];
-        in.pointlist[3 * v + 1] = p[1];
-        in.pointlist[3 * v + 2] = p[2];
-    }
-
-    in.numberoftetrahedra = (int) geo_mesh.cells.nb();
-    in.tetrahedronlist = new int[in.numberoftetrahedra * 4];
-
-    for (geo::index_t c = 0; c < geo_mesh.cells.nb(); c++)
-    {
-        for (int lv = 0; lv < 4; lv++)
-        {
-            in.tetrahedronlist[4 * c + lv] = (int) geo_mesh.cells.vertex(c, lv);
-        }
-    }
-
-    if (geo_mesh.vertices.attributes().is_defined("v_boundary_marker"))
-    {
-        //in.numberofpointattributes = 1;
-        in.pointmarkerlist = new int[in.numberofpoints];
-        auto v_boundary_marker = geo::Attribute<bool>(geo_mesh.vertices.attributes(), "v_boundary_marker");
-        for (geo::index_t v = 0; v < geo_mesh.vertices.nb(); v++)
-        {
-            if (v_boundary_marker[v])
-            {
-                in.pointmarkerlist[v] = -1;
-            }
-        }
-    }
-}
-
-static void tetgen_to_geo(tetgenio& tetgen_io, geo::Mesh& geo_mesh)
-{
-    geo_mesh.clear(false, false);
-    for (int v = 0; v < tetgen_io.numberofpoints; v++)
-    {
-        geo_mesh.vertices.create_vertex(geo::vec3(
-            tetgen_io.pointlist[3 * v],
-            tetgen_io.pointlist[3 * v + 1],
-            tetgen_io.pointlist[3 * v + 2]
-        ));
-    }
-
-    for (int c = 0; c < tetgen_io.numberoftetrahedra; c++)
-    {
-        geo_mesh.cells.create_tet(
-            tetgen_io.tetrahedronlist[4 * c],
-            tetgen_io.tetrahedronlist[4 * c + 1],
-            tetgen_io.tetrahedronlist[4 * c + 2],
-            tetgen_io.tetrahedronlist[4 * c + 3]
-        );
-    }
-}
 
 moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane)
 {
+    // this->Prune(_crown, plane.extent);
+
     this->ConstructExactMesh(a, _mesh_a, plane);
     this->ConstructExactMesh(b, _mesh_b, plane);
-#ifndef NDEBUG
-    _mesh_a.DebugMesh("exact_mesh_a.mesh");
-    _mesh_b.DebugMesh("exact_mesh_b.mesh");
-
-    moist::utils::geogram::save("crownless_a.msh", a);
-    moist::utils::geogram::save("crownless_b.msh", b);
+    _crown.ResetGrid(10.0);
     moist::utils::geogram::save("crownless_a.mesh", a);
     moist::utils::geogram::save("crownless_b.mesh", b);
+
+    this->InsertAndMapPoints(_mesh_a, _mesh_b);
+    this->InsertAndMapPoints(_mesh_b, _mesh_a);
+
+#ifndef NDEBUG
+    _mesh_a.DebugMesh("exact_a.mesh");
+    _mesh_b.DebugMesh("exact_b.mesh");
 #endif // NDEBUG
 
     this->InsertBToA();
-    this->HollowCrown();
+
+    #ifndef NDEBUG
     _crown.DebugMesh("crown.mesh");
-    _crown_surface.DebugMesh("crown_surface.mesh");
+    moist::utils::geogram::save("triangles.off", dbg_triangles);
+#endif // NDEBUG
 
-    // check how the interface looks for debugging after all ops
-    /*auto v_boundary_marker = geo::Attribute<bool>(_crown.vertices.attributes(), "v_boundary_marker");
-    for (const geo::index_t v : _crown.vertices)
-    {
-        v_boundary_marker[v] = _crown.vertices.point(v).z == plane.extent;
-    }
-
-    tetgenio in;
-    tetgenio out;
-    tetgenbehavior behavior;
-    //behavior.plc = 1;
-    behavior.refine = 1;
-    //behavior.quality = 1;
-    behavior.coarsen = 1;
-    //behavior.opt_scheme = 7;
-    behavior.coarsen_percent = 0.1;
-
-    geo_to_tetgen(_crown, in);
-    tetrahedralize(&behavior, &in, &out);
-    tetgen_to_geo(out, _crown);
-
-    moist::utils::geogram::save("crown.msh", _crown);*/
-}
-
-void moist::Merger::HollowCrown()
-{
-    _crown.ResetGrid(10.0);
-    // this is SUPER bad but for now it must be enough
-    std::vector<moist::exact::Point> inserted_points;
-    for (std::size_t c = 0; c < _crown.NbCells(); c++)
-    {
-        std::array<std::size_t, 4> facet_adjacencies {0, 0, 0, 0};
-        const auto aabb = moist::create_cell_bbox2d_exact(c, _crown);
-        const auto grid_cells = _crown.Grid()->GetCells(aabb);
-        const auto cell = _crown.Cell(c);
-
-        const std::array<moist::exact::Point, 4> points = {
-            _crown.Point(cell[0]),
-            _crown.Point(cell[1]),
-            _crown.Point(cell[2]),
-            _crown.Point(cell[3])
-        };
-
-        if (points[0] == points[1] || points[0] == points[2] || points[0] == points[3] || points[1] == points[2] || points[1] == points[3])
-        {
-            OOC_WARNING("Degenerate cell " << c << "!");
-            _crown.DeleteCell(c);
-            continue;
-        }
-
-        // check all cells in the vicinity for a shared facet. If it exists, increment the corresponding facet_adjacenties
-        // since we don't have any internal mesh connectivity, just brute force this via our grid optimization
-        std::unordered_set<std::size_t> checked{c};
-        for (std::size_t lf = 0; lf < 4; lf++) // local facet of the original cell
-        {
-            bool found_another = false;
-            const auto& lf_indices = moist::geometry::exact::TET_FACET_DESCRIPTOR.at(lf);
-            const std::array<moist::exact::Point, 3> facet
-            {
-                points[lf_indices[0]],
-                points[lf_indices[1]],
-                points[lf_indices[2]]
-            };
-
-            for (const auto grid_cell : grid_cells)
-            {
-                if (!_crown.Grid()->_grid.contains(grid_cell))
-                {
-                    continue;
-                }
-
-                for (const std::size_t c_other : _crown.Grid()->GetMeshCells(grid_cell))
-                {
-                    if (checked.contains(c_other))
-                    {
-                        continue;
-                    }
-
-                    const auto& cell_other = _crown.Cell(c_other);
-                    // if c_other contains all points of the facet we are currently checking, they match
-                    bool found[4] { false, false, false, false };
-                    for (const std::size_t v_other : cell_other._points)
-                    {
-                        const auto p_other = _crown.Point(v_other);
-                        if (p_other == points[0])
-                        {
-                            found[0] = true;
-                        }
-                        else if (p_other == points[1])
-                        {
-                            found[1] = true;
-                        }
-                        else if (p_other == points[2])
-                        {
-                            found[2] = true;
-                        }
-                        else if (p_other == points[3])
-                        {
-                            found[3] = true;
-                        }
-                    }
-                    /*for (std::size_t lv = 0; lv < 4; lv++)
-                    {
-                        const auto& point_other = _crown.Point(cell_other[lv]);
-                        for (std::size_t lf_v = 0; lf_v < 3; lf_v++)
-                        {
-                            if (facet[lf_v] == point_other)
-                            {
-                                found[lf_v] = true;
-                            }
-                        }
-                    }*/
-
-                    checked.insert(c_other);
-
-                    std::size_t nb_found = 0;
-                    for (std::size_t i = 0; i < 4; i++)
-                    {
-                        if (found[i]) nb_found++;
-                    }
-
-                    if (nb_found >= 3)
-                    {
-                        found_another = true;
-                        break;
-                    }
-                }
-
-                if (found_another)
-                {
-                    break;
-                }
-            }
-
-            // create LF in _crown_surface
-            if (!found_another)
-            {
-                const auto& lf_indices = moist::geometry::exact::TET_FACET_DESCRIPTOR.at(lf);
-                std::size_t f_points[3];
-                for (std::size_t lv = 0; lv < 3; lv++)
-                {
-                    auto it = std::find(inserted_points.begin(), inserted_points.end(), points[lf_indices[lv]]);
-                    if (it == inserted_points.end())
-                    {
-                        f_points[lv] = _crown_surface.Add(moist::exact::Point(points[lf_indices[lv]]));
-                        inserted_points.push_back(_crown_surface.Point(f_points[lv]));
-                    }
-                    else
-                    {
-                        f_points[lv] = std::distance(inserted_points.begin(), it);
-                    }
-                }
-
-                if (f_points[0] == f_points[1] || f_points[0] == f_points[2] || f_points[1] == f_points[2])
-                {
-                    OOC_DEBUG(points[0]._p);
-                    OOC_DEBUG(points[1]._p);
-                    OOC_DEBUG(points[2]._p);
-                    OOC_DEBUG(points[3]._p);
-
-                    OOC_ERROR("invalid triangle!");
-                }
-                _crown_surface.Add(moist::exact::Facet(
-                    f_points[0],
-                    f_points[1],
-                    f_points[2]
-                ));
-            }
-        }
-    }
+    this->Prune(_crown, plane.extent);
 }
 
 std::vector<std::size_t> shared_facet(const std::array<std::size_t, 4>& a, const std::array<std::size_t, 4>& b)
@@ -296,7 +73,7 @@ std::array<std::size_t, 2> longest_edge_on_interface(const moist::exact::Cell& c
         const auto& p0 = mesh.Point(cell._points[i]);
         const auto& p1 = mesh.Point(cell._points[j]);
 
-        if (p0._v != moist::exact::NO_VERTEX || p1._v != moist::exact::NO_VERTEX)
+        if (!p0._interface || !p1._interface)
         {
             continue;
         }
@@ -313,74 +90,281 @@ std::array<std::size_t, 2> longest_edge_on_interface(const moist::exact::Cell& c
     return {min0, min1};
 }
 
-void moist::Merger::Prune(moist::ExactMesh& mesh, const double min_volume)
+static std::pair<moist::predicates::PointInTet, double> get_shortest_edge(moist::ExactMesh& mesh, const std::size_t c)
 {
-    // for each tet, with a face on the interface:
-    // then, for each tet, check how many faces are free.
-    // if it has at least one more free non-interface face, and bad volume, we can prune it.
-    // this ensures we don't prune non-boundary facets we need to keep for connectivity.
-
-    std::size_t pruned = 0;
-    for (std::size_t c = 0; c < mesh.NbCells(); c++)
+    const auto cell = mesh.Cell(c);
+    double distance = std::numeric_limits<double>::max();
+    moist::predicates::PointInTet shortest_edge = moist::predicates::PointInTet::NONE;
+    for (const auto& [i, j] : moist::geometry::exact::TET_EDGE_DESCRIPTOR)
     {
-        auto& cell = mesh.Cell(c);
-        auto longest_interface_edge = longest_edge_on_interface(cell, mesh);
-        if (cell._deleted || !moist::geometry::exact::cell_has_interface_facet(cell, mesh))
+        const auto p0 = mesh.Point(cell[i]);
+        const auto p1 = mesh.Point(cell[j]);
+
+        if (!p0._interface || !p1._interface)
         {
-            // we cannot prune cells without a face on the interface, since they may be required for connectivity inside the mesh
             continue;
         }
 
-        std::unordered_set<std::size_t> neighbours;
-        bool has_longest_edge_neighbour = false;
-        const auto bbox = moist::create_interface_cell_bbox2d_exact(c, mesh);
-        const auto grid_cells = mesh.Grid()->GetCells(bbox);
-        for (const auto grid_cell : grid_cells)
+        const auto _distance = CGAL::to_double(CGAL::squared_distance(p0._p, p1._p));
+        if (_distance < distance)
         {
-            if (!mesh.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
+            distance = _distance;
+            if (i == 0 && j == 1)
             {
-                continue;
+                shortest_edge = moist::predicates::PointInTet::EDGE01;
             }
-
-            for (const auto c_other : mesh.Grid()->GetMeshCells(grid_cell))
+            else if (i == 0 && j == 2)
             {
-                const auto& cell_other = mesh.Cell(c_other);
-                if (c_other == c || cell_other._deleted || neighbours.contains(c_other))
-                {
-                    continue;
-                }
-
-                const auto face = shared_facet(cell._points, cell_other._points);
-                if (!face.empty())
-                {
-                    if (std::find(face.begin(), face.end(), longest_interface_edge[0]) != face.end() ||  std::find(face.begin(), face.end(), longest_interface_edge[1]) != face.end())
-                    {
-                        has_longest_edge_neighbour = true;
-                    }
-                    neighbours.insert(c_other);
-                }
+                shortest_edge = moist::predicates::PointInTet::EDGE02;
+            }
+            else if (i == 0 && j == 3)
+            {
+                shortest_edge = moist::predicates::PointInTet::EDGE03;
+            }
+            else if (i == 1 && j == 2)
+            {
+                shortest_edge = moist::predicates::PointInTet::EDGE12;
+            }
+            else if (i == 1 && j == 3)
+            {
+                shortest_edge = moist::predicates::PointInTet::EDGE13;
+            }
+            else if (i == 2 && j == 3)
+            {
+                shortest_edge = moist::predicates::PointInTet::EDGE23;
             }
         }
-
-        if (neighbours.size() == 1 || (neighbours.size() == 2 && has_longest_edge_neighbour)) // we can check 2 here, since we made sure it's not wharing its longest facet!
-        {
-            const auto volume = std::abs(CGAL::to_double(CGAL::volume(
-                mesh.Point(cell._points[0])._p,
-                mesh.Point(cell._points[1])._p,
-                mesh.Point(cell._points[2])._p,
-                mesh.Point(cell._points[3])._p
-            )));
-
-            if (volume < min_volume)
-            {
-                cell._deleted = true;
-                pruned++;
-            }
-        }
-full_continue:
     }
 
-    OOC_DEBUG("pruned " << pruned << " cells");
+    if (shortest_edge != moist::predicates::PointInTet::NONE)
+    {
+        return std::make_pair(shortest_edge, distance);
+    }
+    return std::make_pair(moist::predicates::PointInTet::NONE, 0.0);
+    // else
+    // {
+    //     OOC_DEBUG("cell without an interface edge...");
+    // }
+}
+
+extern "C"
+{
+  #include "mmg/mmg3d/libmmg3d.h"
+}
+
+static void mark_required_triangles(MMG5_pMesh mmgMesh, MMG5_pSol mmgSol, const double extent)
+{
+    constexpr int faces[4][3] = {
+        {1,2,3},
+        {0,2,3},
+        {0,1,3},
+        {0,1,2}
+    };
+
+    int ne, nv, na, nt, np;
+    MMG3D_Get_meshSize(mmgMesh, &np, &ne, &na, &nt, NULL, NULL);
+
+    int num_elements = ne;
+    int num_vertices = np;
+    int num_triangles = 0;
+    std::vector<std::array<int, 3>> triangles;
+    std::vector<std::array<int, 4>> cells;
+    std::vector<std::array<double, 3>> points;
+
+    for (int v = 1; v <= np; v++)
+    {
+        points.push_back({mmgMesh->point[v].c[0], mmgMesh->point[v].c[1], mmgMesh->point[v].c[2]});
+    }
+
+    // we must count boundary faces ourselves :(
+    std::map<std::array<int, 3>, int> face_count;
+    for (int c = 1; c <= ne; c++)
+    {
+        const int *v = mmgMesh->tetra[c].v;
+        cells.push_back({mmgMesh->tetra[c].v[0], mmgMesh->tetra[c].v[1], mmgMesh->tetra[c].v[2], mmgMesh->tetra[c].v[3]});
+        for (int lf=0; lf < 4; lf++)
+        {
+            std::array<int, 3> key = { v[faces[lf][0]], v[faces[lf][1]], v[faces[lf][2]] };
+            std::sort(key.begin(), key.end());
+            face_count[key] += 1;
+            if (face_count[key] > 2)
+            {
+                OOC_WARNING("non manifold face");
+            }
+        }
+    }
+
+    auto is_z_extent = [&](int vidx) -> bool
+    {
+        return mmgMesh->point[vidx].c[2] == extent;
+    };
+
+    int triCount = 0;
+    // Iterate over tets
+    for (int k = 1; k <= ne; k++)
+    {
+        const int* v = mmgMesh->tetra[k].v;
+        int z_extent_count = 0;
+        for (int j = 0; j < 4; j++)
+        {
+            if (is_z_extent(v[j]))
+            {
+                z_extent_count++;
+            }
+        }
+
+        if (z_extent_count == 1)
+        {
+            // its👏a👏boundary👏tet👏
+            int lv_extent = -1;
+            for (int lv = 0; lv < 4; lv++)
+            {
+                if (is_z_extent(v[lv]))
+                {
+                    lv_extent = lv;
+                }
+            }
+
+            num_triangles++;
+            const auto v0 = v[(lv_extent + 1) % 4];
+            const auto v1 = v[(lv_extent + 2) % 4];
+            const auto v2 = v[(lv_extent + 3) % 4];
+            triangles.push_back({v[(lv_extent + 1) % 4], v[(lv_extent + 2) % 4], v[(lv_extent + 3) % 4]});
+        }
+    }
+
+    MMG3D_Set_meshSize(mmgMesh, num_vertices, num_elements, 0, num_triangles, 0, 0);
+    const auto points_size = points.size();
+    const auto cells_size = cells.size();
+    for (std::size_t v = 1; v <= num_vertices; v++)
+    {
+        MMG3D_Set_vertex(mmgMesh, points[v - 1][0], points[v - 1][1], points[v - 1][2], 0, v);
+    }
+    for (std::size_t f = 1; f <= num_triangles; f++)
+    {
+        MMG3D_Set_triangle(mmgMesh, triangles[f - 1][0], triangles[f - 1][1], triangles[f - 1][2], 0, f);
+        MMG3D_Set_requiredTriangle(mmgMesh, f);
+    }
+    for (std::size_t c = 1; c <= num_elements; c++)
+    {
+        if (c == 494 || c == 495 || c == 496)
+        {
+            const std::array<int, 4> cc = {{
+                cells[c - 1][0], cells[c - 1][1], cells[c - 1][2], cells[c - 1][3]
+            }};
+
+            std::vector<std::array<double, 3>> pp;
+            for (int i = 0; i < 4; i++)
+            {
+                const auto cp = points[cells[c - 1][i]];
+                pp.push_back({cp.at(0), cp.at(1), cp.at(2)});
+            }
+            int ggg = 0;
+        }
+        MMG3D_Set_tetrahedron(mmgMesh, cells[c - 1][0], cells[c - 1][1], cells[c - 1][2], cells[c - 1][3], 0, c);
+    }
+
+    double min_quality = 100000000.0;
+    std::size_t worst_tet = 0;
+    for (std::size_t c = 1; c <= num_elements; c++)
+    {
+        if (c == 494 || c == 495 || c == 496)
+        {
+            double q = MMG3D_Get_tetrahedronQuality(mmgMesh, mmgSol, c);
+            int ggwgw = 1;
+        }
+        double q = MMG3D_Get_tetrahedronQuality(mmgMesh, mmgSol, c);
+        if (q < min_quality)
+        {
+            min_quality = q;
+            worst_tet = c;
+        }
+        if (q < 1.e-30)
+        {
+            OOC_WARNING("NULKAL");
+        }
+        if (q < 1.e-15)
+        {
+            OOC_WARNING("EPSOK " << c);
+        }
+    }
+
+    OOC_DEBUG("min_quality: " << min_quality);
+}
+
+void moist::Merger::Prune(moist::ExactMesh& mesh, const double extent)
+{
+    MOIST_INFO("remeshing...");
+
+    tetgenio coarsen_mesh;
+    tetgenio output_coarsen_mesh;
+    output_coarsen_mesh.initialize();
+    moist::tetgen::transform(_crown, coarsen_mesh);
+    tetgenbehavior coarsen_pass;
+    coarsen_pass.nobisect = true;
+    coarsen_pass.supsteiner_level = 0;
+    coarsen_pass.refine = true;
+    coarsen_pass.coarsen = true;
+    tetrahedralize(&coarsen_pass, &coarsen_mesh, &output_coarsen_mesh);
+    geo::Mesh geo_coarsen_mesh(3);
+    moist::tetgen::transform(coarsen_mesh, geo_coarsen_mesh);
+    moist::utils::geogram::save("dbg_after_coarsening.mesh", geo_coarsen_mesh);
+
+    MMG5_pMesh      mmgMesh;
+    MMG5_pSol       mmgSol;
+
+    mmgMesh = NULL;
+    mmgSol  = NULL;
+    MMG3D_Init_mesh(MMG5_ARG_start,
+                    MMG5_ARG_ppMesh,&mmgMesh,
+                    MMG5_ARG_ppMet,&mmgSol,
+                    MMG5_ARG_end);
+
+    MMG3D_loadMesh(mmgMesh, "crown.mesh");
+    mark_required_triangles(mmgMesh, mmgSol, extent);
+
+    //if (MMG3D_Chk_meshData(mmgMesh, mmgSol) != 1)
+    //{
+    //    OOC_WARNING("bad mesh data");
+    //}
+
+    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_nosplit, 1);
+    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_angle, 1);
+    // MMG3D_SET_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_)
+    int nv;
+    MMG3D_Get_meshSize(mmgMesh, &nv, NULL, NULL, NULL, NULL, NULL);
+    MMG3D_Set_solSize(mmgMesh, mmgSol, MMG5_Vertex, nv, MMG5_Scalar);
+    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_opnbdy, 1);
+    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_nofem, 1);
+    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_angle, 1);
+    for (int i = 1; i <= nv; i++)
+    {
+        MMG3D_Set_scalarSol(mmgSol, 1.0, i);
+    }
+
+    MMG3D_Set_dparameter(mmgMesh, mmgSol, MMG3D_DPARAM_hmin, 0.1);
+    MMG3D_Set_dparameter(mmgMesh, mmgSol, MMG3D_DPARAM_hausd, 0.05);
+
+    if (MMG3D_saveMesh(mmgMesh, "output_mmg3d_before_remesning.mesh") != 1)
+    {
+        std::cerr << "Error: cannot save output.mesh\n";
+    }
+
+    //if (MMG3D_mmg3dls(mmgMesh, mmgSol, NULL) == MMG5_STRONGFAILURE )
+    //{
+    //    std::cerr << "Error: MMG3D remeshing failed\n";
+    //}
+    if (MMG3D_mmg3dlib(mmgMesh, mmgSol) == MMG5_STRONGFAILURE )
+    {
+        std::cerr << "Error: MMG3D remeshing failed\n";
+    }
+
+    if (MMG3D_saveMesh(mmgMesh, "output_mmg3d.mesh") != 1)
+    {
+        std::cerr << "Error: cannot save output.mesh\n";
+    }
+
+    MOIST_INFO("finished remeshing...");
 }
 
 /**
@@ -401,6 +385,13 @@ static double round16(double value)
 
 void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_mesh, const moist::AxisAlignedPlane& plane)
 {
+    double lowest = 10000.0;
+    double highest = -100000.0;
+
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::Merger::ConstructExactMesh");
+#endif // NDEBUG
+
     std::unordered_map<geo::index_t, std::size_t> added_vertices;
     geo::vector<geo::index_t> to_delete(mesh.cells.nb());
     for (const geo::index_t c : mesh.cells)
@@ -410,19 +401,27 @@ void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_
             continue;
         }
 
-        std::size_t points[4];
+        std::array<std::size_t, 4> vertices;
         for (geo::index_t lv = 0; lv < 4; lv++)
         {
             const geo::index_t v = mesh.cells.vertex(c, lv);
             if (added_vertices.contains(v))
             {
-                points[lv] = added_vertices[v];
+                vertices[lv] = added_vertices[v];
                 continue;
             }
             else
             {
                 // here we must keep _other of the point always on NO_VERTEX...
-                auto point = mesh.vertices.point(v);
+                auto& point = mesh.vertices.point(v);
+                if (point.z < lowest)
+                {
+                    lowest = point.z;
+                }
+                if (point.z > highest)
+                {
+                    highest = point.z;
+                }
                 bool interface = moist::predicates::point_on_plane(point, plane);
                 if (interface)
                 {
@@ -430,12 +429,23 @@ void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_
                 }
 
                 vec3 point_rounded = vec3(round16(point[0]), round16(point[1]), round16(point[2]));
-                points[lv] = exact_mesh.Add(moist::exact::Point(point_rounded, interface ? geo::NO_VERTEX : v));
-                added_vertices[v] = points[lv];
+                vertices[lv] = exact_mesh.Add(moist::exact::Point(point_rounded, interface));
+                added_vertices[v] = vertices[lv];
             }
         }
 
-        exact_mesh.Add(moist::exact::Cell(points[0], points[1], points[2], points[3]), true);
+        if (geo::mesh_cell_volume(mesh, c) != 0.0)
+        {
+            exact_mesh.Add(moist::exact::Cell(
+                vertices[0], vertices[1], vertices[2], vertices[3],
+                moist::geometry::exact::get_cell_type(vertices, exact_mesh)
+            ), true);
+        }
+        else
+        {
+            OOC_DEBUG("skipped cell " << c << " during interface plane mesh construction due to degeneracy in eps...");
+        }
+
         to_delete[c] = true;
     }
     mesh.cells.delete_elements(to_delete);
@@ -443,7 +453,10 @@ void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_
     // edge length does not make the most sense, since it must be based relative to the overall length of our bbox diag.
     // dumb hard coded value... use nb of cells on the interface maybe... times some factor controlled so we can evaluate performance based on it...
     constexpr double FACTOR = 0.5;
-    exact_mesh.ResetGrid(/*FACTOR * std::sqrt(exact_mesh.NbCells())*/ 10.0);
+    exact_mesh.ResetGrid(FACTOR * std::sqrt(exact_mesh.NbCells()));
+    OOC_DEBUG("grid resolution: " << FACTOR * std::sqrt(exact_mesh.NbCells()));
+    OOC_DEBUG("lowest point: " << lowest);
+    OOC_DEBUG("highest point: " << highest);
 }
 
 void moist::Merger::InsertAndMapPoints(const moist::ExactMesh& from, moist::ExactMesh& to)
@@ -472,8 +485,11 @@ static bool point_in_tet_on_edge(const moist::predicates::PointInTet& pit)
 
 // This is done in the "old" meshes, not in the one being currently constructed, because tets with an edge on the interface may be cut
 // multiple times.
-void moist::Merger::InsertPointIntoEdges(const moist::exact::Point& point, moist::ExactMesh& mesh)
+bool moist::Merger::InsertPointIntoEdges(const moist::exact::Point& point, moist::ExactMesh& mesh)
 {
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::Merger::InsertPointIntoEdges");
+#endif // NDEBUG
     const auto& grid_cells = mesh.Grid()->GetCells(moist::create_point_box2d_exact(point));
     std::size_t v_1to2 = moist::exact::NO_VERTEX;
 
@@ -498,7 +514,7 @@ void moist::Merger::InsertPointIntoEdges(const moist::exact::Point& point, moist
             std::size_t nb_interface = 0;
             for (std::size_t lv = 0; lv < 4; lv++)
             {
-                if (mesh.Point(cell._points[lv])._v != moist::exact::NO_VERTEX)
+                if (mesh.Point(cell._points[lv])._interface)
                 {
                     nb_interface++;
                 }
@@ -515,23 +531,22 @@ void moist::Merger::InsertPointIntoEdges(const moist::exact::Point& point, moist
                 if (v_1to2 == moist::exact::NO_VERTEX)
                 {
                     v_1to2 = mesh.Add(moist::exact::Point(point));
+                    mesh.Point(v_1to2)._interface = true;
                 }
 
                 moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, location, mesh);
                 found = true;
                 inserted.insert(c);
             }
+            else if (location == moist::predicates::PointInTet::FACET)
+            {
+                // const std::size_t v = mesh.Add(point);
+                // moist::operation::exact::InsertVertexOnCellBoundaryFacet(c, v, mesh);
+            }
         }
     }
 
-    if (!found)
-    {
-        //OOC_DEBUG("Oh noes! " << point._p);
-    }
-    else
-    {
-        //OOC_DEBUG("Oh yese! " << point._p);
-    }
+    return found;
 }
 
 void moist::Merger::InsertPoint(const std::size_t v, const moist::ExactMesh& from, moist::ExactMesh& to)
@@ -563,6 +578,7 @@ void moist::Merger::InsertPoint(const std::size_t v, const moist::ExactMesh& fro
                 const std::size_t v_new = to.Add(moist::exact::Point(point));
                 moist::operation::exact::InsertVertexOnCellBoundaryFacet(c, v_new, to);
                 to.Point(v_new)._other = v;
+                to.Point(v_new)._interface = true;
             }
             else if (point_in_tet_on_edge(location))
             {
@@ -570,6 +586,7 @@ void moist::Merger::InsertPoint(const std::size_t v, const moist::ExactMesh& fro
                 {
                     v_1to2 = to.Add(moist::exact::Point(point));
                     to.Point(v_1to2)._other = v;
+                    to.Point(v_1to2)._interface = true;
                 }
 
                 moist::operation::exact::InsertVertexOnCellBoundaryEdge(c, v_1to2, location, to);
@@ -578,11 +595,21 @@ void moist::Merger::InsertPoint(const std::size_t v, const moist::ExactMesh& fro
     }
 }
 
+static std::unordered_set<std::size_t> touched_a;
 static geo::Mesh dbg_full(3);
 void moist::Merger::InsertBToA()
 {
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::Merger::InsertBToA");
+#endif // NDEBUG
+
     for (std::size_t c = 0; c < _mesh_b.NbCells(); c++)
     {
+        if (c % 50 == 0)
+        {
+            OOC_DEBUG("merged " << c << " out of " << _mesh_b.NbCells() << " cells...");
+        }
+
         const auto cell = _mesh_b.Cell(c);
         if (cell._deleted)
         {
@@ -595,33 +622,13 @@ void moist::Merger::InsertBToA()
         }
 
         this->InsertCellBToA(c);
-
-        if (c % 50 == 0)
-        {
-            //geo::mesh_repair(dbg_full, geo::MeshRepairMode::MESH_REPAIR_DEFAULT, 1e-14);
-            moist::utils::geogram::save("dbg_full_" + std::to_string(c) + ".mesh", dbg_full);
-            moist::utils::geogram::save("dbg_triangles_" + std::to_string(c) + ".mesh", dbg_triangles);
-        }
+        _mesh_b.Cell(c)._deleted = true;
     }
 
     for (std::size_t c = 0; c < _mesh_a.NbCells(); c++)
     {
         const auto& cell = _mesh_a.Cell(c);
-        if (cell._deleted)
-        {
-            continue;
-        }
-
-        std::size_t nb_non_interface = 0;
-        for (std::size_t lv = 0; lv < 4; lv++)
-        {
-            if (_mesh_a.Point(cell._points[lv])._v != moist::exact::NO_VERTEX)
-            {
-                nb_non_interface++;
-            }
-        }
-
-        if (nb_non_interface == 1)
+        if (cell._deleted || touched_a.contains(c))
         {
             continue;
         }
@@ -631,18 +638,12 @@ void moist::Merger::InsertBToA()
         const auto p2 = _mesh_a.Point(cell._points[2]);
         const auto p3 = _mesh_a.Point(cell._points[3]);
 
-        dbg_full.cells.create_tet(
-            dbg_full.vertices.create_vertex(vec3(p0.x(), p0.y(), p0.z())),
-            dbg_full.vertices.create_vertex(vec3(p1.x(), p1.y(), p1.z())),
-            dbg_full.vertices.create_vertex(vec3(p2.x(), p2.y(), p2.z())),
-            dbg_full.vertices.create_vertex(vec3(p3.x(), p3.y(), p3.z()))
-        );
-
         _crown.Add(moist::exact::Cell(
             _crown.Add(moist::exact::Point(p0)),
             _crown.Add(moist::exact::Point(p1)),
             _crown.Add(moist::exact::Point(p2)),
-            _crown.Add(moist::exact::Point(p3))
+            _crown.Add(moist::exact::Point(p3)),
+            moist::exact::CellType::I
         ), true);
     }
 
@@ -650,20 +651,6 @@ void moist::Merger::InsertBToA()
     {
         const auto& cell = _mesh_b.Cell(c);
         if (cell._deleted)
-        {
-            continue;
-        }
-
-        std::size_t nb_non_interface = 0;
-        for (std::size_t lv = 0; lv < 4; lv++)
-        {
-            if (_mesh_b.Point(cell._points[lv])._v != moist::exact::NO_VERTEX)
-            {
-                nb_non_interface++;
-            }
-        }
-
-        if (nb_non_interface == 1)
         {
             continue;
         }
@@ -677,24 +664,18 @@ void moist::Merger::InsertBToA()
             _crown.Add(moist::exact::Point(p0)),
             _crown.Add(moist::exact::Point(p1)),
             _crown.Add(moist::exact::Point(p2)),
-            _crown.Add(moist::exact::Point(p3))
+            _crown.Add(moist::exact::Point(p3)),
+            moist::exact::CellType::I
         ), true);
-
-        dbg_full.cells.create_tet(
-            dbg_full.vertices.create_vertex(vec3(p0.x(), p0.y(), p0.z())),
-            dbg_full.vertices.create_vertex(vec3(p1.x(), p1.y(), p1.z())),
-            dbg_full.vertices.create_vertex(vec3(p2.x(), p2.y(), p2.z())),
-            dbg_full.vertices.create_vertex(vec3(p3.x(), p3.y(), p3.z()))
-        );
     }
-
-    geo::mesh_repair(dbg_full, geo::MeshRepairMode::MESH_REPAIR_DEFAULT, 1e-14);
-    moist::utils::geogram::save("dbg_crown.msh", dbg_full);
-    moist::utils::geogram::save("dbg_crown.mesh", dbg_full);
 }
 
-void moist::Merger::InsertCellBToA(const std::size_t cb)
+bool moist::Merger::InsertCellBToA(const std::size_t cb)
 {
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::Merger::InsertCellBToA");
+#endif // NDEBUG
+
     // since grid cells can overlap in which cells they contain, we need to track into which cells we already inserted, so as to not
     // insert a cell twice!
     std::unordered_set<std::size_t> inserted;
@@ -711,20 +692,24 @@ void moist::Merger::InsertCellBToA(const std::size_t cb)
 
         for (const auto ca : _mesh_a.Grid()->GetMeshCells(grid_cell))
         {
-            if (_mesh_a.Cell(ca)._deleted || inserted.contains(ca))
+            const auto cell = _mesh_a.Cell(ca);
+            if (cell._deleted || inserted.contains(ca))
             {
                 continue;
             }
 
-            if (!moist::geometry::exact::cell_has_interface_facet(_mesh_a.Cell(ca), _mesh_a))
+            if (!moist::geometry::exact::cell_has_interface_facet(cell, _mesh_a))
             {
                 continue;
             }
 
-            this->InsertCellIntoCell(ca, cb);
-            inserted.emplace(ca);
+            if (this->InsertCellIntoCell(ca, cb))
+            {
+                inserted.emplace(ca);
+            }
         }
     }
+    return !inserted.empty();
 }
 
 static moist::exact::Triangle get_interface_triangle(const moist::exact::Cell& cell, const moist::ExactMesh& mesh)
@@ -733,7 +718,7 @@ static moist::exact::Triangle get_interface_triangle(const moist::exact::Cell& c
     for (const auto v : cell._points)
     {
         const auto point = mesh.Point(v);
-        if (point._v == moist::exact::NO_VERTEX)
+        if (point._interface)
         {
             points.push_back(point);
         }
@@ -752,7 +737,7 @@ static std::size_t get_opposite_vertex(const moist::exact::Cell& cell, const moi
     for (const auto v : cell._points)
     {
         const auto point = mesh.Point(v);
-        if (point._v != moist::exact::NO_VERTEX)
+        if (!point._interface)
         {
             return v;
         }
@@ -795,9 +780,44 @@ static bool triangle_has_point(const moist::exact::Triangle& triangle, const moi
     return false;
 };
 
-static bool marked_for_debug = false;
-void moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t cb)
+// remove all cells of crown that intersect the new cell...
+static void remove_intersecting_III_cells(const std::size_t c, moist::ExactMesh& mesh)
 {
+    const auto cell = mesh.Cell(c);
+    const auto t0 = get_interface_triangle(cell, mesh);
+
+    const auto grid_cells = mesh.Grid()->GetCells(moist::create_cell_bbox2d_exact(c, mesh));
+    for (const auto grid_cell : grid_cells)
+    {
+        if (!mesh.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
+        {
+            continue;
+        }
+
+        for (auto lc : mesh.Grid()->GetMeshCells(grid_cell))
+        {
+            auto& cell_other = mesh.Cell(lc);
+            if (lc == c || cell_other._deleted || cell_other._type != moist::exact::CellType::III)
+            {
+                continue;
+            }
+
+            const auto t1 = get_interface_triangle(mesh.Cell(lc), mesh);
+            if (moist::exact::arrangeable(t0, t1))
+            {
+                mesh.Cell(lc)._deleted = true;
+            }
+        }
+    }
+}
+
+static bool marked_for_debug = false;
+bool moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t cb)
+{
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::Merger::InsertCellIntoCell");
+#endif // NDEBUG
+
     auto& cell_a = _mesh_a.Cell(ca);
     auto& cell_b = _mesh_b.Cell(cb);
 
@@ -808,10 +828,15 @@ void moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t c
 
     if (!moist::exact::arrangeable(t0, t1))
     {
-        //return;
+        return false;
     }
 
     const auto triangulation = moist::exact::arrange(t0, t1);
+
+    if (triangulation.empty())
+    {
+        return false;
+    }
 
     geo::Mesh dbg(3);
     for (const auto triangle : triangulation)
@@ -828,14 +853,16 @@ void moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t c
         {
             for (std::size_t lv = 0; lv < 3; lv++)
             {
+                bool in_a = true;
+                bool in_b = true;
                 if (!triangle_has_point(t0, triangle._t.vertex(lv)))
                 {
-                    this->InsertPointIntoEdges(moist::exact::Point(triangle._t.vertex(lv)), _mesh_a);
+                    in_a = this->InsertPointIntoEdges(moist::exact::Point(triangle._t.vertex(lv)), _mesh_a);
                 }
 
                 if (!triangle_has_point(t1, triangle._t.vertex(lv)))
                 {
-                    this->InsertPointIntoEdges(moist::exact::Point(triangle._t.vertex(lv)), _mesh_b);
+                    in_b = this->InsertPointIntoEdges(moist::exact::Point(triangle._t.vertex(lv)), _mesh_b);
                 }
             }
 
@@ -850,23 +877,125 @@ void moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t c
             );
         #endif // NDEBUG
 
+            auto points_triangle_0 = moist::exact::Point(triangle._t.vertex(0));
+            auto points_triangle_1 = moist::exact::Point(triangle._t.vertex(1));
+            auto points_triangle_2 = moist::exact::Point(triangle._t.vertex(2));
+            points_triangle_0._interface = true;
+            points_triangle_1._interface = true;
+            points_triangle_2._interface = true;
+            std::size_t v0 = _crown.Add(points_triangle_0);
+            std::size_t v1 = _crown.Add(points_triangle_1);
+            std::size_t v2 = _crown.Add(points_triangle_2);
+
             _crown.Add(moist::exact::Cell(
-                _crown.Add(moist::exact::Point(triangle._t.vertex(0))),
-                _crown.Add(moist::exact::Point(triangle._t.vertex(1))),
-                _crown.Add(moist::exact::Point(triangle._t.vertex(2))),
-                _crown.Add(moist::exact::Point(p_opposite_a))
+                v0, v1, v2, _crown.Add(moist::exact::Point(p_opposite_a)),
+                moist::exact::CellType::III
             ), true);
 
             _crown.Add(moist::exact::Cell(
-                _crown.Add(moist::exact::Point(triangle._t.vertex(0))),
-                _crown.Add(moist::exact::Point(triangle._t.vertex(1))),
-                _crown.Add(moist::exact::Point(triangle._t.vertex(2))),
-                _crown.Add(moist::exact::Point(p_opposite_b))
+                v0, v1, v2, _crown.Add(moist::exact::Point(p_opposite_b)),
+                moist::exact::CellType::III
             ), true);
         }
-        else
+        else if (correspondence == moist::exact::VertexCorrespondence::A)
         {
-            OOC_WARNING("invalid triangle correspondence!");
+            // the cell is only present in mesh b in this arragement -> check if it intersects with any cell of mesh a, if not, add it...
+            const auto aabb = moist::create_triangle_bbox2d_exact(triangle);
+            const auto grid_cells = _mesh_b.Grid()->GetCells(aabb);
+            bool do_add = true;
+            for (const auto grid_cell : grid_cells)
+            {
+                if (!_mesh_b.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
+                {
+                    continue;
+                }
+
+                for (const auto cb_check : _mesh_b.Grid()->GetMeshCells(grid_cell))
+                {
+                    if (_mesh_b.Cell(cb_check)._type != moist::exact::CellType::III)
+                    {
+                        continue;
+                    }
+
+                    const auto t0 = get_interface_triangle(_mesh_b.Cell(cb_check), _mesh_b);
+                    if (moist::exact::arrangeable(t0, triangle))
+                    {
+                        // if we have at least one triangular overlap, we must not add it to the crown.
+                        do_add = false;
+                        goto add_cell_b_into_crown;
+                    }
+                }
+            }
+add_cell_b_into_crown:
+            if (do_add)
+            {
+                auto points_triangle_0 = moist::exact::Point(triangle._t.vertex(0));
+                auto points_triangle_1 = moist::exact::Point(triangle._t.vertex(1));
+                auto points_triangle_2 = moist::exact::Point(triangle._t.vertex(2));
+                points_triangle_0._interface = true;
+                points_triangle_1._interface = true;
+                points_triangle_2._interface = true;
+                std::size_t v0 = _crown.Add(points_triangle_0);
+                std::size_t v1 = _crown.Add(points_triangle_1);
+                std::size_t v2 = _crown.Add(points_triangle_2);
+                std::size_t new_cell_crown = _crown.Add(moist::exact::Cell(
+                    v0, v1, v2, _crown.Add(moist::exact::Point(p_opposite_a)),
+                    moist::exact::CellType::III
+                ), true);
+                // we also must delete any intersecting cell in a...
+                //remove_intersecting_III_cells(new_cell_crown, _crown);
+            }
+        }
+else if (correspondence == moist::exact::VertexCorrespondence::B)
+        {
+            // the cell is only present in mesh b in this arragement -> check if it intersects with any cell of mesh a, if not, add it...
+            const auto aabb = moist::create_triangle_bbox2d_exact(triangle);
+            const auto grid_cells = _mesh_a.Grid()->GetCells(aabb);
+            bool do_add = true;
+            for (const auto grid_cell : grid_cells)
+            {
+                if (!_mesh_a.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
+                {
+                    continue;
+                }
+
+                for (const auto cb_check : _mesh_a.Grid()->GetMeshCells(grid_cell))
+                {
+                    if (_mesh_a.Cell(cb_check)._type != moist::exact::CellType::III)
+                    {
+                        continue;
+                    }
+
+                    const auto t0 = get_interface_triangle(_mesh_a.Cell(cb_check), _mesh_a);
+                    if (moist::exact::arrangeable(t0, triangle))
+                    {
+                        // if we have at least one triangular overlap, we must not add it to the crown.
+                        do_add = false;
+                        goto add_cell_a_into_crown;
+                    }
+                }
+            }
+add_cell_a_into_crown:
+            if (do_add)
+            {
+                auto points_triangle_0 = moist::exact::Point(triangle._t.vertex(0));
+                auto points_triangle_1 = moist::exact::Point(triangle._t.vertex(1));
+                auto points_triangle_2 = moist::exact::Point(triangle._t.vertex(2));
+                points_triangle_0._interface = true;
+                points_triangle_1._interface = true;
+                points_triangle_2._interface = true;
+                std::size_t v0 = _crown.Add(points_triangle_0);
+                std::size_t v1 = _crown.Add(points_triangle_1);
+                std::size_t v2 = _crown.Add(points_triangle_2);
+                std::size_t new_cell_crown = _crown.Add(moist::exact::Cell(
+                    v0, v1, v2, _crown.Add(moist::exact::Point(p_opposite_b)),
+                    moist::exact::CellType::III
+                ), true);
+                // we also must delete any intersecting cell in a...
+                //remove_intersecting_III_cells(new_cell_crown, _crown);
+            }
         }
     }
+    touched_a.emplace(ca);
+    return true;
 }

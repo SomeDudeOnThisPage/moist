@@ -38,11 +38,6 @@ static bool triangles_share_vertex(const moist::exact::Triangle& t0, const moist
 
 bool moist::exact::arrangeable(const moist::exact::Triangle& t0, const moist::exact::Triangle& t1)
 {
-    if (!triangles_share_vertex(t0, t1))
-    {
-        //return false;
-    }
-
     auto result = CGAL::intersection(t0._t, t1._t);
 
     if (!result) return false; // no intersection at all
@@ -61,7 +56,7 @@ bool moist::exact::arrangeable(const moist::exact::Triangle& t0, const moist::ex
     }
     else
     {
-        return true;
+        return true; // polyhon
     }
 
     // if the triangles only intersect on their boundary or one vertex, we don't care.
@@ -78,22 +73,48 @@ class VertexObserver : public CGAL::Arr_observer<Arrangement_2> {
 
         virtual void after_create_vertex(Arrangement_2::Vertex_handle v)
         {
+            const auto& point = v->point();
+            moist::exact::VertexCorrespondence correspondence;
+
             bool is_a = std::find_if(_points_a.begin(), _points_a.end(), [&](const auto p) -> bool { return p._p == v->point(); }) != _points_a.end();
             bool is_b = std::find_if(_points_b.begin(), _points_b.end(), [&](const auto p) -> bool { return p._p == v->point(); }) != _points_b.end();
 
             if (is_a && is_b || !(is_a || is_b)) // if the point is shared or new (edge split point)
             {
-                v->set_data(moist::exact::VertexCorrespondence::AB);
+                correspondence = moist::exact::VertexCorrespondence::AB;
             }
             else
             {
-                v->set_data(is_a ? moist::exact::VertexCorrespondence::A : moist::exact::VertexCorrespondence::B);
+                correspondence = is_a ? moist::exact::VertexCorrespondence::A : moist::exact::VertexCorrespondence::B;
             }
+
+            // if the vertex lies inside the triangle defined by the other set of points, it must become AB
+            if (correspondence == moist::exact::VertexCorrespondence::A && this->InTriangle(point, _points_b))
+            {
+                correspondence = moist::exact::VertexCorrespondence::AB;
+            }
+            else if (correspondence == moist::exact::VertexCorrespondence::B && this->InTriangle(point, _points_a))
+            {
+                correspondence = moist::exact::VertexCorrespondence::AB;
+            }
+
+            v->set_data(correspondence);
         }
     private:
         const std::array<moist::exact::Point2, 3> _points_a;
         const std::array<moist::exact::Point2, 3> _points_b;
         moist::exact::VertexCorrespondence _correspondence;
+
+        bool InTriangle(const moist::exact::Kernel::Point_2& point, const std::array<moist::exact::Point2, 3>& triangle) const
+        {
+            const std::array<moist::exact::Kernel::Point_2, 3> it_polygon = {
+                triangle[0]._p,
+                triangle[1]._p,
+                triangle[2]._p
+            };
+            const auto side = CGAL::bounded_side_2(it_polygon.begin(), it_polygon.end(), point);
+            return side == CGAL::ON_BOUNDARY || side == CGAL::ON_BOUNDED_SIDE;
+        }
 };
 
 static moist::exact::VertexCorrespondence get_correspondence(const moist::exact::Kernel::Point_2& p, const std::vector<moist::exact::Point2>& points)
@@ -108,11 +129,18 @@ static moist::exact::VertexCorrespondence get_correspondence(const moist::exact:
     OOC_ERROR("invalid point without correspondence in triangulation");
 }
 
+#include "moist/core/utils.hpp"
+
+static geo::Mesh dbg_arrangement(3);
+static geo::Mesh dbg_arrangement_triangulation(3);
+
 moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& t0, const moist::exact::Triangle& t1)
 {
+    dbg_arrangement.clear();
+    dbg_arrangement_triangulation.clear();
     moist::exact::Triangulation triangulation;
 
-    /*Arrangement_2 arrangement;
+    Arrangement_2 arrangement;
     const std::array<moist::exact::Point2, 3> points_a =
     {{
         moist::exact::Point2(t0._t.vertex(0), moist::exact::VertexCorrespondence::A),
@@ -127,6 +155,18 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         moist::exact::Point2(t1._t.vertex(2), moist::exact::VertexCorrespondence::B)
     }};
 
+    dbg_arrangement.facets.create_triangle(
+        dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_a[0]._p.x()), CGAL::to_double(points_a[0]._p.y()), 0)),
+        dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_a[1]._p.x()), CGAL::to_double(points_a[1]._p.y()), 0)),
+        dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_a[2]._p.x()), CGAL::to_double(points_a[2]._p.y()), 0))
+    );
+
+    dbg_arrangement.facets.create_triangle(
+        dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[0]._p.x()), CGAL::to_double(points_b[0]._p.y()), 0)),
+        dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[1]._p.x()), CGAL::to_double(points_b[1]._p.y()), 0)),
+        dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[2]._p.x()), CGAL::to_double(points_b[2]._p.y()), 0))
+    );
+
     VertexObserver observer(arrangement, points_a, points_b);
 
     moist::exact::Kernel::Segment_2 segments[] = {
@@ -138,65 +178,17 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         moist::exact::Kernel::Segment_2(points_b.at(2)._p, points_b.at(0)._p)
     };
 
-    CGAL::insert(arrangement, segments, segments + 6);*/
-
-    moist::exact::Kernel::Triangle_2 t0_2d(
-        moist::exact::Kernel::Point_2(t0._t.vertex(0).x(), t0._t.vertex(0).y()),
-        moist::exact::Kernel::Point_2(t0._t.vertex(1).x(), t0._t.vertex(1).y()),
-        moist::exact::Kernel::Point_2(t0._t.vertex(2).x(), t0._t.vertex(2).y())
-    );
-
-    moist::exact::Kernel::Triangle_2 t1_2d(
-        moist::exact::Kernel::Point_2(t1._t.vertex(0).x(), t1._t.vertex(0).y()),
-        moist::exact::Kernel::Point_2(t1._t.vertex(1).x(), t1._t.vertex(1).y()),
-        moist::exact::Kernel::Point_2(t1._t.vertex(2).x(), t1._t.vertex(2).y())
-    );
-
-    auto result = CGAL::intersection(t0_2d, t1_2d);
-    if (!result)
-    {
-        //return;
-    }
-
-    Polygon_2 polygon;
-    if (const std::vector<moist::exact::Kernel::Point_2>* poly = std::get_if<std::vector<moist::exact::Kernel::Point_2>>(&*result))
-    {
-        for (const auto p : *poly)
-        {
-            polygon.push_back(p);
-        }
-    }
-    else if (const moist::exact::Kernel::Triangle_2* tri = std::get_if<moist::exact::Kernel::Triangle_2>(&*result))
-    {
-        const auto z = t0._t.vertex(0).z();
-        triangulation.push_back(moist::exact::Triangle(
-            moist::exact::Point(tri->vertex(0).x(), tri->vertex(0).y(), z, moist::exact::VertexCorrespondence::AB),
-            moist::exact::Point(tri->vertex(1).x(), tri->vertex(1).y(), z, moist::exact::VertexCorrespondence::AB),
-            moist::exact::Point(tri->vertex(2).x(), tri->vertex(2).y(), z, moist::exact::VertexCorrespondence::AB)
-        ));
-        return triangulation;
-    }
-
-    if (!polygon.is_simple() || polygon.vertices().size() == 0)
-    {
-        return triangulation;
-    }
-
-    if (polygon.orientation() == CGAL::CLOCKWISE)
-    {
-        polygon.reverse_orientation();
-    }
-
+    CGAL::insert(arrangement, segments, segments + 6);
 
     // The triangulation we use does not support data on points like the arrangements... so keep a copy of all points with their corresponding mesh(es) here to reindex later...
     std::vector<moist::exact::Point2> points;
 
-    /*for (auto vit = arrangement.vertices_begin(); vit != arrangement.vertices_end(); vit++)
+    for (auto vit = arrangement.vertices_begin(); vit != arrangement.vertices_end(); vit++)
     {
         points.push_back(moist::exact::Point2(vit->point(), vit->data()));
-    }*/
+    }
 
-    /*for (auto fit = arrangement.faces_begin(); fit != arrangement.faces_end(); fit++)
+    for (auto fit = arrangement.faces_begin(); fit != arrangement.faces_end(); fit++)
     {
         if (fit->is_unbounded())
         {
@@ -228,7 +220,7 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         if (polygon.orientation() == CGAL::CLOCKWISE)
         {
             polygon.reverse_orientation();
-        }*/
+        }
 
         // TODO: we don't always need to do a full triangulation, since most overlaps are by their nature already triangulated.
         //       some notable exception is when two overlapping triangles share zero
@@ -239,18 +231,22 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         const auto z = t0._t.vertex(0).z();
         for (const auto& triangle : triangles)
         {
-            //const auto c0 = get_correspondence(triangle.vertex(0), points);
-            //const auto c1 = get_correspondence(triangle.vertex(1), points);
-            //const auto c2 = get_correspondence(triangle.vertex(2), points);
+            const auto c0 = get_correspondence(triangle.vertex(0), points);
+            const auto c1 = get_correspondence(triangle.vertex(1), points);
+            const auto c2 = get_correspondence(triangle.vertex(2), points);
 
             triangulation.push_back(moist::exact::Triangle(
-                moist::exact::Point(triangle.vertex(0).x(), triangle.vertex(0).y(), z, moist::exact::VertexCorrespondence::AB),
-                moist::exact::Point(triangle.vertex(1).x(), triangle.vertex(1).y(), z, moist::exact::VertexCorrespondence::AB),
-                moist::exact::Point(triangle.vertex(2).x(), triangle.vertex(2).y(), z, moist::exact::VertexCorrespondence::AB)
+                moist::exact::Point(triangle.vertex(0).x(), triangle.vertex(0).y(), z, c0),
+                moist::exact::Point(triangle.vertex(1).x(), triangle.vertex(1).y(), z, c1),
+                moist::exact::Point(triangle.vertex(2).x(), triangle.vertex(2).y(), z, c2)
             ));
-        }
-    //}
 
+            dbg_arrangement_triangulation.facets.create_triangle(
+                dbg_arrangement_triangulation.vertices.create_vertex(geo::vec3(CGAL::to_double(triangle.vertex(0).x()), CGAL::to_double(triangle.vertex(0).y()), 0)),
+                dbg_arrangement_triangulation.vertices.create_vertex(geo::vec3(CGAL::to_double(triangle.vertex(1).x()), CGAL::to_double(triangle.vertex(1).y()), 0)),
+                dbg_arrangement_triangulation.vertices.create_vertex(geo::vec3(CGAL::to_double(triangle.vertex(2).x()), CGAL::to_double(triangle.vertex(2).y()), 0))
+            );
+        }
+    }
     return triangulation;
 }
-//}

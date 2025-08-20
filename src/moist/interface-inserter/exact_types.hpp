@@ -29,6 +29,7 @@ namespace moist::exact
         GEO::index_t _v; // Only non-interface vertices must have this set, to retranslate the new geometry back into the main mesh later... All others must be geo::NO_VERTEX
         bool _deleted;
         bool _fixed;
+        bool _interface;
         moist::exact::VertexCorrespondence _correspondence;
 
         std::size_t _other;
@@ -41,6 +42,14 @@ namespace moist::exact
                             _fixed(false),
                             _other(moist::exact::NO_VERTEX),
                             _correspondence(correspondence) {}
+        Point(const GEO::vec3& p, const bool interface) :
+            _p(moist::exact::Kernel::Point_3(p.x, p.y, p.z)),
+            _v(GEO::NO_VERTEX),
+            _deleted(false),
+            _fixed(false),
+            _other(moist::exact::NO_VERTEX),
+            _correspondence(moist::exact::VertexCorrespondence::A),
+            _interface(interface) {};
 
         bool operator==(const moist::exact::Point& other) const { return _p == other._p; }
 
@@ -109,11 +118,21 @@ namespace moist::exact
         const std::size_t& operator[](std::size_t index) const { moist::assert::in_range(index, 0, 3); return _points.at(index); }
     };
 
+    enum class CellType
+    {
+        I, II, III
+    };
+
     struct Cell
     {
         std::array<std::size_t, 4> _points;
         bool _deleted;
-        Cell(const std::size_t v0, const std::size_t v1, const std::size_t v2, const std::size_t v3) : _points({v0, v1, v2, v3}), _deleted(false) {};
+        CellType _type;
+
+        Cell(const std::size_t v0, const std::size_t v1, const std::size_t v2, const std::size_t v3, const moist::exact::CellType type) :
+            _points({v0, v1, v2, v3}),
+            _type(type),
+            _deleted(false) {}
 
         std::size_t& operator[](std::size_t index) { moist::assert::in_range(index, 0, 4); return _points.at(index); }
         const std::size_t& operator[](std::size_t index) const { moist::assert::in_range(index, 0, 4); return _points.at(index); }

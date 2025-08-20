@@ -147,6 +147,21 @@ set(CGAL_USE_MPFR ON)
 
 #FetchContent_MakeAvailable(CGAL)
 
+
+#FetchContent_Declare(
+#  mmg
+#  GIT_REPOSITORY https://github.com/MmgTools/mmg.git
+#  GIT_TAG master
+#)
+#set(LIBMMG3D_SHARED ON CACHE BOOL "" FORCE)  # dont build mmg binaries
+#set(USE_SCOTCH OFF CACHE BOOL "" FORCE)
+
+#FetchContent_MakeAvailable(mmg)
+#get_target_property(MMG_INCLUDES mmg3d INTERFACE_INCLUDE_DIRECTORIES)
+#message(STATUS "MMG includes: ${MMG_INCLUDES}")
+
+include(../cmake/FindMMG3D.cmake)
+
 # TODO: Maybe create a "forked" github repo, port tetrahedron to cmake and c++23, and include via fetchcontent...
 add_subdirectory(tetrahedron)
 add_subdirectory(triangle)

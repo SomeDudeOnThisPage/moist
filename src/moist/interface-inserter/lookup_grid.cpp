@@ -4,6 +4,8 @@
 
 #include "moist/core/predicates.inl"
 #include "moist/core/geometry.inl"
+#include "moist/core/timer.hpp"
+
 #include "exact_mesh.hpp"
 
 void moist::LookupGridExact::InsertCell(const std::size_t c, const moist::ExactMesh& mesh)
@@ -50,6 +52,10 @@ moist::LookupGridExact::MeshCells& moist::LookupGridExact::GetMeshCells(const mo
 
 std::optional<moist::exact::index_t> moist::LookupPointGrid::Get(moist::exact::Point point)
 {
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::LookupPointGrid::Get");
+#endif // NDEBUG
+
     const moist::LookupPointGrid::Coordinates key = this->GetCoordinates(point);
     auto it = _grid.find(key);
     if (it == _grid.end())
@@ -71,6 +77,10 @@ std::optional<moist::exact::index_t> moist::LookupPointGrid::Get(moist::exact::P
 
 void moist::LookupPointGrid::Add(moist::exact::Point point, const moist::exact::index_t index)
 {
+#ifndef NDEBUG
+    moist::ScopeTimer TIMER("moist::LookupPointGrid::Add");
+#endif // NDEBUG
+
     const moist::LookupPointGrid::Coordinates key = this->GetCoordinates(point);
     auto& cell = _grid[key];
 

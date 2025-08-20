@@ -2,6 +2,7 @@
 #define MOIST_INTERFACE_INSERTER_ARRANGEMENT_HPP_
 
 #include <vector>
+#include <geogram/mesh/mesh.h>
 
 #include "moist/core/defines.hpp"
 

@@ -71,7 +71,7 @@ void moist::operation::exact::InsertVertexOnCellBoundaryFacet(const std::size_t 
     for (const std::size_t& cv : mesh.Cell(c)._points)
     {
         const auto& cp = mesh.Point(cv);
-        if (cp._v != geo::NO_VERTEX)
+        if (!cp._interface)
         {
             v_opposite = cv;
             break;
@@ -79,9 +79,9 @@ void moist::operation::exact::InsertVertexOnCellBoundaryFacet(const std::size_t 
     }
 
     const auto [v0, v1, v2] = moist::geometry::exact::other(c, v_opposite, mesh);
-    mesh.Add(moist::exact::Cell(v_opposite, v0, v1, v));
-    mesh.Add(moist::exact::Cell(v_opposite, v1, v2, v));
-    mesh.Add(moist::exact::Cell(v_opposite, v2, v0, v));
+    mesh.Add(moist::exact::Cell(v_opposite, v0, v1, v, moist::exact::CellType::III));
+    mesh.Add(moist::exact::Cell(v_opposite, v1, v2, v, moist::exact::CellType::III));
+    mesh.Add(moist::exact::Cell(v_opposite, v2, v0, v, moist::exact::CellType::III));
     mesh.DeleteCell(c);
 }
 
@@ -120,8 +120,8 @@ bool moist::operation::exact::InsertVertexOnCellBoundaryEdgeOld(const std::size_
                 const std::size_t v2 = cell._points[v_other[0]];
                 const std::size_t v3 = cell._points[v_other[1]];
 
-                mesh.Add(moist::exact::Cell(v, v0, v2, v3));
-                mesh.Add(moist::exact::Cell(v, v1, v2, v3));
+                mesh.Add(moist::exact::Cell(v, v0, v2, v3, moist::exact::CellType::II));
+                mesh.Add(moist::exact::Cell(v, v1, v2, v3, moist::exact::CellType::II));
 
                 if (mesh.Point(v0).z() == 10.0 && mesh.Point(v2).z() == 10.0 && mesh.Point(v3).z() == 10.0)
                 {
@@ -208,13 +208,13 @@ void moist::operation::exact::InsertVertexOnCellBoundaryEdge(const std::size_t &
     const auto z0 = mesh.Point(v0).z();
     const auto z1 = mesh.Point(v1).z();
 
-    if (mesh.Point(v0)._v != moist::exact::NO_VERTEX || mesh.Point(v1)._v != moist::exact::NO_VERTEX)
+    if (!mesh.Point(v0)._interface || !mesh.Point(v1)._interface)
     {
         return;
     }
 
-    mesh.Add(moist::exact::Cell(v, v0, v2, v3));
-    mesh.Add(moist::exact::Cell(v, v1, v2, v3));
+    mesh.Add(moist::exact::Cell(v, v0, v2, v3, moist::exact::CellType::II));
+    mesh.Add(moist::exact::Cell(v, v1, v2, v3, moist::exact::CellType::II));
     mesh.DeleteCell(c);
 }
 
@@ -229,8 +229,8 @@ void moist::operation::exact::SplitEdge1_2(const std::size_t &c, const moist::Cr
         }
     }
 
-    created_cells.push_back(moist::exact::Cell(edge.vp, edge.v0, others[0], others[1]));
-    created_cells.push_back(moist::exact::Cell(edge.vp, edge.v1, others[0], others[1]));
+    created_cells.push_back(moist::exact::Cell(edge.vp, edge.v0, others[0], others[1], moist::exact::CellType::II));
+    created_cells.push_back(moist::exact::Cell(edge.vp, edge.v1, others[0], others[1], moist::exact::CellType::II));
     mesh.DeleteCell(c);
 }
 
@@ -258,8 +258,8 @@ void moist::operation::exact::SplitEdge1_3(const std::size_t &c, const moist::Cr
     const auto v_other_e0 = (edge0.v0 == v_shared) ? edge0.v1 : edge0.v0;
     const auto v_other = others.at(0);
 
-    created_cells.push_back(moist::exact::Cell {v_other, edge0.vp, edge1.vp, v_shared});
-    created_cells.push_back(moist::exact::Cell {v_other, edge0.vp, edge1.vp, v_other_e0});
-    created_cells.push_back(moist::exact::Cell {v_other, edge1.vp, v_other_e0, v_other_e1});
+    created_cells.push_back(moist::exact::Cell {v_other, edge0.vp, edge1.vp, v_shared, moist::exact::CellType::III});
+    created_cells.push_back(moist::exact::Cell {v_other, edge0.vp, edge1.vp, v_other_e0, moist::exact::CellType::III});
+    created_cells.push_back(moist::exact::Cell {v_other, edge1.vp, v_other_e0, v_other_e1, moist::exact::CellType::III});
     mesh.DeleteCell(c);
 }

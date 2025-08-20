@@ -10,7 +10,10 @@
 #include <CGAL/Line_3.h>
 #include <CGAL/Segment_3.h>
 
+#include <tetgen.h>
+
 #include <geogram/mesh/mesh.h>
+
 #include "moist/core/defines.hpp"
 
 #include "exact_types.hpp"
@@ -34,6 +37,7 @@ namespace moist
 
         void DeletePoint(const std::size_t v);
         void DeleteCell(const std::size_t c);
+        void FlushDeletedElements();
 
         moist::exact::Cell& Cell(const std::size_t& index);
         moist::exact::Point& Point(const std::size_t& index);
@@ -89,6 +93,25 @@ namespace moist
         for (const std::size_t v : cell._points)
         {
             const auto point = mesh.Point(v);
+            aabb.xy_min[0] = std::min(aabb.xy_min[0], point.x());
+            aabb.xy_min[1] = std::min(aabb.xy_min[1], point.y());
+            aabb.xy_max[0] = std::max(aabb.xy_max[0], point.x());
+            aabb.xy_max[1] = std::max(aabb.xy_max[1], point.y());
+        }
+
+        return aabb;
+    }
+
+    inline geo::Box2d create_triangle_bbox2d_exact(const moist::exact::Triangle& triangle)
+    {
+        geo::Box2d aabb;
+        aabb.xy_min[0] = std::numeric_limits<double>::max();
+        aabb.xy_min[1] = std::numeric_limits<double>::max();
+        aabb.xy_max[0] = std::numeric_limits<double>::lowest();
+        aabb.xy_max[1] = std::numeric_limits<double>::lowest();
+
+        for (const auto point : triangle._points)
+        {
             aabb.xy_min[0] = std::min(aabb.xy_min[0], point.x());
             aabb.xy_min[1] = std::min(aabb.xy_min[1], point.y());
             aabb.xy_max[0] = std::max(aabb.xy_max[0], point.x());

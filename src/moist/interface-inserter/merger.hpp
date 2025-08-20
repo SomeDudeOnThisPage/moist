@@ -34,15 +34,13 @@ namespace moist
         void ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_mesh, const moist::AxisAlignedPlane& plane);
         void InsertAndMapPoints(const moist::ExactMesh& from, moist::ExactMesh& to);
 
-        void Prune(moist::ExactMesh& mesh, const double min_volume = 1e-6);
-
-        void HollowCrown();
+        void Prune(moist::ExactMesh& mesh, const double eps = 1e-6);
 
         void InsertPoint(const std::size_t v, const moist::ExactMesh& from, moist::ExactMesh& to);
         void InsertBToA();
-        void InsertCellBToA(const std::size_t c);
-        void InsertCellIntoCell(const std::size_t ca, const std::size_t cb);
-        void InsertPointIntoEdges(const moist::exact::Point& point, moist::ExactMesh& mesh);
+        bool InsertCellBToA(const std::size_t c);
+        bool InsertCellIntoCell(const std::size_t ca, const std::size_t cb);
+        bool InsertPointIntoEdges(const moist::exact::Point& point, moist::ExactMesh& mesh);
     };
 }
 
