@@ -65,7 +65,7 @@ moist::Tiff::Tiff(const std::string& pattern, const uint32_t first_file, const u
                     // enable parallel insertion into the vector by not using push_back
                     for (uint32_t i = 0; i < vector.size(); i++)
                     {
-                        this->data[n * _width *_height + row * _width + i] = static_cast<float>(vector[i]) / max;
+                        this->data[n * _width *_height + row * _width + i] = static_cast<float>(vector[i]) > 0 ? 1.0f : 0.0f;
                     }
                 }, line_data);
             }

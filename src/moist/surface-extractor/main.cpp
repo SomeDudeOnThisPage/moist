@@ -69,8 +69,8 @@ int main(int argc, char* argv[])
         ->check(cli::PositiveNumber)
         ->required();
     app.add_option("-v, --isovalue", arguments.isovalue, "Isovalue.")
-        ->check(cli::PositiveNumber)
-        ->check(cli::Bound(0.0f, 1.0f))
+        //->check(cli::PositiveNumber)
+        //->check(cli::Bound(0.0f, 1.0f))
         ->required();
     app.add_option("-b, --sample-bits", arguments.sample_bits, "Bits per sample [8, 16, 32, 64].")
         ->check(cli::IsMember({8, 16, 32, 64}))

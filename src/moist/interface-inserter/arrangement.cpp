@@ -166,6 +166,7 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[1]._p.x()), CGAL::to_double(points_b[1]._p.y()), 0)),
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[2]._p.x()), CGAL::to_double(points_b[2]._p.y()), 0))
     );
+    moist::utils::geogram::save("dbg_arrangement.mesh", dbg_arrangement);
 
     VertexObserver observer(arrangement, points_a, points_b);
 
@@ -248,5 +249,6 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
             );
         }
     }
+    moist::utils::geogram::save("dbg_arrangement_triangulation.mesh", dbg_arrangement_triangulation);
     return triangulation;
 }
