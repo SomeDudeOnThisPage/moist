@@ -33,8 +33,8 @@ if(MOIST_TESTS)
         #slice.cpp
         merger.hpp
         merger.cpp
-        tetgen_utils.hpp
-        tetgen_utils.cpp
+        remeshing.hpp
+        remeshing.cpp
         #slice_exact.cpp
         local_operations.hpp
         local_operations.cpp

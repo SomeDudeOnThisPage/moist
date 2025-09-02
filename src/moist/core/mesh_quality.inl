@@ -184,7 +184,6 @@ namespace moist::mesh_quality
         metrics.skewness = skewness(mesh);
 
         metrics.nb_vertices = mesh.vertices.nb();
-        metrics.nb_edges = 0; // not needed for eval
         metrics.nb_cells = mesh.cells.nb();
     }
 
@@ -202,8 +201,6 @@ namespace moist::mesh_quality
                 metrics.nb_vertices++;
             }
         }
-
-        metrics.nb_edges = moist::geometry::collect_interface_edges(mesh, *interface.Plane()).size();
 
         metrics.nb_cells = 0;
         for (const g_index c : mesh.cells)

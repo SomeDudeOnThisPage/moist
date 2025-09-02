@@ -1,5 +1,8 @@
 #include <format>
 
+// works only on linux
+#include <sys/resource.h>
+
 #include <CLI/CLI.hpp>
 
 #include <MC33.h>
@@ -12,6 +15,7 @@
 #include "moist/core/defines.hpp"
 #include "moist/core/timer.hpp"
 #include "moist/core/utils.hpp"
+#include "moist/core/metrics.hpp"
 
 #include "tiff_data.hpp"
 #include "surface_generator.hpp"
@@ -36,6 +40,9 @@ struct Arguments
     bool f_generate_sizing_field;
 
     float sizing_field_scale_denominator;
+
+    std::filesystem::path csv;
+    std::string csv_name;
 };
 
 static cli::Validator PatternPlaceholderCountValidator(const std::size_t placeholders)
@@ -50,9 +57,6 @@ static cli::Validator PatternPlaceholderCountValidator(const std::size_t placeho
 
 int main(int argc, char* argv[])
 {
-    auto metrics = moist::metrics::Metrics("SurfaceExtractor");
-    moist::Timer timer("SurfaceExtractor::Main", metrics);
-
     Arguments arguments{};
     cli::App app{argv[0]};
 
@@ -91,22 +95,51 @@ int main(int argc, char* argv[])
     app.add_option("--sizing-field-scale-denominator", arguments.sizing_field_scale_denominator, "Inverse minimum sizing field octree node size, in relation to the width of the data. E.g., with a width of 500, setting this to 50 will set the minimum size of an octree cell to 500/50 = 10x10x10px")
         ->default_val(100.0f);
 
+    app.add_option("--csv", arguments.csv, "CSV file for metrics")
+        ->required();
+    app.add_option("--run-name", arguments.csv_name, "Run name for metrics")
+        ->required();
+
     CLI11_PARSE(app, argc, app.ensure_utf8(argv));
 
     moist::utils::geogram::initialize();
     // geo::CmdLine::import_arg_group("algo");
 
+    auto metrics = moist::metrics::Metrics(arguments.csv_name);
+    moist::Timer runtime_timer("Total", metrics);
+
+    moist::Timer tiff_timer("Tiff::Tiff", metrics);
     const moist::Tiff tiff_data(arguments.input, arguments.first, arguments.amount);
+    tiff_timer.End();
+    *metrics << moist::metrics::Metric("volume_x", tiff_data.width());
+    *metrics << moist::metrics::Metric("volume_y", tiff_data.height());
+    *metrics << moist::metrics::Metric("volume_z", tiff_data.depth());
+    *metrics << moist::metrics::Metric("volume_xyz", tiff_data.width() * tiff_data.height() * tiff_data.depth());
+
     moist::SurfaceGenerator generator(tiff_data, int(arguments.first) + arguments.dir_offset, arguments.axis, arguments.f_center, arguments.f_invert);
 
     geo::Mesh mesh(3);
     {
-        moist::Timer _scope_timer("SurfaceGenerator::Generate", metrics);
+        moist::Timer timer("SurfaceGenerator::Generate", metrics);
         generator.Generate(mesh, arguments.isovalue);
     }
 
-    const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first - 1));
-    moist::utils::geogram::save(std::filesystem::path(path), mesh);
+    {
+        moist::Timer timer("SurfaceGenerator::Save", metrics);
+        const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first - 1));
+        moist::utils::geogram::save(std::filesystem::path(path), mesh);
+        const std::uintmax_t size = std::filesystem::file_size(std::filesystem::path(path));
+        double size_mb = static_cast<double>(size) / (1024 * 1024);
+        MOIST_INFO("saved " << path << ", filesize = " << size_mb << "mb");
+        *metrics << moist::metrics::Metric("filesize_mb", size_mb);
+    }
+
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    *metrics << moist::metrics::Metric("peak_ram_usage_mb", static_cast<double>(usage.ru_maxrss) / 1024);
+
+    runtime_timer.End();
+    metrics->AppendCSV(arguments.csv);
 
     if (!arguments.f_generate_sizing_field)
     {

@@ -136,8 +136,8 @@ static geo::Mesh dbg_arrangement_triangulation(3);
 
 moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& t0, const moist::exact::Triangle& t1)
 {
-    dbg_arrangement.clear();
-    dbg_arrangement_triangulation.clear();
+    //dbg_arrangement.clear();
+    //dbg_arrangement_triangulation.clear();
     moist::exact::Triangulation triangulation;
 
     Arrangement_2 arrangement;
@@ -155,7 +155,7 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         moist::exact::Point2(t1._t.vertex(2), moist::exact::VertexCorrespondence::B)
     }};
 
-    dbg_arrangement.facets.create_triangle(
+    /*dbg_arrangement.facets.create_triangle(
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_a[0]._p.x()), CGAL::to_double(points_a[0]._p.y()), 0)),
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_a[1]._p.x()), CGAL::to_double(points_a[1]._p.y()), 0)),
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_a[2]._p.x()), CGAL::to_double(points_a[2]._p.y()), 0))
@@ -165,8 +165,8 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[0]._p.x()), CGAL::to_double(points_b[0]._p.y()), 0)),
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[1]._p.x()), CGAL::to_double(points_b[1]._p.y()), 0)),
         dbg_arrangement.vertices.create_vertex(geo::vec3(CGAL::to_double(points_b[2]._p.x()), CGAL::to_double(points_b[2]._p.y()), 0))
-    );
-    moist::utils::geogram::save("dbg_arrangement.mesh", dbg_arrangement);
+    );*/
+    // moist::utils::geogram::save("dbg_arrangement.mesh", dbg_arrangement);
 
     VertexObserver observer(arrangement, points_a, points_b);
 
@@ -242,13 +242,13 @@ moist::exact::Triangulation moist::exact::arrange(const moist::exact::Triangle& 
                 moist::exact::Point(triangle.vertex(2).x(), triangle.vertex(2).y(), z, c2)
             ));
 
-            dbg_arrangement_triangulation.facets.create_triangle(
+            /*dbg_arrangement_triangulation.facets.create_triangle(
                 dbg_arrangement_triangulation.vertices.create_vertex(geo::vec3(CGAL::to_double(triangle.vertex(0).x()), CGAL::to_double(triangle.vertex(0).y()), 0)),
                 dbg_arrangement_triangulation.vertices.create_vertex(geo::vec3(CGAL::to_double(triangle.vertex(1).x()), CGAL::to_double(triangle.vertex(1).y()), 0)),
                 dbg_arrangement_triangulation.vertices.create_vertex(geo::vec3(CGAL::to_double(triangle.vertex(2).x()), CGAL::to_double(triangle.vertex(2).y()), 0))
-            );
+            );*/
         }
     }
-    moist::utils::geogram::save("dbg_arrangement_triangulation.mesh", dbg_arrangement_triangulation);
+    // moist::utils::geogram::save("dbg_arrangement_triangulation.mesh", dbg_arrangement_triangulation);
     return triangulation;
 }

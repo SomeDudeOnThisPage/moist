@@ -34,6 +34,7 @@ namespace moist::exact
 
         std::size_t _other;
         Point(const GEO::vec3 p) : _p(moist::exact::Kernel::Point_3(p.x, p.y, p.z)), _v(GEO::NO_VERTEX), _deleted(false), _fixed(false), _other(moist::exact::NO_VERTEX) {}
+        Point(const double x, const double y, const double z) : _p(moist::exact::Kernel::Point_3(x, y, z)), _v(GEO::NO_VERTEX), _deleted(false), _fixed(false), _other(moist::exact::NO_VERTEX) {}
         Point(const GEO::vec3 p, GEO::index_t v) : _p(moist::exact::Kernel::Point_3(p.x, p.y, p.z)), _v(v), _deleted(false), _fixed(false), _other(moist::exact::NO_VERTEX) {}
         Point(const moist::exact::Kernel::Point_3& p) : _p(p), _v(GEO::NO_VERTEX), _deleted(false), _fixed(false), _other(moist::exact::NO_VERTEX) {}
         Point(const moist::exact::Kernel::FT x, const moist::exact::Kernel::FT y, const moist::exact::Kernel::FT z, const moist::exact::VertexCorrespondence correspondence) :

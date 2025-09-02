@@ -4,8 +4,11 @@
 #include <iostream>
 #include <string>
 
+#include "moist/core/timer.hpp"
+
 moist::Tiff::Tiff(const std::string& pattern, const uint32_t first_file, const uint32_t num_files) : data(std::vector<float>()), _depth(num_files)
 {
+    moist::ScopeTimer timer("Tiff::Tiff");
     for (auto n = 0; n < num_files; n++)
     {
         try

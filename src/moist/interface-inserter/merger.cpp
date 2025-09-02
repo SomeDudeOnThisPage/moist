@@ -1,5 +1,7 @@
 #include "merger.hpp"
 
+#include <cmath>
+
 #include <tetgen.h>
 
 #include <geogram/mesh/mesh_repair.h>
@@ -13,19 +15,73 @@
 #include "local_operations.hpp"
 #include "new_predicates.inl"
 #include "geometry_exact.inl"
-#include "tetgen_utils.hpp"
+#include "remeshing.hpp"
 
 static geo::Mesh dbg_triangles(3);
 
-moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane)
+#define GRID_FACTOR 1.0
+
+static void snap_histograms(moist::ExactMesh& mesh, moist::metrics::Metrics_ptr metrics, const std::string& suffix)
 {
-    // this->Prune(_crown, plane.extent);
+    // save histogram to metrics for qualities
+    moist::metrics::Histogram hg_aspect_ratio(10);
+    moist::metrics::Histogram hg_mean_ratio(10);
+    moist::metrics::Histogram hg_mmg3d_quality(10);
+
+    mesh.ComputeHistogram(hg_aspect_ratio, moist::metrics::QualityMetricType::ASPECT_RATIO);
+    mesh.ComputeHistogram(hg_mean_ratio, moist::metrics::QualityMetricType::MEAN_RATIO);
+    mesh.ComputeHistogram(hg_mmg3d_quality, moist::metrics::QualityMetricType::MMG3D_QUALITY);
+
+    *metrics << moist::metrics::Metric("histogram::aspect_ratio::" + suffix, hg_aspect_ratio);
+    *metrics << moist::metrics::Metric("histogram::mean_ratio" + suffix, hg_mean_ratio);
+    *metrics << moist::metrics::Metric("histogram::mmg3d_quality" + suffix, hg_mmg3d_quality);
+}
+
+static void snap_histograms_2(moist::ExactMesh& a, moist::ExactMesh& b, moist::metrics::Metrics_ptr metrics, const std::string& suffix)
+{
+    moist::metrics::Histogram hg_aspect_ratio(10);
+    moist::metrics::Histogram hg_mean_ratio(10);
+    moist::metrics::Histogram hg_mmg3d_quality(10);
+    a.ComputeHistogram(hg_aspect_ratio, moist::metrics::QualityMetricType::ASPECT_RATIO);
+    a.ComputeHistogram(hg_mean_ratio, moist::metrics::QualityMetricType::MEAN_RATIO);
+    a.ComputeHistogram(hg_mmg3d_quality, moist::metrics::QualityMetricType::MMG3D_QUALITY);
+    b.ComputeHistogram(hg_aspect_ratio, moist::metrics::QualityMetricType::ASPECT_RATIO);
+    b.ComputeHistogram(hg_mean_ratio, moist::metrics::QualityMetricType::MEAN_RATIO);
+    b.ComputeHistogram(hg_mmg3d_quality, moist::metrics::QualityMetricType::MMG3D_QUALITY);
+    *metrics << moist::metrics::Metric("histogram::aspect_ratio::" + suffix, hg_aspect_ratio);
+    *metrics << moist::metrics::Metric("histogram::mean_ratio" + suffix, hg_mean_ratio);
+    *metrics << moist::metrics::Metric("histogram::mmg3d_quality" + suffix, hg_mmg3d_quality);
+}
+
+moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane, const moist::RemeshingParameters remeshing, moist::metrics::Metrics_ptr metrics) : _metrics(metrics)
+{
+    _min_edge_length = std::numeric_limits<double>::max();
+    _max_edge_length = -std::numeric_limits<double>::max();
 
     this->ConstructExactMesh(a, _mesh_a, plane);
     this->ConstructExactMesh(b, _mesh_b, plane);
-    _crown.ResetGrid(10.0);
+
+    snap_histograms_2(_mesh_a, _mesh_b, metrics, "ab");
+
+    *metrics << moist::metrics::Metric("grid_factor", GRID_FACTOR);
+    *metrics << moist::metrics::Metric("grid_resolution::a", _mesh_a.Grid().Resolution());
+    *metrics << moist::metrics::Metric("grid_resolution::b", _mesh_b.Grid().Resolution());
+    *metrics << moist::metrics::Metric("remeshing::hmin_factor", remeshing.hmin);
+    *metrics << moist::metrics::Metric("remeshing::hmax_factor", remeshing.hmax);
+    *metrics << moist::metrics::Metric("remeshing::min_edge_length::before", _min_edge_length);
+    *metrics << moist::metrics::Metric("remeshing::max_edge_length::before", _max_edge_length);
+
+    _crown.ResetGrid((_mesh_a.Grid().Resolution() + _mesh_b.Grid().Resolution()) / 2.0);
     moist::utils::geogram::save("crownless_a.mesh", a);
     moist::utils::geogram::save("crownless_b.mesh", b);
+
+    moist::metrics::MeshQuality a_before("a_before");
+    moist::metrics::MeshQuality b_before("b_before");
+    _mesh_a.ComputeMetrics(a_before);
+    _mesh_b.ComputeMetrics(b_before);
+    moist::metrics::MeshQuality ab_before = a_before + b_before;
+    ab_before.name = "ab_before"; // operator doesnt set name
+    *metrics << ab_before;
 
     this->InsertAndMapPoints(_mesh_a, _mesh_b);
     this->InsertAndMapPoints(_mesh_b, _mesh_a);
@@ -36,335 +92,64 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
 #endif // NDEBUG
 
     this->InsertBToA();
-
-    #ifndef NDEBUG
-    _crown.DebugMesh("crown.mesh");
+    moist::metrics::MeshQuality crown_before_remeshing("crown_before_remeshing");
+    _crown.ComputeMetrics(crown_before_remeshing);
+    *metrics << crown_before_remeshing;
+#ifndef NDEBUG
+    _crown.DebugMesh("crown_before_remeshing.mesh");
     moist::utils::geogram::save("triangles.off", dbg_triangles);
 #endif // NDEBUG
+    snap_histograms(_crown, metrics, "crown::before_remeshing");
 
-    this->Prune(_crown, plane.extent);
-}
-
-std::vector<std::size_t> shared_facet(const std::array<std::size_t, 4>& a, const std::array<std::size_t, 4>& b)
-{
-    std::vector<size_t> common;
-    std::array<size_t, 4> b_copy = b; // so we can mark used elements
-
-    for (size_t va : a) {
-        auto it = std::find(b_copy.begin(), b_copy.end(), va);
-        if (it != b_copy.end()) {
-            common.push_back(va);
-            *it = static_cast<size_t>(-1); // mark as used
-        }
-    }
-
-    if (common.size() == 3) {
-        return common; // exactly 3 shared points
-    }
-    return {}; // empty if not exactly 3
-}
-
-std::array<std::size_t, 2> longest_edge_on_interface(const moist::exact::Cell& cell, moist::ExactMesh& mesh)
-{
-    moist::exact::Kernel::FT distance = std::numeric_limits<double>::lowest();
-    std::size_t min0, min1;
-    for (const auto& [i, j] : moist::geometry::exact::TET_EDGE_DESCRIPTOR)
-    {
-        const auto& p0 = mesh.Point(cell._points[i]);
-        const auto& p1 = mesh.Point(cell._points[j]);
-
-        if (!p0._interface || !p1._interface)
-        {
-            continue;
-        }
-
-        const auto edge_length = CGAL::squared_distance(p0._p, p1._p);
-        if (edge_length > distance)
-        {
-            distance = edge_length;
-            min0 = cell._points[i];
-            min1 = cell._points[j];
-        }
-    }
-
-    return {min0, min1};
-}
-
-static std::pair<moist::predicates::PointInTet, double> get_shortest_edge(moist::ExactMesh& mesh, const std::size_t c)
-{
-    const auto cell = mesh.Cell(c);
-    double distance = std::numeric_limits<double>::max();
-    moist::predicates::PointInTet shortest_edge = moist::predicates::PointInTet::NONE;
-    for (const auto& [i, j] : moist::geometry::exact::TET_EDGE_DESCRIPTOR)
-    {
-        const auto p0 = mesh.Point(cell[i]);
-        const auto p1 = mesh.Point(cell[j]);
-
-        if (!p0._interface || !p1._interface)
-        {
-            continue;
-        }
-
-        const auto _distance = CGAL::to_double(CGAL::squared_distance(p0._p, p1._p));
-        if (_distance < distance)
-        {
-            distance = _distance;
-            if (i == 0 && j == 1)
-            {
-                shortest_edge = moist::predicates::PointInTet::EDGE01;
-            }
-            else if (i == 0 && j == 2)
-            {
-                shortest_edge = moist::predicates::PointInTet::EDGE02;
-            }
-            else if (i == 0 && j == 3)
-            {
-                shortest_edge = moist::predicates::PointInTet::EDGE03;
-            }
-            else if (i == 1 && j == 2)
-            {
-                shortest_edge = moist::predicates::PointInTet::EDGE12;
-            }
-            else if (i == 1 && j == 3)
-            {
-                shortest_edge = moist::predicates::PointInTet::EDGE13;
-            }
-            else if (i == 2 && j == 3)
-            {
-                shortest_edge = moist::predicates::PointInTet::EDGE23;
-            }
-        }
-    }
-
-    if (shortest_edge != moist::predicates::PointInTet::NONE)
-    {
-        return std::make_pair(shortest_edge, distance);
-    }
-    return std::make_pair(moist::predicates::PointInTet::NONE, 0.0);
-    // else
-    // {
-    //     OOC_DEBUG("cell without an interface edge...");
-    // }
-}
-
-extern "C"
-{
-  #include "mmg/mmg3d/libmmg3d.h"
-}
-
-static void mark_required_triangles(MMG5_pMesh mmgMesh, MMG5_pSol mmgSol, const double extent)
-{
-    constexpr int faces[4][3] = {
-        {1,2,3},
-        {0,2,3},
-        {0,1,3},
-        {0,1,2}
-    };
-
-    int ne, nv, na, nt, np;
-    MMG3D_Get_meshSize(mmgMesh, &np, &ne, &na, &nt, NULL, NULL);
-
-    int num_elements = ne;
-    int num_vertices = np;
-    int num_triangles = 0;
-    std::vector<std::array<int, 3>> triangles;
-    std::vector<std::array<int, 4>> cells;
-    std::vector<std::array<double, 3>> points;
-
-    for (int v = 1; v <= np; v++)
-    {
-        points.push_back({mmgMesh->point[v].c[0], mmgMesh->point[v].c[1], mmgMesh->point[v].c[2]});
-    }
-
-    // we must count boundary faces ourselves :(
-    std::map<std::array<int, 3>, int> face_count;
-    for (int c = 1; c <= ne; c++)
-    {
-        const int *v = mmgMesh->tetra[c].v;
-        cells.push_back({mmgMesh->tetra[c].v[0], mmgMesh->tetra[c].v[1], mmgMesh->tetra[c].v[2], mmgMesh->tetra[c].v[3]});
-        for (int lf=0; lf < 4; lf++)
-        {
-            std::array<int, 3> key = { v[faces[lf][0]], v[faces[lf][1]], v[faces[lf][2]] };
-            std::sort(key.begin(), key.end());
-            face_count[key] += 1;
-            if (face_count[key] > 2)
-            {
-                OOC_WARNING("non manifold face");
-            }
-        }
-    }
-
-    auto is_z_extent = [&](int vidx) -> bool
-    {
-        return mmgMesh->point[vidx].c[2] == extent;
-    };
-
-    int triCount = 0;
-    // Iterate over tets
-    for (int k = 1; k <= ne; k++)
-    {
-        const int* v = mmgMesh->tetra[k].v;
-        int z_extent_count = 0;
-        for (int j = 0; j < 4; j++)
-        {
-            if (is_z_extent(v[j]))
-            {
-                z_extent_count++;
-            }
-        }
-
-        if (z_extent_count == 1)
-        {
-            // its👏a👏boundary👏tet👏
-            int lv_extent = -1;
-            for (int lv = 0; lv < 4; lv++)
-            {
-                if (is_z_extent(v[lv]))
-                {
-                    lv_extent = lv;
-                }
-            }
-
-            num_triangles++;
-            const auto v0 = v[(lv_extent + 1) % 4];
-            const auto v1 = v[(lv_extent + 2) % 4];
-            const auto v2 = v[(lv_extent + 3) % 4];
-            triangles.push_back({v[(lv_extent + 1) % 4], v[(lv_extent + 2) % 4], v[(lv_extent + 3) % 4]});
-        }
-    }
-
-    MMG3D_Set_meshSize(mmgMesh, num_vertices, num_elements, 0, num_triangles, 0, 0);
-    const auto points_size = points.size();
-    const auto cells_size = cells.size();
-    for (std::size_t v = 1; v <= num_vertices; v++)
-    {
-        MMG3D_Set_vertex(mmgMesh, points[v - 1][0], points[v - 1][1], points[v - 1][2], 0, v);
-    }
-    for (std::size_t f = 1; f <= num_triangles; f++)
-    {
-        MMG3D_Set_triangle(mmgMesh, triangles[f - 1][0], triangles[f - 1][1], triangles[f - 1][2], 0, f);
-        MMG3D_Set_requiredTriangle(mmgMesh, f);
-    }
-    for (std::size_t c = 1; c <= num_elements; c++)
-    {
-        if (c == 494 || c == 495 || c == 496)
-        {
-            const std::array<int, 4> cc = {{
-                cells[c - 1][0], cells[c - 1][1], cells[c - 1][2], cells[c - 1][3]
-            }};
-
-            std::vector<std::array<double, 3>> pp;
-            for (int i = 0; i < 4; i++)
-            {
-                const auto cp = points[cells[c - 1][i]];
-                pp.push_back({cp.at(0), cp.at(1), cp.at(2)});
-            }
-            int ggg = 0;
-        }
-        MMG3D_Set_tetrahedron(mmgMesh, cells[c - 1][0], cells[c - 1][1], cells[c - 1][2], cells[c - 1][3], 0, c);
-    }
-
-    double min_quality = 100000000.0;
-    std::size_t worst_tet = 0;
-    for (std::size_t c = 1; c <= num_elements; c++)
-    {
-        if (c == 494 || c == 495 || c == 496)
-        {
-            double q = MMG3D_Get_tetrahedronQuality(mmgMesh, mmgSol, c);
-            int ggwgw = 1;
-        }
-        double q = MMG3D_Get_tetrahedronQuality(mmgMesh, mmgSol, c);
-        if (q < min_quality)
-        {
-            min_quality = q;
-            worst_tet = c;
-        }
-        if (q < 1.e-30)
-        {
-            OOC_WARNING("NULKAL");
-        }
-        if (q < 1.e-15)
-        {
-            OOC_WARNING("EPSOK " << c);
-        }
-    }
-
-    OOC_DEBUG("min_quality: " << min_quality);
-}
-
-void moist::Merger::Prune(moist::ExactMesh& mesh, const double extent)
-{
-    MOIST_INFO("remeshing...");
-
+    MOIST_INFO("coarsening...");
     tetgenio coarsen_mesh;
     tetgenio output_coarsen_mesh;
     output_coarsen_mesh.initialize();
     moist::tetgen::transform(_crown, coarsen_mesh);
-    tetgenbehavior coarsen_pass;
-    coarsen_pass.nobisect = true;
-    coarsen_pass.supsteiner_level = 0;
-    coarsen_pass.refine = true;
-    coarsen_pass.coarsen = true;
-    tetrahedralize(&coarsen_pass, &coarsen_mesh, &output_coarsen_mesh);
-    geo::Mesh geo_coarsen_mesh(3);
-    moist::tetgen::transform(coarsen_mesh, geo_coarsen_mesh);
-    moist::utils::geogram::save("dbg_after_coarsening.mesh", geo_coarsen_mesh);
+    moist::tetgen::coarsen(coarsen_mesh, output_coarsen_mesh);
+    moist::ExactMesh coarsened_crown;
+    moist::tetgen::transform(output_coarsen_mesh, coarsened_crown, plane);
+    moist::metrics::MeshQuality crown_after_coarsening("crown_after_coarsening");
+    coarsened_crown.ComputeMetrics(crown_after_coarsening);
+    *metrics << crown_after_coarsening;
+    coarsened_crown.DebugMesh("crown_after_coarsening.mesh");
 
-    MMG5_pMesh      mmgMesh;
-    MMG5_pSol       mmgSol;
-
-    mmgMesh = NULL;
-    mmgSol  = NULL;
+    MOIST_INFO("remeshing for FEM...");
+    MMG5_pMesh mmg_mesh = NULL;
+    MMG5_pSol mmg_solution = NULL;
     MMG3D_Init_mesh(MMG5_ARG_start,
-                    MMG5_ARG_ppMesh,&mmgMesh,
-                    MMG5_ARG_ppMet,&mmgSol,
-                    MMG5_ARG_end);
+            MMG5_ARG_ppMesh, &mmg_mesh,
+            MMG5_ARG_ppMet, &mmg_solution,
+        MMG5_ARG_end);
 
-    MMG3D_loadMesh(mmgMesh, "crown.mesh");
-    mark_required_triangles(mmgMesh, mmgSol, extent);
+    moist::mmg3d::transform(_crown, mmg_mesh, mmg_solution);
+    // mmg3d is... weird. even when giving exact hmin / hmax parameters, these are further altered by min*0.1;max*10.
+    // as such, we would have significant overrefinement when just asking for edges between min/max.
+    // eval a good factor (for now just 10) to achieve good quality without too much overrefinement
 
-    //if (MMG3D_Chk_meshData(mmgMesh, mmgSol) != 1)
-    //{
-    //    OOC_WARNING("bad mesh data");
-    //}
+    // mmg docs: hausd default is 0.01, suitable for a mesh of extent 1 in each direction...
+    //           thus: sqrt3(extent.x * extent.y * extent.z) * 0.01
+    const geo::Box3d aabb = create_mesh_bbox3d_exact(_crown);
+    const double hd_factor = std::cbrt((aabb.xyz_max[0] - aabb.xyz_min[0]) * (aabb.xyz_max[1] - aabb.xyz_min[1]) * (aabb.xyz_max[2] - aabb.xyz_min[2])) * 0.01;
+    *metrics << moist::metrics::Metric("remeshing::hd_factor", hd_factor);
+    moist::mmg3d::set_solution(mmg_mesh, mmg_solution, _min_edge_length * remeshing.hmin, _max_edge_length * remeshing.hmax, hd_factor);
 
-    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_nosplit, 1);
-    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_angle, 1);
-    // MMG3D_SET_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_)
-    int nv;
-    MMG3D_Get_meshSize(mmgMesh, &nv, NULL, NULL, NULL, NULL, NULL);
-    MMG3D_Set_solSize(mmgMesh, mmgSol, MMG5_Vertex, nv, MMG5_Scalar);
-    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_opnbdy, 1);
-    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_nofem, 1);
-    //MMG3D_Set_iparameter(mmgMesh, mmgSol, MMG3D_IPARAM_angle, 1);
-    for (int i = 1; i <= nv; i++)
+#ifndef NDEBUG
+    if (MMG3D_saveMesh(mmg_mesh, "output_mmg3d_before_remesning.mesh") != 1)
     {
-        MMG3D_Set_scalarSol(mmgSol, 1.0, i);
+        OOC_ERROR("cannot debug mmg_mesh");
     }
+#endif // NDEBUG
 
-    MMG3D_Set_dparameter(mmgMesh, mmgSol, MMG3D_DPARAM_hmin, 0.1);
-    MMG3D_Set_dparameter(mmgMesh, mmgSol, MMG3D_DPARAM_hausd, 0.05);
+    moist::mmg3d::remesh(mmg_mesh, mmg_solution);
+    moist::mmg3d::transform(mmg_mesh, mmg_solution, _crown);
 
-    if (MMG3D_saveMesh(mmgMesh, "output_mmg3d_before_remesning.mesh") != 1)
-    {
-        std::cerr << "Error: cannot save output.mesh\n";
-    }
+    moist::metrics::MeshQuality crown_after_remeshing("crown_after_remeshing");
+    _crown.ComputeMetrics(crown_after_remeshing);
+    *metrics << crown_after_remeshing;
+    _crown.DebugMesh("crown_after_remeshing.mesh");
 
-    //if (MMG3D_mmg3dls(mmgMesh, mmgSol, NULL) == MMG5_STRONGFAILURE )
-    //{
-    //    std::cerr << "Error: MMG3D remeshing failed\n";
-    //}
-    if (MMG3D_mmg3dlib(mmgMesh, mmgSol) == MMG5_STRONGFAILURE )
-    {
-        std::cerr << "Error: MMG3D remeshing failed\n";
-    }
-
-    if (MMG3D_saveMesh(mmgMesh, "output_mmg3d.mesh") != 1)
-    {
-        std::cerr << "Error: cannot save output.mesh\n";
-    }
-
-    MOIST_INFO("finished remeshing...");
+    snap_histograms(_crown, metrics, "crown::after_remeshing");
 }
 
 /**
@@ -385,12 +170,9 @@ static double round16(double value)
 
 void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_mesh, const moist::AxisAlignedPlane& plane)
 {
-    double lowest = 10000.0;
-    double highest = -100000.0;
-
-#ifndef NDEBUG
+#ifdef MOIST_EVAL
     moist::ScopeTimer TIMER("moist::Merger::ConstructExactMesh");
-#endif // NDEBUG
+#endif // MOIST_EVAL
 
     std::unordered_map<geo::index_t, std::size_t> added_vertices;
     geo::vector<geo::index_t> to_delete(mesh.cells.nb());
@@ -414,14 +196,6 @@ void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_
             {
                 // here we must keep _other of the point always on NO_VERTEX...
                 auto& point = mesh.vertices.point(v);
-                if (point.z < lowest)
-                {
-                    lowest = point.z;
-                }
-                if (point.z > highest)
-                {
-                    highest = point.z;
-                }
                 bool interface = moist::predicates::point_on_plane(point, plane);
                 if (interface)
                 {
@@ -446,22 +220,26 @@ void moist::Merger::ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_
             OOC_DEBUG("skipped cell " << c << " during interface plane mesh construction due to degeneracy in eps...");
         }
 
-        to_delete[c] = true;
+        to_delete[c] = true; // delete all these cells from the original mesh...
+
+        // Update edge lengths...
+        const auto lengths = moist::geometry::longest_shortest_edge(c, mesh);
+        _min_edge_length = (lengths[0] < _min_edge_length) ? lengths[0] : _min_edge_length;
+        _max_edge_length = (lengths[1] > _max_edge_length) ? lengths[0] : _max_edge_length;
     }
     mesh.cells.delete_elements(to_delete);
 
     // edge length does not make the most sense, since it must be based relative to the overall length of our bbox diag.
     // dumb hard coded value... use nb of cells on the interface maybe... times some factor controlled so we can evaluate performance based on it...
-    constexpr double FACTOR = 0.5;
-    exact_mesh.ResetGrid(FACTOR * std::sqrt(exact_mesh.NbCells()));
-    OOC_DEBUG("grid resolution: " << FACTOR * std::sqrt(exact_mesh.NbCells()));
-    OOC_DEBUG("lowest point: " << lowest);
-    OOC_DEBUG("highest point: " << highest);
+    constexpr double FACTOR = 1.0;
+    exact_mesh.ResetGrid(FACTOR * std::sqrt(exact_mesh.Cells().size()));
+    OOC_DEBUG("grid resolution: " << FACTOR * std::sqrt(exact_mesh.Cells().size()));
+    OOC_DEBUG("edge lengths -> max: " << _max_edge_length << ", min: " << _min_edge_length);
 }
 
 void moist::Merger::InsertAndMapPoints(const moist::ExactMesh& from, moist::ExactMesh& to)
 {
-    for (std::size_t v = 0; v < from.NbPoints(); v++)
+    for (std::size_t v = 0; v < from.Points().size(); v++)
     {
         const auto& point = from.Point(v);
         if (point._other != moist::exact::NO_VERTEX)
@@ -490,19 +268,14 @@ bool moist::Merger::InsertPointIntoEdges(const moist::exact::Point& point, moist
 #ifndef NDEBUG
     moist::ScopeTimer TIMER("moist::Merger::InsertPointIntoEdges");
 #endif // NDEBUG
-    const auto& grid_cells = mesh.Grid()->GetCells(moist::create_point_box2d_exact(point));
+    const auto& grid_cells = mesh.Grid().GetCells(moist::create_point_box2d_exact(point));
     std::size_t v_1to2 = moist::exact::NO_VERTEX;
 
     bool found = false;
     std::unordered_set<std::size_t> inserted;
     for (const auto grid_cell : grid_cells)
     {
-        if (!mesh.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
-        {
-            continue;
-        }
-
-        const auto cells = mesh.Grid()->GetMeshCells(grid_cell);
+        const auto cells = mesh.Grid().GetMeshCells(grid_cell);
         for (const auto c : cells)
         {
             const auto& cell = mesh.Cell(c);
@@ -553,17 +326,12 @@ void moist::Merger::InsertPoint(const std::size_t v, const moist::ExactMesh& fro
 {
     // check where to insert the point, and update to accordingly. also map the point!
     const auto point = from.Point(v);
-    const auto& grid_cells = to.Grid()->GetCells(moist::create_point_box2d_exact(point));
+    const auto& grid_cells = to.Grid().GetCells(moist::create_point_box2d_exact(point));
     std::size_t v_1to2 = moist::exact::NO_VERTEX;
 
     for (const auto grid_cell : grid_cells)
     {
-        if (!to.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
-        {
-            continue;
-        }
-
-        const auto cells = to.Grid()->GetMeshCells(grid_cell);
+        const auto cells = to.Grid().GetMeshCells(grid_cell);
         for (const auto c : cells)
         {
             const auto& cell = to.Cell(c);
@@ -603,11 +371,11 @@ void moist::Merger::InsertBToA()
     moist::ScopeTimer TIMER("moist::Merger::InsertBToA");
 #endif // NDEBUG
 
-    for (std::size_t c = 0; c < _mesh_b.NbCells(); c++)
+    for (std::size_t c = 0; c < _mesh_b.Cells().size(); c++)
     {
         if (c % 50 == 0)
         {
-            OOC_DEBUG("merged " << c << " out of " << _mesh_b.NbCells() << " cells...");
+            OOC_DEBUG("merged " << c << " out of " << _mesh_b.Cells().size() << " cells...");
         }
 
         const auto cell = _mesh_b.Cell(c);
@@ -622,10 +390,9 @@ void moist::Merger::InsertBToA()
         }
 
         this->InsertCellBToA(c);
-        _mesh_b.Cell(c)._deleted = true;
     }
 
-    for (std::size_t c = 0; c < _mesh_a.NbCells(); c++)
+    for (std::size_t c = 0; c < _mesh_a.Cells().size(); c++)
     {
         const auto& cell = _mesh_a.Cell(c);
         if (cell._deleted || touched_a.contains(c))
@@ -647,7 +414,7 @@ void moist::Merger::InsertBToA()
         ), true);
     }
 
-    for (std::size_t c = 0; c < _mesh_b.NbCells(); c++)
+    for (std::size_t c = 0; c < _mesh_b.Cells().size(); c++)
     {
         const auto& cell = _mesh_b.Cell(c);
         if (cell._deleted)
@@ -681,16 +448,11 @@ bool moist::Merger::InsertCellBToA(const std::size_t cb)
     std::unordered_set<std::size_t> inserted;
 
     auto cell = _mesh_b.Cell(cb);
-    const auto grid_cells = _mesh_a.Grid()->GetCells(moist::create_interface_cell_bbox2d_exact(cb, _mesh_b));
+    const auto grid_cells = _mesh_a.Grid().GetCells(moist::create_interface_cell_bbox2d_exact(cb, _mesh_b));
 
     for (const auto grid_cell : grid_cells)
     {
-        if (!_mesh_a.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
-        {
-            continue;
-        }
-
-        for (const auto ca : _mesh_a.Grid()->GetMeshCells(grid_cell))
+        for (const auto ca : _mesh_a.Grid().GetMeshCells(grid_cell))
         {
             const auto cell = _mesh_a.Cell(ca);
             if (cell._deleted || inserted.contains(ca))
@@ -708,6 +470,11 @@ bool moist::Merger::InsertCellBToA(const std::size_t cb)
                 inserted.emplace(ca);
             }
         }
+    }
+
+    if (!inserted.empty())
+    {
+        _mesh_b.Cell(cb)._deleted = true;
     }
     return !inserted.empty();
 }
@@ -786,15 +553,10 @@ static void remove_intersecting_III_cells(const std::size_t c, moist::ExactMesh&
     const auto cell = mesh.Cell(c);
     const auto t0 = get_interface_triangle(cell, mesh);
 
-    const auto grid_cells = mesh.Grid()->GetCells(moist::create_cell_bbox2d_exact(c, mesh));
+    const auto grid_cells = mesh.Grid().GetCells(moist::create_cell_bbox2d_exact(c, mesh));
     for (const auto grid_cell : grid_cells)
     {
-        if (!mesh.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
-        {
-            continue;
-        }
-
-        for (auto lc : mesh.Grid()->GetMeshCells(grid_cell))
+        for (auto lc : mesh.Grid().GetMeshCells(grid_cell))
         {
             auto& cell_other = mesh.Cell(lc);
             if (lc == c || cell_other._deleted || cell_other._type != moist::exact::CellType::III)
@@ -811,7 +573,6 @@ static void remove_intersecting_III_cells(const std::size_t c, moist::ExactMesh&
     }
 }
 
-static bool marked_for_debug = false;
 bool moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t cb)
 {
 #ifndef NDEBUG
@@ -838,7 +599,6 @@ bool moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t c
         return false;
     }
 
-    geo::Mesh dbg(3);
     for (const auto triangle : triangulation)
     {
         const auto p_opposite_a = _mesh_a.Point(v_opposite_a);
@@ -866,17 +626,6 @@ bool moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t c
                 }
             }
 
-        #ifndef NDEBUG
-            const vec3 vt0(CGAL::to_double(triangle._t.vertex(0).x()), CGAL::to_double(triangle._t.vertex(0).y()), CGAL::to_double(triangle._t.vertex(0).z()));
-            const vec3 vt1(CGAL::to_double(triangle._t.vertex(1).x()), CGAL::to_double(triangle._t.vertex(1).y()), CGAL::to_double(triangle._t.vertex(1).z()));
-            const vec3 vt2(CGAL::to_double(triangle._t.vertex(2).x()), CGAL::to_double(triangle._t.vertex(2).y()), CGAL::to_double(triangle._t.vertex(2).z()));
-            dbg_triangles.facets.create_triangle(
-                dbg_triangles.vertices.create_vertex(vt0),
-                dbg_triangles.vertices.create_vertex(vt1),
-                dbg_triangles.vertices.create_vertex(vt2)
-            );
-        #endif // NDEBUG
-
             auto points_triangle_0 = moist::exact::Point(triangle._t.vertex(0));
             auto points_triangle_1 = moist::exact::Point(triangle._t.vertex(1));
             auto points_triangle_2 = moist::exact::Point(triangle._t.vertex(2));
@@ -901,16 +650,11 @@ bool moist::Merger::InsertCellIntoCell(const std::size_t ca, const std::size_t c
         {
             // the cell is only present in mesh b in this arragement -> check if it intersects with any cell of mesh a, if not, add it...
             const auto aabb = moist::create_triangle_bbox2d_exact(triangle);
-            const auto grid_cells = _mesh_b.Grid()->GetCells(aabb);
+            const auto grid_cells = _mesh_b.Grid().GetCells(aabb);
             bool do_add = true;
             for (const auto grid_cell : grid_cells)
             {
-                if (!_mesh_b.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
-                {
-                    continue;
-                }
-
-                for (const auto cb_check : _mesh_b.Grid()->GetMeshCells(grid_cell))
+                for (const auto cb_check : _mesh_b.Grid().GetMeshCells(grid_cell))
                 {
                     if (_mesh_b.Cell(cb_check)._type != moist::exact::CellType::III)
                     {
@@ -942,24 +686,17 @@ add_cell_b_into_crown:
                     v0, v1, v2, _crown.Add(moist::exact::Point(p_opposite_a)),
                     moist::exact::CellType::III
                 ), true);
-                // we also must delete any intersecting cell in a...
-                //remove_intersecting_III_cells(new_cell_crown, _crown);
             }
         }
 else if (correspondence == moist::exact::VertexCorrespondence::B)
         {
             // the cell is only present in mesh b in this arragement -> check if it intersects with any cell of mesh a, if not, add it...
             const auto aabb = moist::create_triangle_bbox2d_exact(triangle);
-            const auto grid_cells = _mesh_a.Grid()->GetCells(aabb);
+            const auto grid_cells = _mesh_a.Grid().GetCells(aabb);
             bool do_add = true;
             for (const auto grid_cell : grid_cells)
             {
-                if (!_mesh_a.Grid()->_grid.contains(grid_cell)) // cringe bug from old code...
-                {
-                    continue;
-                }
-
-                for (const auto cb_check : _mesh_a.Grid()->GetMeshCells(grid_cell))
+                for (const auto cb_check : _mesh_a.Grid().GetMeshCells(grid_cell))
                 {
                     if (_mesh_a.Cell(cb_check)._type != moist::exact::CellType::III)
                     {
@@ -991,8 +728,6 @@ add_cell_a_into_crown:
                     v0, v1, v2, _crown.Add(moist::exact::Point(p_opposite_b)),
                     moist::exact::CellType::III
                 ), true);
-                // we also must delete any intersecting cell in a...
-                //remove_intersecting_III_cells(new_cell_crown, _crown);
             }
         }
     }

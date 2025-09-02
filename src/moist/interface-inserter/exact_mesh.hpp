@@ -15,6 +15,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include "moist/core/defines.hpp"
+#include "moist/core/metrics.hpp"
 
 #include "exact_types.hpp"
 #include "lookup_grid.hpp"
@@ -27,10 +28,12 @@ namespace moist
         ExactMesh();
         ~ExactMesh() = default;
 
+        void ComputeMetrics(moist::metrics::MeshQuality& metrics);
+        void ComputeHistogram(moist::metrics::Histogram& histogram, const moist::metrics::QualityMetricType& metric, const std::size_t nb_bins = -1U);
         void ResetGrid(const double resolution);
         void ResetMesh();
 
-        std::size_t Add(const moist::exact::Point p);
+        std::size_t Add(const moist::exact::Point p, const bool initialization = false);
         std::size_t Add(const moist::exact::Cell cell, const bool initialization = false);
         std::size_t Add(const moist::exact::Edge e);
         std::size_t Add(const moist::exact::Facet f);
@@ -49,12 +52,19 @@ namespace moist
         const std::vector<moist::exact::Facet>& Facets() const { return _facets; }
         const std::unordered_set<moist::exact::Edge>& Edges() const { return _edges; }
 
-        const std::size_t NbPoints() const { return _points.size(); }
-        const std::size_t NbCells() const { return _cells.size(); }
+        // theres lotsa better ways to do this without iterating each time, but whatevs
+        const std::size_t NbPoints() const
+        {
+            return std::count_if(_points.begin(), _points.end(), [](const auto point) { return !point._deleted; });
+        }
+        const std::size_t NbCells() const
+        {
+            return std::count_if(_cells.begin(), _cells.end(), [](const auto cell) { return !cell._deleted; });
+        }
         const std::size_t NbFacets() const { return _facets.size(); }
         const std::size_t NbEdges() const { return _edges.size(); }
 
-        std::shared_ptr<moist::LookupGridExact> Grid() { return _grid; }
+        moist::LookupGridExact& Grid() { return _grid; }
 
     #ifndef NDEBUG
         void DebugMesh(const std::filesystem::path& file);
@@ -70,9 +80,37 @@ namespace moist
         std::size_t _tid = 0;
         std::size_t _eid = 0;
 
-        std::shared_ptr<moist::LookupGridExact> _grid;
+        moist::LookupGridExact _grid;
         moist::LookupPointGrid _point_grid;
     };
+
+    inline geo::Box3d create_mesh_bbox3d_exact(const moist::ExactMesh& mesh)
+    {
+        geo::Box3d aabb;
+        aabb.xyz_min[0] = std::numeric_limits<double>::max();
+        aabb.xyz_min[1] = std::numeric_limits<double>::max();
+        aabb.xyz_min[2] = std::numeric_limits<double>::max();
+        aabb.xyz_max[0] = std::numeric_limits<double>::lowest();
+        aabb.xyz_max[1] = std::numeric_limits<double>::lowest();
+        aabb.xyz_max[2] = std::numeric_limits<double>::lowest();
+
+        for (const auto point : mesh.Points())
+        {
+            if (point._deleted)
+            {
+                continue;
+            }
+
+            aabb.xyz_min[0] = std::min(aabb.xyz_min[0], point.x());
+            aabb.xyz_min[1] = std::min(aabb.xyz_min[1], point.y());
+            aabb.xyz_min[2] = std::min(aabb.xyz_min[2], point.z());
+            aabb.xyz_max[0] = std::max(aabb.xyz_max[0], point.x());
+            aabb.xyz_max[1] = std::max(aabb.xyz_max[1], point.y());
+            aabb.xyz_max[2] = std::max(aabb.xyz_max[2], point.z());
+        }
+
+        return aabb;
+    }
 
     /**
      * @brief Creates a two dimensional bounding box of a cell, projected onto the xy-plane.

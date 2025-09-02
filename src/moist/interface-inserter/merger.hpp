@@ -8,6 +8,7 @@
 #include "moist/core/defines.hpp"
 #include "moist/core/core_interface.hpp"
 
+#include "interface_inserter.hpp"
 #include "exact_mesh.hpp"
 
 namespace moist
@@ -15,7 +16,7 @@ namespace moist
     class Merger
     {
     public:
-        Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane);
+        Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane, const moist::RemeshingParameters remeshing, moist::metrics::Metrics_ptr metrics = nullptr);
         ~Merger() = default;
     private:
 
@@ -27,7 +28,10 @@ namespace moist
         moist::ExactMesh _mesh_a;
         moist::ExactMesh _mesh_b;
         moist::ExactMesh _crown;
-        moist::ExactMesh _crown_surface;
+        double _min_edge_length;
+        double _max_edge_length;
+
+        moist::metrics::Metrics_ptr _metrics;
 
         std::unordered_map<geo::index_t, std::size_t> _vertices;
 

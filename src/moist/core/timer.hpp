@@ -22,11 +22,13 @@ namespace moist
         ~Timer();
 
         long long Elapsed();
+        void End(bool write_to_metrics = true);
     protected:
         std::string _name;
         std::chrono::time_point<std::chrono::system_clock> _start;
     private:
         metrics::Metrics_ptr _metrics;
+        bool _ended;
     };
 
 #ifndef NDEBUG

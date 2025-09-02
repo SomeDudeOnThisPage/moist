@@ -84,5 +84,7 @@ for (( i=0; i < slices; i++ )); do
     --amount "$range" \
     --isovalue "$isovalue" \
     --directional-offset "-$first_layer" \
+    --csv "surface_extraction_metrics.csv" \
+    --run-name "$input $i_first - $((i_first + range))" \
     --invert
 done

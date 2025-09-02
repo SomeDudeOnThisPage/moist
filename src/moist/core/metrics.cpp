@@ -4,9 +4,9 @@
 #include <fstream>
 #include <variant>
 
-moist::metrics::internal::metrics_t::metrics_t(const std::string& name): name(name), metrics(std::vector<moist::metrics::internal::metric_t>())
+moist::metrics::internal::metrics_t::metrics_t(const std::string& name): name(name)
 {
-
+    this->metrics = std::vector<moist::metrics::internal::metric_t>();
 }
 
 void moist::metrics::internal::metrics_t::AppendCSV(const std::filesystem::path &csv)
@@ -25,7 +25,7 @@ void moist::metrics::internal::metrics_t::AppendCSV(const std::filesystem::path 
         out << "metric_name";
         for (const auto& m : metrics)
         {
-            out << "," << m.name;
+            out << ";" << m.name;
         }
         out << std::endl;
     }
@@ -37,7 +37,7 @@ void moist::metrics::internal::metrics_t::AppendCSV(const std::filesystem::path 
     {
         std::visit([&out](auto&& metric)
         {
-            out << "," << metric; // all used types in variant defined in metrics.hpp are safe to just dump into ostream...
+            out << ";" << metric; // all used types in variant defined in metrics.hpp are safe to just dump into ostream...
         }, m.metric);
     }
     out << std::endl;

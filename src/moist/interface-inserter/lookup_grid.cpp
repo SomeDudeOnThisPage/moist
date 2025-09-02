@@ -10,7 +10,7 @@
 
 void moist::LookupGridExact::InsertCell(const std::size_t c, const moist::ExactMesh& mesh)
 {
-    auto covered_cells = this->GetCells(moist::create_cell_bbox2d_exact(c, mesh));
+    auto covered_cells = this->GetCells(moist::create_cell_bbox2d_exact(c, mesh), true);
 
     for (const auto& cell : covered_cells)
     {
@@ -18,7 +18,7 @@ void moist::LookupGridExact::InsertCell(const std::size_t c, const moist::ExactM
     }
 }
 
-std::vector<moist::LookupGridExact::GridCell> moist::LookupGridExact::GetCells(const geo::Box2d& aabb) const
+std::vector<moist::LookupGridExact::GridCell> moist::LookupGridExact::GetCells(const geo::Box2d& aabb, const bool initialization) const
 {
     std::vector<GridCell> result;
 
@@ -38,6 +38,10 @@ std::vector<moist::LookupGridExact::GridCell> moist::LookupGridExact::GetCells(c
     {
         for (int j = min_cell.second; j <= max_cell.second; j++)
         {
+            if (!initialization && !_grid.contains({i, j}))
+            {
+                continue;
+            }
             result.emplace_back(i, j);
         }
     }

@@ -16,16 +16,6 @@
 
 namespace moist::geometry::exact
 {
-    constexpr std::array<std::pair<std::size_t, std::size_t>, 6> TET_EDGE_DESCRIPTOR =
-    {{
-        {0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}
-    }};
-
-    constexpr std::array<std::array<std::size_t, 3>, 4> TET_FACET_DESCRIPTOR =
-    {{
-        {0, 1, 2}, {0, 1, 3}, {0, 2, 3}, {1, 2, 3}
-    }};
-
     PURE INLINE moist::exact::CellType get_cell_type(std::array<std::size_t, 4>& vertices, const moist::ExactMesh& mesh)
     {
         std::size_t nv = 0;

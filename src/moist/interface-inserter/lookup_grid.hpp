@@ -37,8 +37,10 @@ namespace moist
         LookupGridExact() = default;
         //void Initialize(const moist::ExactMesh& mesh, const double resolution);
         void InsertCell(const std::size_t c, const moist::ExactMesh& mesh);
-        std::vector<moist::LookupGridExact::GridCell> GetCells(const geo::Box2d& aabb) const;
+        std::vector<moist::LookupGridExact::GridCell> GetCells(const geo::Box2d& aabb, const bool initialization = false) const;
         moist::LookupGridExact::MeshCells& GetMeshCells(const moist::LookupGridExact::GridCell& grid_cell);
+
+        double Resolution() { return _resolution; }
 
         std::unordered_map<GridCell, MeshCells, GridCellHash> _grid;
     private:

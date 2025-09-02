@@ -15,6 +15,15 @@
  */
 namespace moist::geometry
 {
+    constexpr std::array<std::pair<std::size_t, std::size_t>, 6> TET_EDGE_DESCRIPTOR =
+    {{
+        {0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}
+    }};
+
+    constexpr std::array<std::array<std::size_t, 3>, 4> TET_FACET_DESCRIPTOR =
+    {{
+        {0, 1, 2}, {0, 1, 3}, {0, 2, 3}, {1, 2, 3}
+    }};
 
     constexpr g_index NO_ELEMENT = -1;
     struct Edge
@@ -53,6 +62,23 @@ namespace moist::geometry
         }
 
         return false;
+    }
+
+    PURE INLINE std::array<double, 2> longest_shortest_edge(const geo::index_t c, const geo::Mesh& mesh)
+    {
+        double shortest = std::numeric_limits<double>::max();
+        double longest = -std::numeric_limits<double>::max();
+
+        for (const auto& [lv0, lv1] : TET_EDGE_DESCRIPTOR)
+        {
+            const geo::index_t v0 = mesh.cells.vertex(c, lv0);
+            const geo::index_t v1 = mesh.cells.vertex(c, lv1);
+            const double distance = geo::distance(mesh.vertices.point(v0), mesh.vertices.point(v1));
+            shortest = (distance < shortest) ? distance : shortest;
+            longest = (distance > longest) ? distance : longest;
+        }
+
+        return {longest, shortest};
     }
 
     PURE INLINE bool point_of_cell(const geo::Mesh &mesh, const g_index cell, const vec3 &point)
