@@ -30,6 +30,7 @@ add_subdirectory(src/moist/surface-extractor)
 add_subdirectory(src/moist/interface-generator)
 add_subdirectory(src/moist/interface-inserter)
 add_subdirectory(src/moist/submesh-merger)
+add_subdirectory(src/moist/boundary-marker)
 
 if(MOIST_TESTS)
     add_subdirectory(src/tests)

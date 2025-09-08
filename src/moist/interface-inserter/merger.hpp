@@ -10,6 +10,7 @@
 
 #include "interface_inserter.hpp"
 #include "exact_mesh.hpp"
+#include "remeshing.hpp"
 
 namespace moist
 {
@@ -37,8 +38,7 @@ namespace moist
 
         void ConstructExactMesh(geo::Mesh& mesh, moist::ExactMesh& exact_mesh, const moist::AxisAlignedPlane& plane);
         void InsertAndMapPoints(const moist::ExactMesh& from, moist::ExactMesh& to);
-
-        void Prune(moist::ExactMesh& mesh, const double eps = 1e-6);
+        void EvaluateRemeshing(moist::metrics::Metrics_ptr metrics);
 
         void InsertPoint(const std::size_t v, const moist::ExactMesh& from, moist::ExactMesh& to);
         void InsertBToA();

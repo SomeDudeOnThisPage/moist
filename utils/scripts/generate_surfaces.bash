@@ -76,6 +76,7 @@ for (( i=0; i < slices; i++ )); do
   echo "Generating slice $(( i_first )): $current_first -> $((i_first + range))"
 
   # probably add quiet flag to mute output in console...
+  # also always generate inverse for some more FUN test cases
   # Just assume the program is run in the project source directory....
   ./build/bin/moist-extract \
     --input "$input" \
@@ -86,5 +87,15 @@ for (( i=0; i < slices; i++ )); do
     --directional-offset "-$first_layer" \
     --csv "surface_extraction_metrics.csv" \
     --run-name "$input $i_first - $((i_first + range))" \
+
+  ./build/bin/moist-extract \
+    --input "$input" \
+    --output "$output" \
+    --first "$i_first" \
+    --amount "$range" \
+    --isovalue "$isovalue" \
+    --directional-offset "-$first_layer" \
+    --csv "surface_extraction_metrics.csv" \
+    --run-name "$input $i_first - $((i_first + range))'" \
     --invert
 done

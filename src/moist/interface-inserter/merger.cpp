@@ -15,11 +15,71 @@
 #include "local_operations.hpp"
 #include "new_predicates.inl"
 #include "geometry_exact.inl"
-#include "remeshing.hpp"
 
 static geo::Mesh dbg_triangles(3);
 
 #define GRID_FACTOR 1.0
+
+// multiplied by shortest edge in the mesh BEFORE remeshing...
+// gradually relax bounds
+constexpr std::array<double, 4> EVAL_HMIN =
+{
+    1.0, 0.8, 0.6, 0.4
+};
+
+// multiplied by longest edge in the mesh BEFORE remeshing...
+constexpr std::array<double, 4> EVAL_HMAX =
+{
+    1.0, 1.2, 1.4, 1.6
+};
+
+// hausd is unchanged we just use the suggested value from mmg docs
+
+void moist::Merger::EvaluateRemeshing(moist::metrics::Metrics_ptr metrics)
+{
+    const geo::Box3d aabb = create_mesh_bbox3d_exact(_crown);
+    const double hd_factor = std::cbrt((aabb.xyz_max[0] - aabb.xyz_min[0]) * (aabb.xyz_max[1] - aabb.xyz_min[1]) * (aabb.xyz_max[2] - aabb.xyz_min[2])) * 0.01;
+    *metrics << moist::metrics::Metric("remeshing::hd_factor", hd_factor);
+
+    for (std::size_t i = 0; i < 4; i++)
+    {
+        for (std::size_t j = 0; j < 4; j++)
+        {
+            auto remeshing_metrics = moist::metrics::Metrics(metrics->name + "_remeshing_" + std::to_string((int) i) + "-" + std::to_string((int) j));
+            const double hmin = EVAL_HMIN[i];
+            const double hmax = EVAL_HMAX[j];
+            moist::metrics::MeshQuality metrics_before("before");
+            moist::metrics::MeshQuality metrics_after("after");
+
+            MOIST_INFO("performing evaluation remeshing pass w/ hmin=" << hmin << ", hmax=" << hmax);
+            *remeshing_metrics << moist::metrics::Metric("pass", i);
+            *remeshing_metrics << moist::metrics::Metric("hmin", hmin);
+            *remeshing_metrics << moist::metrics::Metric("hmax", hmax);
+            *remeshing_metrics << moist::metrics::Metric("hmin_abs", _min_edge_length * hmin);
+            *remeshing_metrics << moist::metrics::Metric("hmax_abs", _max_edge_length * hmax);
+            _crown.ComputeMetrics(metrics_before);
+
+            MMG5_pMesh mmg_mesh = NULL;
+            MMG5_pSol mmg_solution = NULL;
+            MMG3D_Init_mesh(MMG5_ARG_start,
+                    MMG5_ARG_ppMesh, &mmg_mesh,
+                    MMG5_ARG_ppMet, &mmg_solution,
+                MMG5_ARG_end);
+
+            moist::mmg3d::transform(_crown, mmg_mesh, mmg_solution);
+
+            moist::ExactMesh remeshing_output;
+            moist::mmg3d::set_solution(mmg_mesh, mmg_solution, _min_edge_length * hmin, _max_edge_length * hmax, hd_factor);
+            moist::mmg3d::remesh(mmg_mesh, mmg_solution);
+            moist::mmg3d::transform(mmg_mesh, mmg_solution, remeshing_output);
+            remeshing_output.ComputeMetrics(metrics_after);
+            *remeshing_metrics << metrics_before;
+            *remeshing_metrics << metrics_after;
+            remeshing_metrics->AppendCSV(metrics->name + "_metrics.csv");
+        }
+    }
+}
+
 
 static void snap_histograms(moist::ExactMesh& mesh, moist::metrics::Metrics_ptr metrics, const std::string& suffix)
 {
@@ -101,7 +161,7 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
 #endif // NDEBUG
     snap_histograms(_crown, metrics, "crown::before_remeshing");
 
-    MOIST_INFO("coarsening...");
+    /*MOIST_INFO("coarsening...");
     tetgenio coarsen_mesh;
     tetgenio output_coarsen_mesh;
     output_coarsen_mesh.initialize();
@@ -112,44 +172,24 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
     moist::metrics::MeshQuality crown_after_coarsening("crown_after_coarsening");
     coarsened_crown.ComputeMetrics(crown_after_coarsening);
     *metrics << crown_after_coarsening;
-    coarsened_crown.DebugMesh("crown_after_coarsening.mesh");
+    coarsened_crown.DebugMesh("crown_after_coarsening.mesh");*/
 
-    MOIST_INFO("remeshing for FEM...");
-    MMG5_pMesh mmg_mesh = NULL;
-    MMG5_pSol mmg_solution = NULL;
-    MMG3D_Init_mesh(MMG5_ARG_start,
-            MMG5_ARG_ppMesh, &mmg_mesh,
-            MMG5_ARG_ppMet, &mmg_solution,
-        MMG5_ARG_end);
+    this->EvaluateRemeshing(metrics);
 
-    moist::mmg3d::transform(_crown, mmg_mesh, mmg_solution);
-    // mmg3d is... weird. even when giving exact hmin / hmax parameters, these are further altered by min*0.1;max*10.
-    // as such, we would have significant overrefinement when just asking for edges between min/max.
-    // eval a good factor (for now just 10) to achieve good quality without too much overrefinement
-
-    // mmg docs: hausd default is 0.01, suitable for a mesh of extent 1 in each direction...
-    //           thus: sqrt3(extent.x * extent.y * extent.z) * 0.01
-    const geo::Box3d aabb = create_mesh_bbox3d_exact(_crown);
-    const double hd_factor = std::cbrt((aabb.xyz_max[0] - aabb.xyz_min[0]) * (aabb.xyz_max[1] - aabb.xyz_min[1]) * (aabb.xyz_max[2] - aabb.xyz_min[2])) * 0.01;
-    *metrics << moist::metrics::Metric("remeshing::hd_factor", hd_factor);
-    moist::mmg3d::set_solution(mmg_mesh, mmg_solution, _min_edge_length * remeshing.hmin, _max_edge_length * remeshing.hmax, hd_factor);
-
-#ifndef NDEBUG
+/*#ifndef NDEBUG
     if (MMG3D_saveMesh(mmg_mesh, "output_mmg3d_before_remesning.mesh") != 1)
     {
         OOC_ERROR("cannot debug mmg_mesh");
     }
 #endif // NDEBUG
 
-    moist::mmg3d::remesh(mmg_mesh, mmg_solution);
-    moist::mmg3d::transform(mmg_mesh, mmg_solution, _crown);
 
     moist::metrics::MeshQuality crown_after_remeshing("crown_after_remeshing");
     _crown.ComputeMetrics(crown_after_remeshing);
     *metrics << crown_after_remeshing;
     _crown.DebugMesh("crown_after_remeshing.mesh");
 
-    snap_histograms(_crown, metrics, "crown::after_remeshing");
+    snap_histograms(_crown, metrics, "crown::after_remeshing");*/
 }
 
 /**

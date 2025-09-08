@@ -36,7 +36,7 @@ void moist::tetgen::transform(moist::ExactMesh& mesh, tetgenio& tetgen_io)
         tetgen_io.pointlist[3 * v] = point.x();
         tetgen_io.pointlist[3 * v + 1] = point.y();
         tetgen_io.pointlist[3 * v + 2] = point.z();
-        tetgen_io.pointmarkerlist[v] = (point._interface ? -1 : 22); // -1 -> can be coarsened
+        tetgen_io.pointmarkerlist[v] = (point._interface ? -1 : 1); // -1 -> can be coarsened
         v++;
     }
 
