@@ -21,7 +21,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 file(GLOB_RECURSE CUDA_SOURCES "*.cuh" "*.cu")
 file(GLOB_RECURSE SOURCES "*.cpp")
 file(GLOB_RECURSE HEADERS "*.h" "*.hpp" "*.inl")
-find_package(Eigen3 3.4 REQUIRED)
 find_package(TIFF REQUIRED)
 
 #set_source_files_properties(${SOURCES} PROPERTIES LANGUAGE CXX)
