@@ -33,7 +33,6 @@ target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE CLI11::CLI11)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE TIFF::TIFF)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE MC33::MC33)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE OutOfCore_Meshing_Core)
-target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE Eigen3::Eigen)
 target_link_libraries(OutOfCore_Meshing_SurfaceExtractor PRIVATE CGAL::CGAL)
 #target_include_directories(OutOfCore_Meshing_SurfaceExtractor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -50,7 +50,7 @@ for file in "$input"/*; do
         fTetWild --input "$file" --epsr "$epsilon" \
                 --output "${output%/}/${filename%.*}.msh" \
                 --no-binary --no-color --max-its "25" \
-        >/dev/null 2>program_errors.log
+        >fTetWild.log 2>fTetWild_errors.log
 
     time_output=$(<time_stats.txt)
     rm time_stats.txt

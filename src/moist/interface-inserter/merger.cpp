@@ -43,11 +43,11 @@ void moist::Merger::EvaluateRemeshing(moist::metrics::Metrics_ptr metrics)
 
     for (std::size_t i = 0; i < 4; i++)
     {
-        for (std::size_t j = 0; j < 4; j++)
-        {
-            auto remeshing_metrics = moist::metrics::Metrics(metrics->name + "_remeshing_" + std::to_string((int) i) + "-" + std::to_string((int) j));
+        // for (std::size_t j = 0; j < 4; j++) // too many useless data points, as relaxing hmax without relaxing hmin usually does not result in different bounds on elements
+        // {
+            auto remeshing_metrics = moist::metrics::Metrics(metrics->name + "_remeshing_" + std::to_string((int) i) + "-" + std::to_string((int) i));
             const double hmin = EVAL_HMIN[i];
-            const double hmax = EVAL_HMAX[j];
+            const double hmax = EVAL_HMAX[i];
             moist::metrics::MeshQuality metrics_before("before");
             moist::metrics::MeshQuality metrics_after("after");
 
@@ -76,7 +76,7 @@ void moist::Merger::EvaluateRemeshing(moist::metrics::Metrics_ptr metrics)
             *remeshing_metrics << metrics_before;
             *remeshing_metrics << metrics_after;
             remeshing_metrics->AppendCSV(metrics->name + "_metrics.csv");
-        }
+        // }
     }
 }
 
@@ -161,7 +161,7 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
 #endif // NDEBUG
     snap_histograms(_crown, metrics, "crown::before_remeshing");
 
-    /*MOIST_INFO("coarsening...");
+    MOIST_INFO("coarsening...");
     tetgenio coarsen_mesh;
     tetgenio output_coarsen_mesh;
     output_coarsen_mesh.initialize();
@@ -172,7 +172,8 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
     moist::metrics::MeshQuality crown_after_coarsening("crown_after_coarsening");
     coarsened_crown.ComputeMetrics(crown_after_coarsening);
     *metrics << crown_after_coarsening;
-    coarsened_crown.DebugMesh("crown_after_coarsening.mesh");*/
+    coarsened_crown.DebugMesh("crown_after_coarsening.mesh");
+    snap_histograms(coarsened_crown, metrics, "crown_after_coarsening");
 
     this->EvaluateRemeshing(metrics);
 

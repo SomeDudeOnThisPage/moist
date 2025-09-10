@@ -3,6 +3,7 @@
 # Default values
 input="./data/{}.tif"
 output="./surfaces/{}-{}.off"
+output_inverted="./surfaces/{}-{}_inverted.off"
 first_layer=0
 sample_bits=16
 isovalue=0.999
@@ -18,6 +19,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -output)
       output="$2"
+      shift 2
+      ;;
+    -output-inverted)
+      output_inverted="$2"
       shift 2
       ;;
     -first-layer)
@@ -90,7 +95,7 @@ for (( i=0; i < slices; i++ )); do
 
   ./build/bin/moist-extract \
     --input "$input" \
-    --output "$output" \
+    --output "$output_inverted" \
     --first "$i_first" \
     --amount "$range" \
     --isovalue "$isovalue" \
