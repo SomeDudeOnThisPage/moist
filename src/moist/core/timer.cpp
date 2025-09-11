@@ -31,8 +31,6 @@ long long moist::Timer::Elapsed()
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - _start).count();
 }
 
-#ifndef NDEBUG
-
 moist::ScopeTimer::ScopeTimer(const std::string& name) : Timer(name, nullptr)
 {
 }
@@ -46,5 +44,3 @@ moist::ScopeTimer::~ScopeTimer()
     data.total += ms;
     data.count++;
 }
-
-#endif // NDEBUG

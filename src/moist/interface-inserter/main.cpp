@@ -25,6 +25,7 @@
 #include "moist/core/mesh_quality.inl"
 
 #include "interface_inserter.hpp"
+#include "merger.hpp"
 
 struct Arguments
 {
@@ -67,6 +68,8 @@ int main(int argc, char* argv[])
         ->required();
     app.add_option("--output-b", arguments.output_b, "Output Triangulation B (.msh) file")
         ->required();
+    app.add_option("--grid-factor", arguments.grid_size_factor, "Override grid size factor")
+        ->default_val(1.0);
     const auto* use_metrics = app.add_option("--output-metrics", arguments.metrics, "Output Metrics (.csv) file");
     app.add_option("--output-metrics-tc-name", arguments.tc_name, "Test-Case Name written to output metrics file")
         ->default_str("you should probably add a tc name when outputting metrics");
@@ -107,12 +110,14 @@ int main(int argc, char* argv[])
     moist::utils::geogram::load(arguments.input_a, slice_a, 3, false);
     moist::utils::geogram::load(arguments.input_b, slice_b, 3, false);
     const auto plane = moist::AxisAlignedPlane { moist::Axis::Z, arguments.extent, arguments.epsilon };
-    moist::create_interface_mesh(slice_a, slice_b, plane, moist::RemeshingParameters {arguments.hmin_factor, arguments.hmax_factor}, metrics);
+    // moist::create_interface_mesh(slice_a, slice_b, plane, moist::RemeshingParameters {arguments.hmin_factor, arguments.hmax_factor}, metrics);
+    moist::Merger merger(slice_a, slice_b, plane, arguments.grid_size_factor, moist::RemeshingParameters {arguments.hmin_factor, arguments.hmax_factor}, metrics);
 
 #ifndef NDEBUG
     moist::ScopeTimer::Print();
 #endif // NDEBUG
 
+    moist::ScopeTimer::WriteMetrics(metrics);
     if (use_metrics->count() > 0)
     {
         metrics->AppendCSV(arguments.metrics);

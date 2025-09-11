@@ -20,6 +20,8 @@ void moist::LookupGridExact::InsertCell(const std::size_t c, const moist::ExactM
 
 std::vector<moist::LookupGridExact::GridCell> moist::LookupGridExact::GetCells(const geo::Box2d& aabb, const bool initialization) const
 {
+    moist::ScopeTimer TIMER("moist::LookupGrid::GetAdd");
+
     std::vector<GridCell> result;
 
     const GridCell min_cell
@@ -56,9 +58,7 @@ moist::LookupGridExact::MeshCells& moist::LookupGridExact::GetMeshCells(const mo
 
 std::optional<moist::exact::index_t> moist::LookupPointGrid::Get(moist::exact::Point point)
 {
-#ifndef NDEBUG
-    moist::ScopeTimer TIMER("moist::LookupPointGrid::Get");
-#endif // NDEBUG
+    moist::ScopeTimer TIMER("moist::LookupPointGrid::GetAdd");
 
     const moist::LookupPointGrid::Coordinates key = this->GetCoordinates(point);
     auto it = _grid.find(key);
@@ -81,9 +81,7 @@ std::optional<moist::exact::index_t> moist::LookupPointGrid::Get(moist::exact::P
 
 void moist::LookupPointGrid::Add(moist::exact::Point point, const moist::exact::index_t index)
 {
-#ifndef NDEBUG
-    moist::ScopeTimer TIMER("moist::LookupPointGrid::Add");
-#endif // NDEBUG
+    moist::ScopeTimer TIMER("moist::LookupPointGrid::GetAdd");
 
     const moist::LookupPointGrid::Coordinates key = this->GetCoordinates(point);
     auto& cell = _grid[key];

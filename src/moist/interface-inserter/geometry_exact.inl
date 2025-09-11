@@ -202,6 +202,22 @@ namespace moist::geometry::exact
         return std::nullopt;
     }
 
+    PURE INLINE std::vector<std::array<std::size_t, 2>> get_interface_edges(const std::size_t c, const moist::ExactMesh& mesh)
+    {
+        std::vector<std::array<std::size_t, 2>> edges;
+        const auto cell = mesh.Cell(c);
+        for (const auto& [i,j] : moist::geometry::TET_EDGE_DESCRIPTOR)
+        {
+            const auto p0 = mesh.Point(cell[i]);
+            const auto p1 = mesh.Point(cell[j]);
+            if (p0._interface && p1._interface)
+            {
+                edges.push_back({i, j});
+            }
+        }
+        return edges;
+    }
+
     PURE INLINE bool edge_exists(const moist::exact::EdgePoints& edge, const moist::ExactMesh& mesh)
     {
         for (const auto cell : mesh.Cells())

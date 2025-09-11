@@ -17,7 +17,7 @@ namespace moist
     class Merger
     {
     public:
-        Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane, const moist::RemeshingParameters remeshing, moist::metrics::Metrics_ptr metrics = nullptr);
+        Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane& plane, float grid_factor, const moist::RemeshingParameters remeshing, moist::metrics::Metrics_ptr metrics = nullptr);
         ~Merger() = default;
     private:
 
@@ -31,6 +31,7 @@ namespace moist
         moist::ExactMesh _crown;
         double _min_edge_length;
         double _max_edge_length;
+        float _grid_factor;
 
         moist::metrics::Metrics_ptr _metrics;
 

@@ -8,5 +8,10 @@ SURFACE EXTRACTION:
 
 VOLUME GENERATION:
 ./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/at0/ -output ../moist-data/volumes/at0/ -csv ./moist-data/volumes/at0.csv -epsilon 0.01
-./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/thin/res5/ -output ../moist-data/volumes/thin/res5/ -csv ./moist-data/volumes/thin/samples.csv -epsilon 0.001
+./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/thin/res5/ -output ../moist-data/volumes/thin/res5/ -csv ../moist-data/volumes/thin/samples.csv -epsilon 0.001
+./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/thin/res23/ -output ../moist-data/volumes/thin/res23/ -csv ../moist-data/volumes/thin/samples.csv -epsilon 0.001
+
+
 ./utils/scripts/generate_volumes.bash -input ./test/target/surfaces/thin/res16/ -output ./test/target/volumes/thin/res16/ -csv ./test/target/volumes/thin/samples.csv -epsilon 0.001
+./utils/scripts/generate_volumes.bash -input ./test/target/surfaces/thin/res23/ -output ./test/target/volumes/thin/res23/ -csv ./test/target/volumes/thin/samples.csv -epsilon 0.001
+./utils/scripts/generate_volumes.bash -input ./test/target/surfaces/thin/res43/ -output ./test/target/volumes/thin/res43/ -csv ./test/target/volumes/thin/samples.csv -epsilon 0.001

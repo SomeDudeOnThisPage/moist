@@ -43,6 +43,7 @@ namespace moist::exact
                             _fixed(false),
                             _other(moist::exact::NO_VERTEX),
                             _correspondence(correspondence) {}
+        // Point(const moist::exact::Point& p) : _p(p._p), _interface(p._interface) {};
         Point(const GEO::vec3& p, const bool interface) :
             _p(moist::exact::Kernel::Point_3(p.x, p.y, p.z)),
             _v(GEO::NO_VERTEX),

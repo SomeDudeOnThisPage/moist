@@ -122,6 +122,33 @@ static std::array<double, 3> mean_ratio(const moist::ExactMesh& mesh)
     return { mean_ratio / static_cast<double>(nb_cells), min, max };
 }
 
+static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh)
+{
+    MMG5_pMesh mmg_mesh = NULL;
+    MMG5_pSol mmg_solution = NULL;
+    MMG3D_Init_mesh(MMG5_ARG_start,
+            MMG5_ARG_ppMesh, &mmg_mesh,
+            MMG5_ARG_ppMet, &mmg_solution,
+        MMG5_ARG_end);
+
+    moist::mmg3d::transform(mesh, mmg_mesh, mmg_solution);
+    int nb_points;
+    int nb_cells;
+    MMG3D_Get_meshSize(mmg_mesh, &nb_points, &nb_cells, NULL, NULL, NULL, NULL);
+
+    double mmg_quality = 0.0f;
+    double min = 100000.0;
+    double max = -100000.0;
+    for (std::size_t c = 1; c < nb_cells; c++)
+    {
+        const double mmg_quality_l = MMG3D_Get_tetrahedronQuality(mmg_mesh, nullptr, c);
+        min = mmg_quality_l < min ? mmg_quality_l : min;
+        max = mmg_quality_l > max ? mmg_quality_l : max;
+        mmg_quality += mmg_quality_l;
+    }
+    return { mmg_quality / static_cast<double>(nb_cells), min, max };
+}
+
 moist::ExactMesh::ExactMesh() : _grid(moist::LookupGridExact()), _point_grid(moist::LookupPointGrid(10.0))
 {
 }
@@ -130,6 +157,7 @@ void moist::ExactMesh::ComputeMetrics(moist::metrics::MeshQuality& metrics)
 {
     const auto aspect_ratios = aspect_ratio(*this);
     const auto mean_ratios = mean_ratio(*this);
+    const auto mmg = mmg_quality(*this);
 
     std::size_t nv = 0;
     std::size_t nc = 0;
@@ -151,6 +179,9 @@ void moist::ExactMesh::ComputeMetrics(moist::metrics::MeshQuality& metrics)
     metrics.mean_ratio = mean_ratios[0];
     metrics.mean_ratio_lb = mean_ratios[1];
     metrics.mean_ratio_ub = mean_ratios[2];
+    metrics.mmg = mmg[0];
+    metrics.mmg_lb = mmg[1];
+    metrics.mmg_ub = mmg[2];
 }
 
 void moist::ExactMesh::ComputeHistogram(moist::metrics::Histogram& histogram, const moist::metrics::QualityMetricType& type, const std::size_t nb_bins)

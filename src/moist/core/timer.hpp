@@ -31,7 +31,6 @@ namespace moist
         bool _ended;
     };
 
-#ifndef NDEBUG
     class ScopeTimer : Timer
     {
     public:
@@ -46,6 +45,20 @@ namespace moist
                 OOC_DEBUG(name << ": " << (data.total / data.count) << "ms x " << data.count << " => " << data.total << "ms");
             }
         }
+
+        static void WriteMetrics(metrics::Metrics_ptr metrics)
+        {
+            if (metrics == nullptr) return;
+
+            const auto timings = ScopeTimer::Timings();
+            for (const auto& [name, time] : timings)
+            {
+                *metrics << moist::metrics::Metric(name + "::total", time.total);
+                *metrics << moist::metrics::Metric(name + "::avg", time.total / time.count);
+                *metrics << moist::metrics::Metric(name + "::count", time.count);
+            }
+        }
+
     private:
         struct ScopeTime
         {
@@ -59,7 +72,6 @@ namespace moist
             return data;
         }
     };
-#endif // NDEBUG
 }
 
 #endif // MOIST_CORE_TIMER_HPP_
