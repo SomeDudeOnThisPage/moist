@@ -19,8 +19,8 @@
 static geo::Mesh dbg_triangles(3);
 
 #define GRID_FACTOR 3.0
-#define GRID_BY_EXTENT
-// #define GRID_BY_NUM_CELLS
+//#define GRID_BY_EXTENT
+#define GRID_BY_NUM_CELLS
 #define MIST_EVAL_GRID
 // #define MIST_EVAL_QUALITY
 

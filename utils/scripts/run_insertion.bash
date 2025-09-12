@@ -4,7 +4,7 @@
 
 CSV_FILE="$1"
 PROGRAM="./build/bin/moist-insert" # assume we run in root dir
-GRID_FACTORS=(0.5 1.0 1.5 2.0 2.5)
+GRID_FACTORS=(0.33 0.66 1.0 1.33 1.66 2.0 2.33 2.66 3.0)
 
 if [[ ! -f "$CSV_FILE" ]]; then
     echo "CSV file not found: $CSV_FILE"

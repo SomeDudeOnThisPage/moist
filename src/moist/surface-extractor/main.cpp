@@ -132,6 +132,8 @@ int main(int argc, char* argv[])
         double size_mb = static_cast<double>(size) / (1024 * 1024);
         MOIST_INFO("saved " << path << ", filesize = " << size_mb << "mb");
         *metrics << moist::metrics::Metric("filesize_mb", size_mb);
+        *metrics << moist::metrics::Metric("num_triangles", mesh.facets.nb());
+        *metrics << moist::metrics::Metric("num_vertices", mesh.vertices.nb());
     }
 
     struct rusage usage;
