@@ -185,6 +185,10 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
     moist::tetgen::coarsen(coarsen_mesh, output_coarsen_mesh);
     moist::ExactMesh coarsened_crown;
     moist::tetgen::transform(output_coarsen_mesh, coarsened_crown, plane);
+    moist::metrics::MeshQuality crown_after_coarsening("crown_after_coarsening");
+    coarsened_crown.ComputeMetrics(crown_after_coarsening);
+    *metrics << crown_after_coarsening;
+    snap_histograms(coarsened_crown, metrics, "crown_after_coarsening");
 
 #ifdef MIST_EVAL_QUALITY
     moist::metrics::MeshQuality crown_after_coarsening("crown_after_coarsening");
