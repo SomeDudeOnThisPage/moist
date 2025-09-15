@@ -13,7 +13,8 @@ moist::Tiff::Tiff(const std::string& pattern, const uint32_t first_file, const u
     {
         try
         {
-            const std::string filename = std::vformat(pattern, std::make_format_args(n + first_file));
+            const auto nb_files = n + first_file;
+            const std::string filename = std::vformat(pattern, std::make_format_args(nb_files));
             auto tiff = std::unique_ptr<TIFF, decltype(&TIFFClose)>( // wrap in unique-pointer for automatic closing...
                 TIFFOpen(filename.c_str(), "r"),
                 &TIFFClose
