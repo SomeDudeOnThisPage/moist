@@ -126,7 +126,8 @@ int main(int argc, char* argv[])
 
     {
         moist::Timer timer("SurfaceGenerator::Save", metrics);
-        const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, arguments.amount + arguments.first - 1));
+        const auto nb_files = arguments.amount + arguments.first - 1;
+        const std::string path = std::vformat(arguments.output, std::make_format_args(arguments.first, nb_files));
         moist::utils::geogram::save(std::filesystem::path(path), mesh);
         const std::uintmax_t size = std::filesystem::file_size(std::filesystem::path(path));
         double size_mb = static_cast<double>(size) / (1024 * 1024);
