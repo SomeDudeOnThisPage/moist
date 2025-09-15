@@ -6,7 +6,7 @@ SURFACE EXTRACTION:
 ./utils/scripts/generate_surfaces.bash -input /mnt/c/Users/robin/Desktop/Master-Thesis/test-rocks/p4_res64_mu8/merge{:05}_s.tif -output ./test/target/surfaces/res64/{}-{}.off -output-inverted ./test/target/surfaces/res64/{}-{}_inverted.off -first-layer 400 -num-layers 600 -slices 3 -sample-bits 16 -isovalue 0.9999
 ./utils/scripts/generate_surfaces.bash -input /mnt/c/Users/robin/Desktop/Master-Thesis/test-rocks/tight-carbonate-middle-east/UofC{:04}.tif -output ./test/target/surfaces/tc/{}-{}.off -output-inverted ./test/target/surfaces/tc/{}-{}_inverted.off -first-layer 100 -num-layers 600 -slices 3 -sample-bits 8 -isovalue 0.9999
 
-./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res5_mu96/recon_scan0856500_{:05}_s.tif   -output ../moist-data/surfaces/res5/{}-{}.off   -output-inverted ../moist-data/surfaces/res5/{}-{}_inverted.off -first-layer 410    -num-layers 600 -slices 3 -sample-bits 16 -isovalue 0.9999
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res5_mu96/segmented/recon_scan0856500_{:05}_s.tif   -output ../moist-data/surfaces/res5/{}-{}.off   -output-inverted ../moist-data/surfaces/res5/{}-{}_inverted.off -first-layer 410    -num-layers 600 -slices 3 -sample-bits 16 -isovalue 0.9999
 ./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res16_mu30/segmented/merge{:05}_s.tif     -output ../moist-data/surfaces/res16/{}-{}.off  -output-inverted ../moist-data/surfaces/res16/{}-{}_inverted.off -first-layer 230   -num-layers 600 -slices 3 -sample-bits 16 -isovalue 0.9999
 ./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p4_res23_mu24/merge{:05}_s.tif               -output ../moist-data/surfaces/res23/{}-{}.off  -output-inverted ../moist-data/surfaces/res23/{}-{}_inverted.off -first-layer 500   -num-layers 600 -slices 3 -sample-bits 16 -isovalue 0.9999
 ./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res43_mu11/segmented/merge{:05}_s.tif     -output ../moist-data/surfaces/res43/{}-{}.off  -output-inverted ../moist-data/surfaces/res43/{}-{}_inverted.off -first-layer 238   -num-layers 600 -slices 3 -sample-bits 16 -isovalue 0.9999
@@ -14,7 +14,20 @@ SURFACE EXTRACTION:
 ./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/tight-carbonate-middle-east/UofC{:04}.tif    -output ../moist-data/surfaces/tc/{}-{}.off     -output-inverted ../moist-data/surfaces/tc/{}-{}_inverted.off -first-layer 100      -num-layers 600 -slices 3 -sample-bits 8 -isovalue 0.9999
 
 
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res16_mu30/segmented/merge{:05}_s.tif     -output ../moist-data/surfaces/tetwild-test/res16{}-{}.off  -output-inverted ../moist-data/surfaces/tetwild-test/res16_inverted{}-{}.off -first-layer 230   -num-layers 75 -slices 1 -sample-bits 16 -isovalue 0.9999
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res16_mu30/segmented/merge{:05}_s.tif     -output ../moist-data/surfaces/tetwild-test/res16-part{}-{}.off  -output-inverted ../moist-data/surfaces/tetwild-test/res16_inverted-part{}-{}.off -first-layer 230   -num-layers 75 -slices 3 -sample-bits 16 -isovalue 0.9999
+
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p4_res23_mu24/merge{:05}_s.tif               -output ../moist-data/surfaces/tetwild-test/res23-part{}-{}.off  -output-inverted ../moist-data/surfaces/tetwild-test/res23-part{}-{}_inverted.off -first-layer 500   -num-layers 75 -slices 3 -sample-bits 16 -isovalue 0.9999
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res43_mu11/segmented/merge{:05}_s.tif     -output ../moist-data/surfaces/tetwild-test/res43{}-{}.off  -output-inverted ../moist-data/surfaces/tetwild-test/res43{}-{}_inverted.off -first-layer 238   -num-layers 75 -slices 1 -sample-bits 16 -isovalue 0.9999
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p4_res64_mu8/merge{:05}_s.tif                -output ../moist-data/surfaces/tetwild-test/res64-part{}-{}.off  -output-inverted ../moist-data/surfaces/tetwild-test/res64-part{}-{}_inverted.off -first-layer 400   -num-layers 75 -slices 3 -sample-bits 16 -isovalue 0.9999
+
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/tight-carbonate-middle-east/UofC{:04}.tif -output ../moist-data/surfaces/tetwild-test/tc-part-{}-{}.off -output-inverted ../moist-data/surfaces/tetwild-test/tc-part-{}-{}_inverted.off -first-layer 100 -num-layers 75 -slices 3 -sample-bits 8 -isovalue 0.9999
+./utils/scripts/generate_surfaces.bash -input ../moist-data/ct/p3_res5_mu96/recon_scan0856500_{:05}_s.tif   -output ../moist-data/surfaces/tetwild-test/res5-part{}-{}.off   -output-inverted ../moist-data/surfaces/tetwild-test/res5-part{}-{}_inverted.off -first-layer 410    -num-layers 75 -slices 3 -sample-bits 16 -isovalue 0.9999
+
 VOLUME GENERATION:
+./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/tetwild-test/ -output ../moist-data/volumes/tetwild-test/ -csv ../moist-data/volumes/tetwild-test-metrics.csv -epsilon 0.001
+
+
 ./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/at0/ -output ../moist-data/volumes/at0/ -csv ./moist-data/volumes/at0.csv -epsilon 0.01
 ./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/thin/res5/ -output ../moist-data/volumes/thin/res5/ -csv ../moist-data/volumes/thin/samples.csv -epsilon 0.001
 ./utils/scripts/generate_volumes.bash -input ../moist-data/surfaces/thin/res23/ -output ../moist-data/volumes/thin/res23/ -csv ../moist-data/volumes/thin/samples.csv -epsilon 0.001

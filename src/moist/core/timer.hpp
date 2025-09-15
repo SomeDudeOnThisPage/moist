@@ -34,7 +34,7 @@ namespace moist
     class ScopeTimer : Timer
     {
     public:
-        ScopeTimer(const std::string& name);
+        ScopeTimer(const std::string& name, const bool write_timing_direct = false);
         ~ScopeTimer();
 
         static void Print()
@@ -71,6 +71,10 @@ namespace moist
             static std::unordered_map<std::string, ScopeTime> data;
             return data;
         }
+
+        bool _write;
+        static std::ofstream _csv_stream; // static to not reopen csv every write
+        static std::chrono::time_point<std::chrono::high_resolution_clock> _timing_start;
     };
 }
 

@@ -198,8 +198,8 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
     this->EvaluateRemeshing(metrics);
 #endif
 
-#ifndef MIST_EVAL_GRID
-    const geo::Box3d aabb = create_mesh_bbox3d_exact(_crown);
+//#ifndef MIST_EVAL_GRID
+    /*const geo::Box3d aabb = create_mesh_bbox3d_exact(_crown);
     const double hd_factor = std::cbrt((aabb.xyz_max[0] - aabb.xyz_min[0]) * (aabb.xyz_max[1] - aabb.xyz_min[1]) * (aabb.xyz_max[2] - aabb.xyz_min[2])) * 0.01;
 
     MMG5_pMesh mmg_mesh = NULL;
@@ -212,17 +212,10 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
     moist::mmg3d::transform(_crown, mmg_mesh, mmg_solution);
 
     moist::ExactMesh remeshing_output;
-    moist::mmg3d::set_solution(mmg_mesh, mmg_solution, _min_edge_length, 2.0 * _max_edge_length, hd_factor);
+    moist::mmg3d::set_solution(mmg_mesh, mmg_solution, remeshing.hmin * _min_edge_length, remeshing.hmax * _max_edge_length, hd_factor);
     moist::mmg3d::remesh(mmg_mesh, mmg_solution);
     moist::mmg3d::transform(mmg_mesh, mmg_solution, remeshing_output);
     remeshing_output.DebugMesh("crown_after_remeshing.msh");
-
-/*#ifndef NDEBUG
-    if (MMG3D_saveMesh(mmg_mesh, "output_mmg3d_before_remesning.mesh") != 1)
-    {
-        OOC_ERROR("cannot debug mmg_mesh");
-    }
-#endif // NDEBUG
 
 
     moist::metrics::MeshQuality crown_after_remeshing("crown_after_remeshing");
@@ -231,7 +224,7 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
     _crown.DebugMesh("crown_after_remeshing.mesh");
 
     snap_histograms(_crown, metrics, "crown::after_remeshing");*/
-#endif MIST_EVAL_GRID
+//#endif MIST_EVAL_GRID
 }
 
 /**
@@ -574,7 +567,7 @@ void moist::Merger::InsertBToA()
 
 bool moist::Merger::InsertCellBToA(const std::size_t cb)
 {
-    moist::ScopeTimer TIMER("moist::Merger::InsertCellBToA");
+    moist::ScopeTimer TIMER("moist::Merger::InsertCellBToA_" + _metrics->name, true); // write every metric to track how long insertion takes over time...
 
     // since grid cells can overlap in which cells they contain, we need to track into which cells we already inserted, so as to not
     // insert a cell twice!

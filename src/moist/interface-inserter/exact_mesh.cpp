@@ -122,7 +122,7 @@ static std::array<double, 3> mean_ratio(const moist::ExactMesh& mesh)
     return { mean_ratio / static_cast<double>(nb_cells), min, max };
 }
 
-static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh)
+static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh, std::size_t* nb_cells_lower_than_threshold) // lazy raw pointer...
 {
     MMG5_pMesh mmg_mesh = NULL;
     MMG5_pSol mmg_solution = NULL;
@@ -145,6 +145,10 @@ static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh)
         min = mmg_quality_l < min ? mmg_quality_l : min;
         max = mmg_quality_l > max ? mmg_quality_l : max;
         mmg_quality += mmg_quality_l;
+        if (mmg_quality <= 1e-15)
+        {
+            nb_cells_lower_than_threshold++;
+        }
     }
     return { mmg_quality / static_cast<double>(nb_cells), min, max };
 }
@@ -155,9 +159,10 @@ moist::ExactMesh::ExactMesh() : _grid(moist::LookupGridExact()), _point_grid(moi
 
 void moist::ExactMesh::ComputeMetrics(moist::metrics::MeshQuality& metrics)
 {
+    std::size_t nb_cells_lower_than_threshold = 0;
     const auto aspect_ratios = aspect_ratio(*this);
     const auto mean_ratios = mean_ratio(*this);
-    const auto mmg = mmg_quality(*this);
+    const auto mmg = mmg_quality(*this, &nb_cells_lower_than_threshold);
 
     std::size_t nv = 0;
     std::size_t nc = 0;
@@ -182,6 +187,7 @@ void moist::ExactMesh::ComputeMetrics(moist::metrics::MeshQuality& metrics)
     metrics.mmg = mmg[0];
     metrics.mmg_lb = mmg[1];
     metrics.mmg_ub = mmg[2];
+    metrics.nb_lower_threshold_mmg = nb_cells_lower_than_threshold;
 }
 
 void moist::ExactMesh::ComputeHistogram(moist::metrics::Histogram& histogram, const moist::metrics::QualityMetricType& type, const std::size_t nb_bins)

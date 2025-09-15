@@ -26,7 +26,7 @@ add_subdirectory(src/moist/core)
 # memory-requirement per "subpoject" is the memory-footprint of ONE slice (the one being worked on), plus some constant
 #     e.g., if a slice-mesh takes N memory, and consists of M tiff-slices, its a factor of N + (N/M * x), with x being some factor
 # add_subdirectory(src/interfacing) # todo rename to "interface-inserter" or something
-#add_subdirectory(src/moist/surface-extractor)
+add_subdirectory(src/moist/surface-extractor)
 #add_subdirectory(src/moist/interface-generator)
 add_subdirectory(src/moist/interface-inserter)
 #add_subdirectory(src/moist/submesh-merger)
