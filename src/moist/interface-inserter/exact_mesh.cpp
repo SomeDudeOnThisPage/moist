@@ -72,6 +72,11 @@ static std::array<double, 3> aspect_ratio(const moist::ExactMesh& mesh)
         }
 
         const double l_aspect_ratio = cell_aspect_ratio(cell, mesh);
+        if (std::isnan(l_aspect_ratio) || std::isinf(l_aspect_ratio))
+        {
+            continue;
+        }
+
         if (l_aspect_ratio < min)
         {
             min = l_aspect_ratio;
@@ -105,6 +110,10 @@ static std::array<double, 3> mean_ratio(const moist::ExactMesh& mesh)
         }
 
         const double l_mean_ratio = cell_mean_ratio(cell, mesh);
+        if (std::isnan(l_mean_ratio) || std::isinf(l_mean_ratio))
+        {
+            continue;
+        }
         if (l_mean_ratio < min)
         {
             min = l_mean_ratio;
@@ -142,6 +151,10 @@ static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh, std::size_t* nb
     for (std::size_t c = 1; c < nb_cells; c++)
     {
         const double mmg_quality_l = MMG3D_Get_tetrahedronQuality(mmg_mesh, nullptr, c);
+        if (std::isnan(mmg_quality_l) || std::isinf(mmg_quality_l))
+        {
+            continue;
+        }
         min = mmg_quality_l < min ? mmg_quality_l : min;
         max = mmg_quality_l > max ? mmg_quality_l : max;
         mmg_quality += mmg_quality_l;

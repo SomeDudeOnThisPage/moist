@@ -77,6 +77,8 @@ void moist::Merger::EvaluateRemeshing(moist::metrics::Metrics_ptr metrics)
             moist::mmg3d::remesh(mmg_mesh, mmg_solution);
             moist::mmg3d::transform(mmg_mesh, mmg_solution, remeshing_output);
             remeshing_output.ComputeMetrics(metrics_after);
+            remeshing_output.DebugMesh("crown_after_remeshing_max" + std::to_string(hmax) + "_min" + std::to_string(hmin) + ".msh");
+
             *remeshing_metrics << metrics_before;
             *remeshing_metrics << metrics_after;
             remeshing_metrics->AppendCSV(metrics->name + "_metrics.csv");
@@ -165,11 +167,11 @@ moist::Merger::Merger(geo::Mesh& a, geo::Mesh& b, const moist::AxisAlignedPlane&
 #endif // NDEBUG
 
     this->InsertBToA();
-#ifdef MIST_EVAL_QUALITY
+//#ifdef MIST_EVAL_QUALITY
     moist::metrics::MeshQuality crown_before_remeshing("crown_before_remeshing");
     _crown.ComputeMetrics(crown_before_remeshing);
     *metrics << crown_before_remeshing;
-#endif
+//#endif
 
 #ifndef NDEBUG
     _crown.DebugMesh("crown_before_remeshing.mesh");

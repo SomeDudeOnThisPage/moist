@@ -1,7 +1,13 @@
 a,b,epsilon,extent,output_a,output_b,output_metrics,output_metrics_tc_name,hmin,hmax
+../moist-data/volumes/thin/res5/410-419_inverted.msh,../moist-data/volumes/thin/res5/419-428_inverted.msh,0.2,10.0,nop,nop,./coarsening.csv,res16',1.0,1.0
+../moist-data/volumes/thin/res5/410-419.msh,../moist-data/volumes/thin/res5/419-428.msh,0.2,10.0,nop,nop,./coarsening.csv,res16,1.0,1.0
 ../moist-data/volumes/thin/res16/230-239_inverted.msh,../moist-data/volumes/thin/res16/239-248_inverted.msh,0.28,10.0,nop,nop,./coarsening.csv,res16',1.0,1.0
 ../moist-data/volumes/thin/res16/230-239.msh,../moist-data/volumes/thin/res16/239-248.msh,0.28,10.0,nop,nop,./coarsening.csv,res16,1.0,1.0
-../moist-data/volumes/thin/res23/509-518_inverted.msh,../moist-data/volumes/thin/res23/509-518_inverted.msh,0.34,10.0,nop,nop,./coarsening.csv,res23',1.0,1.0
-../moist-data/volumes/thin/res23/509-518.msh,../moist-data/volumes/thin/res23/509-518.msh,0.34,10.0,nop,nop,./coarsening.csv,res23,1.0,1.0
 ../moist-data/volumes/thin/res43/238-247_inverted.msh,../moist-data/volumes/thin/res43/247-256_inverted.msh,0.65,10.0,nop,nop,./coarsening.csv,res43',1.0,1.0
 ../moist-data/volumes/thin/res43/238-247.msh,../moist-data/volumes/thin/res43/247-256.msh,0.65,10.0,nop,nop,./coarsening.csv,res43,1.0,1.0
+../moist-data/volumes/at0/cube10x10_below.msh,../moist-data/volumes/at0/cylinder10x10.msh,0.05,0.0,nop,nop,./coarsening.csv,cyl10,1.0,1.0
+../moist-data/volumes/at0/cube25x25_below.msh,../moist-data/volumes/at0/cylinder25x25.msh,0.07,0.0,nop,nop,./coarsening.csv,cyl25,1.0,1.0
+../moist-data/volumes/at0/cube10x10_below.msh,../moist-data/volumes/at0/star10x10_above.msh,0.05,0.0,nop,nop,./coarsening.csv,str10,1.0,1.0
+../moist-data/volumes/at0/cube25x25_below.msh,../moist-data/volumes/at0/star25x25_above.msh,0.07,0.0,nop,nop,./coarsening.csv,str25,1.0,1.0
+../moist-data/volumes/thin/res23/509-518.msh,../moist-data/volumes/thin/res23/509-518.msh,0.34,10.0,nop,nop,./coarsening.csv,res23,1.0,1.0
+../moist-data/volumes/thin/res23/509-518_inverted.msh,../moist-data/volumes/thin/res23/509-518_inverted.msh,0.34,10.0,nop,nop,./coarsening.csv,res23',1.0,1.0
