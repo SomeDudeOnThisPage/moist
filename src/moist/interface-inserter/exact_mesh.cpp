@@ -131,7 +131,7 @@ static std::array<double, 3> mean_ratio(const moist::ExactMesh& mesh)
     return { mean_ratio / static_cast<double>(nb_cells), min, max };
 }
 
-static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh, std::size_t* nb_cells_lower_than_threshold) // lazy raw pointer...
+static std::array<double, 5> mmg_quality(moist::ExactMesh& mesh) // lazy raw pointer...
 {
     MMG5_pMesh mmg_mesh = NULL;
     MMG5_pSol mmg_solution = NULL;
@@ -148,6 +148,8 @@ static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh, std::size_t* nb
     double mmg_quality = 0.0f;
     double min = 100000.0;
     double max = -100000.0;
+    int nb_cells_lower_than_e15 = 0;
+    int nb_cells_lower_than_e29 = 0;
     for (std::size_t c = 1; c < nb_cells; c++)
     {
         const double mmg_quality_l = MMG3D_Get_tetrahedronQuality(mmg_mesh, nullptr, c);
@@ -158,12 +160,16 @@ static std::array<double, 3> mmg_quality(moist::ExactMesh& mesh, std::size_t* nb
         min = mmg_quality_l < min ? mmg_quality_l : min;
         max = mmg_quality_l > max ? mmg_quality_l : max;
         mmg_quality += mmg_quality_l;
-        if (mmg_quality <= 1e-15)
+        if (mmg_quality_l <= 1e-15)
         {
-            nb_cells_lower_than_threshold++;
+            nb_cells_lower_than_e15++;
+        }
+        if (mmg_quality_l <= 1e-29)
+        {
+            nb_cells_lower_than_e29++;
         }
     }
-    return { mmg_quality / static_cast<double>(nb_cells), min, max };
+    return { mmg_quality / static_cast<double>(nb_cells), min, max, nb_cells_lower_than_e15, nb_cells_lower_than_e29 };
 }
 
 moist::ExactMesh::ExactMesh() : _grid(moist::LookupGridExact()), _point_grid(moist::LookupPointGrid(10.0))
@@ -175,7 +181,7 @@ void moist::ExactMesh::ComputeMetrics(moist::metrics::MeshQuality& metrics)
     std::size_t nb_cells_lower_than_threshold = 0;
     const auto aspect_ratios = aspect_ratio(*this);
     const auto mean_ratios = mean_ratio(*this);
-    const auto mmg = mmg_quality(*this, &nb_cells_lower_than_threshold);
+    const auto mmg = mmg_quality(*this);
 
     std::size_t nv = 0;
     std::size_t nc = 0;
@@ -200,7 +206,8 @@ void moist::ExactMesh::ComputeMetrics(moist::metrics::MeshQuality& metrics)
     metrics.mmg = mmg[0];
     metrics.mmg_lb = mmg[1];
     metrics.mmg_ub = mmg[2];
-    metrics.nb_lower_threshold_mmg = nb_cells_lower_than_threshold;
+    metrics.nb_lower_threshold_mmg = mmg[3];
+    metrics.nb_lower_threshold_critical_mmg = mmg[4];
 }
 
 void moist::ExactMesh::ComputeHistogram(moist::metrics::Histogram& histogram, const moist::metrics::QualityMetricType& type, const std::size_t nb_bins)

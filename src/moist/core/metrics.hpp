@@ -86,6 +86,7 @@ namespace moist::metrics
         double mmg_lb;
         double mmg_ub;
         std::size_t nb_lower_threshold_mmg;
+        std::size_t nb_lower_threshold_critical_mmg;
         double skewness;
         MeshQuality(const std::string& name) : name(name) {};
     };
@@ -111,6 +112,7 @@ namespace moist::metrics
         q.mmg_lb = std::min(a.mmg_lb, b.mmg_lb);
         q.mmg_ub = std::max(a.mmg_ub, b.mmg_ub);
         q.nb_lower_threshold_mmg = a.nb_lower_threshold_mmg + b.nb_lower_threshold_mmg;
+        q.nb_lower_threshold_critical_mmg = a.nb_lower_threshold_critical_mmg + b.nb_lower_threshold_critical_mmg;
         return q;
     }
 
@@ -127,7 +129,8 @@ namespace moist::metrics
                 << internal::metric_t {mesh_quality_metrics.name + "::mmg", mesh_quality_metrics.mmg}
                 << internal::metric_t {mesh_quality_metrics.name + "::mmg::upper_bound", mesh_quality_metrics.mmg_ub}
                 << internal::metric_t {mesh_quality_metrics.name + "::mmg::lower_bound", mesh_quality_metrics.mmg_lb}
-                << internal::metric_t {mesh_quality_metrics.name + "::mmg::nb_under_threshold", mesh_quality_metrics.nb_lower_threshold_mmg};
+                << internal::metric_t {mesh_quality_metrics.name + "::mmg::nb_under_threshold", mesh_quality_metrics.nb_lower_threshold_mmg}
+                << internal::metric_t {mesh_quality_metrics.name + "::mmg::nb_under_threshold_critical", mesh_quality_metrics.nb_lower_threshold_critical_mmg};
 
         return metrics;
     }
